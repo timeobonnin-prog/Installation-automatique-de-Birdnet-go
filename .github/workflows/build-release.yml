@@ -29,77 +29,61 @@ jobs:
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
-          if (-not $env:VT_API_KEY) {
-            Write-Warning "Secret VT_API_KEY manquant. Le scan est ignoré."
-            exit 0
-          }
-          
           try {
+            if (-not $env:VT_API_KEY) {
+              Write-Warning "Secret VT_API_KEY manquant. Le scan est ignoré."
+              exit 0
+            }
+            
             $file = Get-Item 'Output\BirdNET-Go-Installer.exe'
             $hash = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
             $headers = @{ 'x-apikey' = $env:VT_API_KEY }
             $lookup = "https://www.virustotal.com/api/v3/files/$hash"
             
-            $alreadyKnown = $false
-            try {
-              $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing
-              if ($response.StatusCode -eq 200) {
-                $alreadyKnown = $true
-                Write-Host "Fichier déjà connu de VirusTotal."
-              }
-            } catch {
-              $statusCode = $_.Exception.Response.StatusCode.value__
-              if ($statusCode -eq 404) {
-                Write-Host "Fichier inconnu, upload en cours..."
-              } else {
-                Write-Warning "Erreur API ($statusCode). On ignore le scan et on continue."
-                exit 0
-              }
-            }
+            # On utilise -SkipHttpErrorCheck pour éviter que GitHub croie qu'il y a une erreur sur le 404
+            $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing -SkipHttpErrorCheck
 
-            if (-not $alreadyKnown) {
-              try {
-                $upload = Invoke-RestMethod -Method Post `
-                  -Uri 'https://www.virustotal.com/api/v3/files' `
-                  -Headers $headers `
-                  -Form @{ file = $file }
-                $analysisId = $upload.data.id
-                Write-Host "Upload réussi, ID : $analysisId"
-              } catch {
-                Write-Warning "Échec de l'upload. On ignore et on continue."
-                exit 0
-              }
+            if ($response.StatusCode -eq 200) {
+              Write-Host "Fichier déjà connu de VirusTotal."
+            } elseif ($response.StatusCode -eq 404) {
+              Write-Host "Fichier inconnu, upload en cours..."
+              
+              $upload = Invoke-RestMethod -Method Post `
+                -Uri 'https://www.virustotal.com/api/v3/files' `
+                -Headers $headers `
+                -Form @{ file = $file }
+              $analysisId = $upload.data.id
+              Write-Host "Upload réussi, ID : $analysisId"
 
-              # Attente de l'analyse (max 2m30 pour éviter de tourner dans le vide)
+              # Attente de l'analyse (max 2m30)
               for ($i=0; $i -lt 15; $i++) {
                 Start-Sleep -Seconds 10
-                try {
-                  $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
-                  if ($analysis.data.attributes.status -eq 'completed') {
-                    Write-Host "Analyse terminée."
-                    break
-                  }
-                } catch {
-                  # On ignore les erreurs de polling
+                $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
+                if ($analysis.data.attributes.status -eq 'completed') {
+                  Write-Host "Analyse terminée."
+                  break
                 }
               }
+            } else {
+              Write-Warning "Erreur API ($($response.StatusCode)). On ignore le scan et on continue."
+              exit 0
             }
 
             Start-Sleep -Seconds 5
             $finalReport = Invoke-RestMethod -Uri $lookup -Headers $headers
             $stats = $finalReport.data.attributes.last_analysis_stats
             Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
-            
+
             if ($stats.malicious -gt 15) {
-              Write-Error "Trop de détections ($($stats.malicious)). Publication annulée par sécurité."
+              Write-Error "Trop de détections ($($stats.malicious)). Publication annulée."
               exit 1
             }
-            
+
             Write-Host "Le fichier est validé."
+            exit 0
           } catch {
-            # Si le moindre truc plante, on attrape l'erreur et on continue !
-            Write-Warning "Erreur imprévue lors du scan VirusTotal : $_"
-            Write-Warning "Le processus continue pour générer la Release."
+            Write-Warning "Erreur lors du scan : $_"
+            Write-Warning "On ignore l'erreur et on continue vers la Release."
             exit 0
           }
 
