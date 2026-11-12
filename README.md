@@ -5,20 +5,27 @@ sur Windows (x64 / ARM64) via un `.exe` auto-généré.
 
 ## Téléchargement
 
-Récupère le dernier `BirdNET-Go-Installer.exe` dans la section
-[**Releases**](../../releases) de ce dépôt.
+Récupérez le dernier `BirdNET-Go-Installer.exe` dans la section
+[**Releases**](../../releases).
 
-## Fonctionnement
+## ⚠️ Avertissement Windows SmartScreen
 
-1. `install-birdnet.ps1` détecte l'architecture du PC et télécharge le bon
-   asset depuis la dernière release de BirdNET-Go.
-2. `BirdNET-Go-Installer.iss` (Inno Setup) empaquette ce script dans un `.exe`.
-3. `.github/workflows/build-release.yml` compile, scanne avec VirusTotal,
-   puis publie la Release automatiquement.
-4. `.github/workflows/update-birdnet-version.yml` vérifie chaque jour les
-   nouvelles versions de BirdNET-Go et déclenche le build.
+Cet exécutable **n'est pas signé numériquement** (pas de certificat de signature).
+Au premier lancement, Windows peut afficher :
 
-## Installation manuelle (sans le .exe)
+> Windows a protégé votre PC — Application inconnue
+
+C'est **normal** pour un `.exe` non signé. Pour l'exécuter :
+
+1. Cliquez sur **"Informations complémentaires"**.
+2. Cliquez sur **"Exécuter quand même"**.
+
+**Alternative** : clic droit sur le `.exe` → **Propriétés** → cocher
+**"Débloquer"** en bas → **OK**. Cela retire le marqueur Mark-of-the-Web.
+
+## Vérification d'intégrité
+
+Chaque Release indique le **SHA-256** du `.exe`. Pour vérifier :
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File install-birdnet.ps1
+Get-FileHash .\BirdNET-Go-Installer.exe -Algorithm SHA256
