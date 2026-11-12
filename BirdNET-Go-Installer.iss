@@ -1,6 +1,3 @@
-; -- BirdNET-Go-Installer.iss --
-; Compile un .exe Windows qui exécute install-birdnet.ps1.
-
 [Setup]
 AppName=BirdNET-Go (Auto-Installer)
 AppVersion=1.0.0
@@ -21,8 +18,8 @@ Source: "install-birdnet.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Run]
 Filename: "powershell.exe"; \
-  Parameters: "-ExecutionPolicy Bypass -NoLogo -NoProfile -WindowStyle Hidden -File ""{tmp}\install-birdnet.ps1"""; \
-  Flags: runhidden waituntilterminated
+  Parameters: "-ExecutionPolicy Bypass -NoLogo -NoProfile -File ""{tmp}\install-birdnet.ps1"""; \
+  Flags: waituntilterminated
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
