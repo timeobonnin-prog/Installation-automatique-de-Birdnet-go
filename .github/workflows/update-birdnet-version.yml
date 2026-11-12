@@ -2,15 +2,15 @@ name: Update BirdNET-Go Version
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # Tous les jours à 6h UTC
-  workflow_dispatch:        # Déclenchement manuel possible
+    - cron: "0 6 * * *"   # tous les jours à 6h UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update-version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,20 +20,28 @@ jobs:
         run: |
           TAG=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | jq -r .tag_name)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Dernière version : $TAG"
+          echo "Dernière version BirdNET-Go : $TAG"
 
-      - name: Update VERSION.txt
-        run: |
-          echo "${{ steps.latest.outputs.tag }}" > VERSION.txt
-
-      - name: Commit and push if changed
+      - name: Update VERSION.txt and tag if changed
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "$TAG" > VERSION.txt
           git add VERSION.txt
+
           if git diff --cached --quiet; then
-            echo "Aucun changement à committer."
-          else
-            git commit -m "chore: mise à jour BirdNET-Go vers ${{ steps.latest.outputs.tag }}"
-            git push
+            echo "Aucune nouvelle version."
+            exit 0
+          fi
+
+          git commit -m "chore: BirdNET-Go $TAG"
+          git push
+
+          # Crée et pousse un tag pour déclencher build-release.yml
+          if ! git rev-parse "v-$TAG" >/dev/null 2>&1; then
+            git tag "v-$TAG"
+            git push origin "v-$TAG"
           fi
