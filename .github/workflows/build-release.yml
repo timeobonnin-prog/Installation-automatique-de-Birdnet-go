@@ -40,7 +40,6 @@ jobs:
             $headers = @{ 'x-apikey' = $env:VT_API_KEY }
             $lookup = "https://www.virustotal.com/api/v3/files/$hash"
             
-            # On utilise -SkipHttpErrorCheck pour éviter que GitHub croie qu'il y a une erreur sur le 404
             $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing -SkipHttpErrorCheck
 
             if ($response.StatusCode -eq 200) {
@@ -53,9 +52,8 @@ jobs:
                 -Headers $headers `
                 -Form @{ file = $file }
               $analysisId = $upload.data.id
-              Write-Host "Upload réussi, ID : $analysisId"
+              Write-Host "Upload réussi. Analyse en cours sur VirusTotal..."
 
-              # Attente de l'analyse (max 2m30)
               for ($i=0; $i -lt 15; $i++) {
                 Start-Sleep -Seconds 10
                 $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
@@ -94,9 +92,38 @@ jobs:
           $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Installer.exe').Hash.ToLower()
           echo "sha256=$h" >> $env:GITHUB_OUTPUT
 
+      # --- NOUVELLE ÉTAPE : Récupération des notes de version de BirdNET-Go ---
+      - name: Fetch Upstream Release Notes
+        id: upstream
+        shell: pwsh
+        run: |
+          $apiUrl = "https://api.github.com/repos/tphakala/birdnet-go/releases/latest"
+          $headers = @{ "User-Agent" = "PowerShell" }
+          try {
+            $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
+            $body = $release.body
+            # On échappe les caractères spéciaux pour GitHub Actions
+            $body = $body -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
+            echo "notes=$body" >> $env:GITHUB_OUTPUT
+          } catch {
+            Write-Warning "Impossible de récupérer les notes de version : $_"
+            echo "notes=Impossible de récupérer les notes de version." >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Determine Tag Name
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=manual-build-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
           files: Output/BirdNET-Go-Installer.exe
           generate_release_notes: true
           body: |
@@ -107,9 +134,11 @@ jobs:
 
             ### 🔍 Analyse VirusTotal
             Ce fichier peut déclencher des **faux positifs** sur quelques moteurs antivirus
-            (comportement normal pour un installateur non signé). 
+            (comportement normal pour un installateur non signé).
             
             **SHA-256** : `${{ steps.hash.outputs.sha256 }}`
-            Version cible : `${{ github.ref_name }}`
+
+            ### 📝 Nouveautés de BirdNET-Go
+            ${{ steps.upstream.outputs.notes }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
