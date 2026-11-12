@@ -3,8 +3,8 @@ name: Build, Scan and Release Windows Installer
 on:
   push:
     tags:
-      - 'v-*'          # déclenché par update-birdnet-version.yml
-      - 'v*.*.*'       # déclenchement manuel possible
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -15,8 +15,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
@@ -25,47 +24,24 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      # --- Signature numérique (optionnelle, s'exécute si secrets présents) ---
-      - name: Sign installer (optional)
-        if: ${{ secrets.CODESIGN_PFX_B64 != '' }}
-        shell: pwsh
-        env:
-          CODESIGN_PFX_B64: ${{ secrets.CODESIGN_PFX_B64 }}
-          CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
-        run: |
-          $pfxPath = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
-          [System.IO.File]::WriteAllBytes(
-            $pfxPath,
-            [System.Convert]::FromBase64String($env:CODESIGN_PFX_B64)
-          )
-          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
-          if (-not $signtool) { throw "signtool.exe introuvable" }
-          & $signtool.FullName sign `
-            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-            /f $pfxPath /p $env:CODESIGN_PFX_PASSWORD `
-            'Output\BirdNET-Go-Installer.exe'
-
-      # --- Scan VirusTotal avec seuil bloquant ---
-      - name: Scan with VirusTotal (threshold)
+      - name: Scan with VirusTotal
         shell: pwsh
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
           if (-not $env:VT_API_KEY) {
-            Write-Error "Secret VT_API_KEY manquant. Configure-le dans Settings > Secrets."
+            Write-Error "Secret VT_API_KEY manquant."
             exit 1
           }
           $file = 'Output\BirdNET-Go-Installer.exe'
           $hash = (Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
           $headers = @{ 'x-apikey' = $env:VT_API_KEY }
-
-          # Upload si le fichier n'est pas déjà connu
           $lookup = "https://www.virustotal.com/api/v3/files/$hash"
+
           try {
             Invoke-RestMethod -Uri $lookup -Headers $headers | Out-Null
           } catch {
-            Write-Host "Fichier inconnu de VirusTotal, upload en cours..."
+            Write-Host "Fichier inconnu, upload..."
             $upload = Invoke-RestMethod -Method Post `
               -Uri 'https://www.virustotal.com/api/v3/files' `
               -Headers $headers `
@@ -83,18 +59,31 @@ jobs:
           $stats = $resp.data.attributes.last_analysis_stats
           Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
           if ($stats.malicious -gt 2) {
-            Write-Error "Trop de moteurs détectent le fichier comme malveillant ($($stats.malicious)). Publication annulée."
+            Write-Error "Trop de détections ($($stats.malicious)). Publication annulée."
             exit 1
           }
 
-      # --- Création de la Release avec le .exe attaché ---
+      - name: Compute SHA-256
+        id: hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Installer.exe').Hash.ToLower()
+          echo "sha256=$h" >> $env:GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: Output/BirdNET-Go-Installer.exe
           generate_release_notes: true
           body: |
-            Installateur Windows auto-généré pour BirdNET-Go.
+            ## Installateur Windows BirdNET-Go
+
+            ⚠️ **Fichier non signé numériquement.**
+            Windows SmartScreen peut afficher un avertissement au premier lancement.
+            Cliquez sur **"Informations complémentaires"** → **"Exécuter quand même"**.
+
+            **SHA-256** : `${{ steps.hash.outputs.sha256 }}`
+
             Version cible : `${{ github.ref_name }}`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
