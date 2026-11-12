@@ -1,12 +1,16 @@
-name: Build Windows Installer
+name: Build and Release Windows Installer
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    tags:
+      - 'v*.*.*'          # Déclenché quand un tag de version est poussé (ex: v1.0.0)
+  workflow_dispatch:       # Permet aussi un déclenchement manuel
+
+permissions:
+  contents: write          # Indispensable pour créer une Release
 
 jobs:
-  build:
+  build-and-release:
     runs-on: windows-latest
 
     steps:
@@ -20,9 +24,10 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: BirdNET-Go-Installer
-          path: Output\BirdNET-Go-Installer.exe
-          retention-days: 30
+          files: Output/BirdNET-Go-Installer.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
