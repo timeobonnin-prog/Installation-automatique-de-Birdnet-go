@@ -2,6 +2,12 @@ name: Build, Scan and Release Windows Installer
 
 on:
   push:
+    branches: [ main ]
+    paths:
+      - 'install-birdnet.ps1'
+      - 'BirdNET-Go-Installer.iss'
+      - '.github/workflows/build-release.yml'
+  create:
     tags:
       - 'v-*'
       - 'v*.*.*'
@@ -92,7 +98,6 @@ jobs:
           $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Installer.exe').Hash.ToLower()
           echo "sha256=$h" >> $env:GITHUB_OUTPUT
 
-      # --- NOUVELLE ÉTAPE : Récupération des notes de version de BirdNET-Go ---
       - name: Fetch Upstream Release Notes
         id: upstream
         shell: pwsh
@@ -102,7 +107,6 @@ jobs:
           try {
             $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
             $body = $release.body
-            # On échappe les caractères spéciaux pour GitHub Actions
             $body = $body -replace '%', '%25' -replace "`r", '%0D' -replace "`n", '%0A'
             echo "notes=$body" >> $env:GITHUB_OUTPUT
           } catch {
@@ -117,7 +121,8 @@ jobs:
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           else
-            echo "tag_name=manual-build-${{ github.run_number }}" >> $GITHUB_OUTPUT
+            # Si c'est un commit sur main, on met à jour une release unique "latest-build"
+            echo "tag_name=latest-build" >> $GITHUB_OUTPUT
           fi
 
       - name: Create GitHub Release
