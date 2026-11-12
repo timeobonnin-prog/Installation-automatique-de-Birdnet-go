@@ -26,13 +26,13 @@ try {
 $latestVersion = $release.tag_name
 Write-Host "[OK] Version : $latestVersion" -ForegroundColor Cyan
 
-# 3. Asset Windows correspondant
+# 3. Asset Windows correspondant (recherche de .tar.gz au lieu de .zip)
 $asset = $release.assets | Where-Object {
-    $_.name -match "windows" -and $_.name -match $archToken -and $_.name -match "\.zip$"
+    $_.name -match "windows" -and $_.name -match $archToken -and $_.name -match "\.tar\.gz$"
 } | Select-Object -First 1
 
 if (-not $asset) {
-    Write-Error "Aucun asset Windows/$archToken trouvé dans $latestVersion."
+    Write-Error "Aucun asset Windows/$archToken (.tar.gz) trouvé dans $latestVersion."
     $release.assets | ForEach-Object { Write-Host "  - $($_.name)" }
     exit 1
 }
@@ -40,7 +40,7 @@ Write-Host "[OK] Asset : $($asset.name)" -ForegroundColor Green
 
 # 4. Téléchargement
 $installDir = Join-Path $env:LOCALAPPDATA "BirdNET-Go"
-$zipPath    = Join-Path $env:TEMP $asset.name
+$archivePath = Join-Path $env:TEMP $asset.name
 
 if (-not (Test-Path $installDir)) {
     New-Item -ItemType Directory -Path $installDir -Force | Out-Null
@@ -48,19 +48,20 @@ if (-not (Test-Path $installDir)) {
 
 Write-Host "[...] Téléchargement..." -ForegroundColor Yellow
 try {
-    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $archivePath -UseBasicParsing
 } catch {
     Write-Error "Échec du téléchargement : $_"; exit 1
 }
 
-# 5. Extraction
+# 5. Extraction (utilise tar pour les .tar.gz)
 Write-Host "[...] Extraction vers $installDir" -ForegroundColor Yellow
 try {
-    Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+    # -xzf : eXtract, gZip, File
+    tar -xzf $archivePath -C $installDir
 } catch {
     Write-Error "Échec de l'extraction : $_"; exit 1
 } finally {
-    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+    if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
 }
 
 Set-Content -Path (Join-Path $installDir "VERSION.txt") -Value $latestVersion -Encoding UTF8
