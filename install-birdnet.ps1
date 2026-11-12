@@ -26,7 +26,7 @@ try {
 $latestVersion = $release.tag_name
 Write-Host "[OK] Version : $latestVersion" -ForegroundColor Cyan
 
-# 3. Asset Windows correspondant (recherche de .tar.gz au lieu de .zip)
+# 3. Asset Windows correspondant (recherche de .tar.gz)
 $asset = $release.assets | Where-Object {
     $_.name -match "windows" -and $_.name -match $archToken -and $_.name -match "\.tar\.gz$"
 } | Select-Object -First 1
@@ -56,7 +56,6 @@ try {
 # 5. Extraction (utilise tar pour les .tar.gz)
 Write-Host "[...] Extraction vers $installDir" -ForegroundColor Yellow
 try {
-    # -xzf : eXtract, gZip, File
     tar -xzf $archivePath -C $installDir
 } catch {
     Write-Error "Échec de l'extraction : $_"; exit 1
