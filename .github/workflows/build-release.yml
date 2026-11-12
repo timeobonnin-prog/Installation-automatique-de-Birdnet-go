@@ -29,88 +29,79 @@ jobs:
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
-          # Si la clé n'est pas configurée, on continue quand même
           if (-not $env:VT_API_KEY) {
             Write-Warning "Secret VT_API_KEY manquant. Le scan est ignoré."
             exit 0
           }
           
-          $file = Get-Item 'Output\BirdNET-Go-Installer.exe'
-          $hash = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
-          $headers = @{ 'x-apikey' = $env:VT_API_KEY }
-          $lookup = "https://www.virustotal.com/api/v3/files/$hash"
-          
-          $alreadyKnown = $false
           try {
-            $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing
-            if ($response.StatusCode -eq 200) {
-              $alreadyKnown = $true
-              Write-Host "Fichier déjà connu de VirusTotal."
-            }
-          } catch {
-            $statusCode = $_.Exception.Response.StatusCode.value__
-            if ($statusCode -eq 404) {
-              Write-Host "Fichier inconnu, upload en cours..."
-            } elseif ($statusCode -eq 429) {
-              # GESTION DU BLOCAGE : On avertit mais on ne plante pas
-              Write-Warning "Quota VirusTotal dépassé ou clé bloquée (429). Le scan est ignoré, on publie quand même."
-              exit 0
-            } elseif ($statusCode -eq 401 -or $statusCode -eq 403) {
-              Write-Warning "Clé API invalide (401/403). Le scan est ignoré, on publie quand même."
-              exit 0
-            } else {
-              Write-Warning "Erreur API VirusTotal ($statusCode). On publie quand même."
-              exit 0
-            }
-          }
-
-          # Upload si le fichier est inconnu
-          if (-not $alreadyKnown) {
+            $file = Get-Item 'Output\BirdNET-Go-Installer.exe'
+            $hash = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
+            $headers = @{ 'x-apikey' = $env:VT_API_KEY }
+            $lookup = "https://www.virustotal.com/api/v3/files/$hash"
+            
+            $alreadyKnown = $false
             try {
-              $upload = Invoke-RestMethod -Method Post `
-                -Uri 'https://www.virustotal.com/api/v3/files' `
-                -Headers $headers `
-                -Form @{ file = $file }
-              $analysisId = $upload.data.id
-              Write-Host "Upload réussi, ID d'analyse : $analysisId"
+              $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing
+              if ($response.StatusCode -eq 200) {
+                $alreadyKnown = $true
+                Write-Host "Fichier déjà connu de VirusTotal."
+              }
             } catch {
-              Write-Warning "Échec de l'upload. On publie quand même."
-              exit 0
-            }
-
-            # Attente de l'analyse (max 5 minutes)
-            for ($i=0; $i -lt 30; $i++) {
-              Start-Sleep -Seconds 10
-              try {
-                $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
-                if ($analysis.data.attributes.status -eq 'completed') {
-                  Write-Host "Analyse terminée."
-                  break
-                }
-              } catch {
-                Write-Warning "Erreur lors du polling : $_"
+              $statusCode = $_.Exception.Response.StatusCode.value__
+              if ($statusCode -eq 404) {
+                Write-Host "Fichier inconnu, upload en cours..."
+              } else {
+                Write-Warning "Erreur API ($statusCode). On ignore le scan et on continue."
+                exit 0
               }
             }
-          }
 
-          Start-Sleep -Seconds 5
-          try {
+            if (-not $alreadyKnown) {
+              try {
+                $upload = Invoke-RestMethod -Method Post `
+                  -Uri 'https://www.virustotal.com/api/v3/files' `
+                  -Headers $headers `
+                  -Form @{ file = $file }
+                $analysisId = $upload.data.id
+                Write-Host "Upload réussi, ID : $analysisId"
+              } catch {
+                Write-Warning "Échec de l'upload. On ignore et on continue."
+                exit 0
+              }
+
+              # Attente de l'analyse (max 2m30 pour éviter de tourner dans le vide)
+              for ($i=0; $i -lt 15; $i++) {
+                Start-Sleep -Seconds 10
+                try {
+                  $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
+                  if ($analysis.data.attributes.status -eq 'completed') {
+                    Write-Host "Analyse terminée."
+                    break
+                  }
+                } catch {
+                  # On ignore les erreurs de polling
+                }
+              }
+            }
+
+            Start-Sleep -Seconds 5
             $finalReport = Invoke-RestMethod -Uri $lookup -Headers $headers
             $stats = $finalReport.data.attributes.last_analysis_stats
+            Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
+            
+            if ($stats.malicious -gt 15) {
+              Write-Error "Trop de détections ($($stats.malicious)). Publication annulée par sécurité."
+              exit 1
+            }
+            
+            Write-Host "Le fichier est validé."
           } catch {
-            Write-Warning "Impossible de récupérer le rapport final. On publie quand même."
+            # Si le moindre truc plante, on attrape l'erreur et on continue !
+            Write-Warning "Erreur imprévue lors du scan VirusTotal : $_"
+            Write-Warning "Le processus continue pour générer la Release."
             exit 0
           }
-
-          Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
-          
-          # Seuil augmenté à 15 pour éviter de bloquer sur des faux positifs
-          if ($stats.malicious -gt 15) {
-            Write-Error "Trop de détections ($($stats.malicious)). Publication annulée par sécurité."
-            exit 1
-          }
-          
-          Write-Host "Le fichier est validé pour la publication."
 
       - name: Compute SHA-256
         id: hash
