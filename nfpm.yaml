@@ -1,0 +1,25 @@
+name: "birdnet-go"
+arch: "${ARCH}"
+platform: "linux"
+version: "${VERSION}"
+section: "default"
+priority: "extra"
+replaces:
+- birdnet-go
+provides:
+- birdnet-go
+maintainer: "Timéo Bonnin <timeobonnin@outlook.fr>"
+description: |
+  Automated installation for BirdNET-Go.
+  BirdNET-Go is a self-hosted soundscape analyzer for wildlife detection.
+vendor: "timeobonnin-prog"
+homepage: "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go"
+license: "MIT"
+contents:
+- src: ./dist/birdnet-go
+  dst: /usr/local/bin/birdnet-go
+- src: ./dist/config.yaml
+  dst: /etc/birdnet-go/config.yaml
+  type: config|noreplace
+scripts:
+  postinstall: ./scripts/postinstall.sh
