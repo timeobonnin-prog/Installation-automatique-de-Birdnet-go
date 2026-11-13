@@ -58,28 +58,6 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      # --- ÉTAPE SIGNPATH (À décommenter quand vous aurez les identifiants) ---
-      # - name: Upload unsigned artifact
-      #   id: upload-unsigned
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     path: Output\BirdNET-Go-Installer.exe
-      #     archive: false
-      #
-      # - name: Sign installer
-      #   uses: signpath/github-action-submit-signing-request@v3
-      #   with:
-      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-      #     organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-      #     project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-      #     signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-      #     github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
-      #     wait-for-completion: true
-      #     output-artifact-directory: './signed-output'
-      #
-      # - name: Replace with signed installer
-      #   run: Copy-Item -Path '.\signed-output\BirdNET-Go-Installer.exe' -Destination 'Output\BirdNET-Go-Installer.exe' -Force
-
       - name: Compute SHA-256
         id: hash
         shell: pwsh
@@ -145,7 +123,7 @@ jobs:
 
             ### 🛡️ Sécurité & Intégrité
 
-            > ⚠️ **Fichier non signé numériquement.** Windows SmartScreen peut afficher un avertissement au premier lancement. Cliquez sur *"Informations complémentaires"* puis *"Exécuter quand même"*.
+            > ⚠️ **Fichier non signé numériquement.** Windows SmartScreen peut afficher un avertissement au premier lancement.
 
             **🔍 Analyse VirusTotal :**
             👉 [Cliquez ici pour voir le rapport d'analyse complet](https://www.virustotal.com/gui/file/${{ steps.hash.outputs.sha256 }})
@@ -153,3 +131,48 @@ jobs:
             **#️⃣ Empreinte SHA-256 :**
             ```text
             ${{ steps.hash.outputs.sha256 }}
+            env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            
+---
+
+### 📄 2. `BirdNET-Go-Installer.iss` (Le script d'installation)
+*Copiez exactement ceci.*
+
+```ini
+[Setup]
+AppName=BirdNET-Go
+AppVersion=1.0.0
+AppPublisher=timeobonnin-prog
+VersionInfoVersion=1.0.0.0
+DefaultDirName={localappdata}\BirdNET-Go
+DefaultGroupName=BirdNET-Go
+DisableProgramGroupPage=yes
+OutputDir=Output
+OutputBaseFilename=BirdNET-Go-Installer
+Compression=lzma2
+SolidCompression=yes
+ArchitecturesInstallIn64BitMode=x64compatible
+WizardStyle=modern
+PrivilegesRequired=lowest
+
+[Files]
+; Le script de configuration
+Source: "install-birdnet.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
+; Le binaire extrait par le workflow GitHub Actions
+Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Le fichier de version pour l'affichage
+Source: "dist\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+[Run]
+; On passe le dossier d'installation en paramètre au script
+Filename: "powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -NoLogo -NoProfile -File ""{tmp}\install-birdnet.ps1"" -InstallDir ""{app}"""; \
+  Flags: waituntilterminated
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    MsgBox('BirdNET-Go a été installé avec succès dans ' + ExpandConstant('{app}'), mbInformation, MB_OK);
+end;
