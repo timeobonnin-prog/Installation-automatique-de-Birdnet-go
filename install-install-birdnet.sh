@@ -5,15 +5,17 @@ set -e
 
 echo "=== Installation de BirdNET-Go pour Raspberry Pi / Linux ARM64 ==="
 
-# 1. Vérification de l'architecture (64 bits requis pour les performances)
+# 1. Dossier d'installation (modifiable via une variable d'environnement pour les tests)
+INSTALL_DIR="${INSTALL_DIR:-/opt/birdnet-go}"
+
+# 2. Vérification de l'architecture (64 bits requis pour les performances)
 ARCH=$(uname -m)
-if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "arm64" ]; then
-    echo "❌ Erreur : Ce script nécessite une architecture 64 bits (aarch64/arm64)."
-    echo "Architecture détectée : $ARCH"
+if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "arm64" ] && [ "$ARCH" != "x86_64" ]; then
+    echo "❌ Erreur : Architecture non supportée ($ARCH)."
     exit 1
 fi
 
-# 2. Récupération de la dernière version
+# 3. Récupération de la dernière version
 echo "[...] Recherche de la dernière version..."
 LATEST_TAG=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
@@ -23,23 +25,29 @@ if [ -z "$LATEST_TAG" ]; then
 fi
 echo "[OK] Version détectée : $LATEST_TAG"
 
-# 3. Téléchargement du binaire natif Linux ARM64
-# Le nom du fichier suit généralement le format birdnet-go-linux-arm64.tar.gz
-ARCHIVE_URL="https://github.com/tphakala/birdnet-go/releases/download/${LATEST_TAG}/birdnet-go-linux-arm64.tar.gz"
-TMP_DIR=$(mktemp -d)
-echo "[...] Téléchargement de l'archive..."
-curl -L -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
+# 4. Téléchargement du binaire natif
+if [ "$ARCH" = "x86_64" ]; then
+    ARCH_NAME="amd64"
+else
+    ARCH_NAME="arm64"
+fi
 
-# 4. Installation
-INSTALL_DIR="/opt/birdnet-go"
+ARCHIVE_URL="https://github.com/tphakala/birdnet-go/releases/download/${LATEST_TAG}/birdnet-go-linux-${ARCH_NAME}.tar.gz"
+TMP_DIR=$(mktemp -d)
+echo "[...] Téléchargement de l'archive ($ARCH_NAME)..."
+curl -sL -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
+
+# 5. Installation (Création automatique du dossier)
 echo "[...] Installation dans $INSTALL_DIR..."
 sudo mkdir -p "$INSTALL_DIR"
 sudo tar -xzf "$TMP_DIR/birdnet.tar.gz" -C "$INSTALL_DIR" --strip-components=1
 sudo chown -R $USER:$USER "$INSTALL_DIR"
+rm -rf "$TMP_DIR"
 
-# 5. Création du service systemd
-echo "[...] Création du service systemd..."
-sudo bash -c "cat > /etc/systemd/system/birdnet-go.service <<EOF
+# 6. Création du service systemd (uniquement si on est sur un vrai système avec systemd)
+if command -v systemctl >/dev/null 2>&1 && [ "$INSTALL_DIR" = "/opt/birdnet-go" ]; then
+    echo "[...] Création du service systemd..."
+    sudo bash -c "cat > /etc/systemd/system/birdnet-go.service <<EOF
 [Unit]
 Description=BirdNET-Go Service
 After=network.target sound.target
@@ -56,12 +64,11 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF"
 
-# 6. Démarrage du service
-sudo systemctl daemon-reload
-sudo systemctl enable birdnet-go
-sudo systemctl start birdnet-go
+    sudo systemctl daemon-reload
+    sudo systemctl enable birdnet-go
+    sudo systemctl start birdnet-go
+    echo "✅ Service systemd configuré et démarré."
+fi
 
 echo ""
-echo "✅ BirdNET-Go $LATEST_TAG a été installé avec succès !"
-echo "L'interface est accessible sur : http://localhost:8080"
-echo "Pour voir les logs : sudo journalctl -u birdnet-go -f"
+echo "✅ BirdNET-Go $LATEST_TAG a été installé avec succès dans $INSTALL_DIR !"
