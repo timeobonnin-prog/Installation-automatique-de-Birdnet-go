@@ -16,35 +16,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Run Installer in ARM64 Container
         run: |
           cat <<EOF > Dockerfile.arm
           FROM --platform=linux/arm64 debian:bookworm-slim
-          # Installation de tous les outils nécessaires
           RUN apt-get update && apt-get install -y curl tar ca-certificates jq sudo
-          
           ARG GITHUB_TOKEN
           ENV GITHUB_TOKEN=\$GITHUB_TOKEN
-          
           WORKDIR /app
           COPY install-birdnet.sh .
+          RUN sed -i 's/\r$//' install-birdnet.sh
           RUN chmod +x install-birdnet.sh
           RUN INSTALL_DIR="/tmp/test-birdnet" ./install-birdnet.sh
           RUN test -x /tmp/test-birdnet/birdnet-go
           EOF
-
           docker buildx build --platform linux/arm64 \
             --build-arg GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
             -f Dockerfile.arm -t birdnet-arm-test .
-          
       - name: Verify ARM Binary
         run: echo "✅ Le binaire ARM64 (Raspberry Pi) a été installé avec succès !"
