@@ -24,14 +24,13 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "dist"
           try {
-            gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "dist" --latest
-            # Renommer si nécessaire pour correspondre au chemin attendu par le fichier .iss
+            gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "dist"
             if (Test-Path "dist\BirdNET-Go-Windows.exe") {
               Copy-Item "dist\BirdNET-Go-Windows.exe" "dist\birdnet-go.exe" -Force
             }
-            Write-Host "✅ Binaire Windows téléchargé avec succès."
+            Write-Host "Binaire Windows téléchargé avec succès."
           } catch {
-            Write-Host "⚠️ Téléchargement impossible, création d'un fichier de secours dans dist."
+            Write-Host "Téléchargement impossible, création d'un fichier de secours dans dist."
             Set-Content -Path "dist\birdnet-go.exe" -Value "Fichier de secours pour test"
           }
         env:
@@ -53,12 +52,12 @@ jobs:
 
       - name: Télécharger et tester le .deb Linux
         run: |
-          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb" --latest || true
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb" || true
           if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
             echo "Test d'installation du paquet Linux..."
             sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y || true
           else
-            echo "Paquet Linux introuvable (aucune release active)."
+            echo "Paquet Linux introuvable."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,7 +72,7 @@ jobs:
 
       - name: Télécharger le paquet Raspberry Pi
         run: |
-          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-RaspberryPi.deb" --latest || true
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-RaspberryPi.deb" || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -103,9 +102,9 @@ jobs:
 
       - name: Télécharger le paquet macOS
         run: |
-          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-macOS.pkg" --latest || true
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-macOS.pkg" || true
           if [ -f "BirdNET-Go-macOS.pkg" ]; then
-            echo "✅ BirdNET-Go-macOS.pkg téléchargé avec succès."
+            echo "Paquet macOS téléchargé avec succès."
           else
             echo "Paquet macOS introuvable."
           fi
