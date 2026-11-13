@@ -30,7 +30,7 @@ Cet exécutable n'étant pas encore signé numériquement, Windows peut afficher
 
 ---
 
-## 🐧 Installation sur Linux (Debian/Ubuntu) et 🍓 Raspberry Pi
+## 🐧 Installation sur Linux et 🍓 Raspberry Pi
 
 Téléchargez le fichier **`.deb`** correspondant à votre architecture (amd64 pour PC, arm64 pour Raspberry Pi) dans les Releases, puis installez-le :
 
