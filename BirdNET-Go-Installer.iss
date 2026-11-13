@@ -6,20 +6,22 @@ DefaultDirName={localappdata}\BirdNET-Go
 DefaultGroupName=BirdNET-Go
 DisableProgramGroupPage=yes
 OutputDir=Output
-OutputBaseFilename=BirdNET-Go-Installer
+OutputBaseFilename=BirdNET-Go-Windows
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 PrivilegesRequired=lowest
 ChangesEnvironment=yes
+SetupIconFile=icon.ico
 
 [Files]
 Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autodesktop}\BirdNET-Go"; Filename: "{app}\birdnet-go.exe"; WorkingDir: "{app}"; IconFilename: "{app}\birdnet-go.exe"
+Name: "{autodesktop}\BirdNET-Go"; Filename: "{app}\birdnet-go.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 
 [Registry]
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath('{app}')
