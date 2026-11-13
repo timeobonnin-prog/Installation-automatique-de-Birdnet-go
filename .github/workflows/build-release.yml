@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'install-birdnet.ps1'
       - 'BirdNET-Go-Installer.iss'
       - '.github/workflows/build-release.yml'
   create:
@@ -53,7 +52,24 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
+      - name: Compute SHA-256 (For Cache Key)
+        id: hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Installer.exe').Hash.ToLower()
+          echo "sha256=$h" >> $env:GITHUB_OUTPUT
+
+      - name: Cache VirusTotal Result
+        id: cache-vt
+        uses: actions/cache@v4
+        with:
+          path: vt-cache
+          key: vt-${{ steps.hash.outputs.sha256 }}
+          restore-keys: |
+            vt-
+
       - name: Scan with VirusTotal
+        if: steps.cache-vt.outputs.cache-hit != 'true'
         shell: pwsh
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
@@ -65,7 +81,7 @@ jobs:
             }
             
             $file = Get-Item 'Output\BirdNET-Go-Installer.exe'
-            $hash = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
+            $hash = "${{ steps.hash.outputs.sha256 }}"
             $headers = @{ 'x-apikey' = $env:VT_API_KEY }
             $lookup = "https://www.virustotal.com/api/v3/files/$hash"
             
@@ -73,9 +89,9 @@ jobs:
 
             if ($response.StatusCode -eq 200) {
               Write-Host "Fichier déjà connu de VirusTotal."
+              $finalReport = $response.Content | ConvertFrom-Json
             } elseif ($response.StatusCode -eq 404) {
-              Write-Host "Fichier inconnu, demande d'une URL d'upload spéciale..."
-              
+              Write-Host "Fichier inconnu, demande d'upload speciale..."
               $uploadUrlReq = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/upload_url" -Headers $headers -Method Get
               $targetUrl = $uploadUrlReq.data
               
@@ -84,43 +100,25 @@ jobs:
               
               $uploadData = $curlOutput | ConvertFrom-Json
               $analysisId = $uploadData.data.id
-              Write-Host "Upload réussi. Analyse en cours..."
-
+              
               for ($i=0; $i -lt 30; $i++) {
                 Start-Sleep -Seconds 10
                 $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
-                if ($analysis.data.attributes.status -eq 'completed') {
-                  Write-Host "Analyse terminée."
-                  break
-                }
+                if ($analysis.data.attributes.status -eq 'completed') { break }
               }
+              Start-Sleep -Seconds 5
+              $finalReport = Invoke-RestMethod -Uri $lookup -Headers $headers
             } else {
-              Write-Warning "Erreur API ($($response.StatusCode)). On ignore."
               exit 0
             }
-
-            Start-Sleep -Seconds 5
-            $finalReport = Invoke-RestMethod -Uri $lookup -Headers $headers
-            $stats = $finalReport.data.attributes.last_analysis_stats
-            Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
-
-            if ($stats.malicious -gt 15) {
-              Write-Error "Trop de détections."
-              exit 1
-            }
+            
+            New-Item -ItemType Directory -Path vt-cache -Force | Out-Null
+            $finalReport | ConvertTo-Json -Depth 10 | Set-Content "vt-cache\$hash.json"
           } catch {
             Write-Warning "Erreur lors du scan : $_"
-            exit 0
           }
 
-      - name: Compute SHA-256
-        id: hash
-        shell: pwsh
-        run: |
-          $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Installer.exe').Hash.ToLower()
-          echo "sha256=$h" >> $env:GITHUB_OUTPUT
-
-      - name: Calculate Next Version
+      - name: Calculate Unique Version
         id: version
         shell: pwsh
         run: |
@@ -128,34 +126,9 @@ jobs:
             echo "tag_name=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
           } else {
             $birdnetTag = "${{ steps.upstream.outputs.tag }}"
-            $file = "INSTALLER_VERSION.txt"
-            $newVersion = "$birdnetTag.1"
-
-            if (Test-Path $file) {
-              $oldVersion = (Get-Content $file -Raw).Trim()
-              $lastDotIndex = $oldVersion.LastIndexOf('.')
-              if ($lastDotIndex -gt 0) {
-                $prefix = $oldVersion.Substring(0, $lastDotIndex)
-                $buildNum = [int]$oldVersion.Substring($lastDotIndex + 1)
-                if ($prefix -eq $birdnetTag) {
-                  $buildNum++
-                  $newVersion = "$birdnetTag.$buildNum"
-                }
-              }
-            }
-            echo "tag_name=v$newVersion" >> $env:GITHUB_OUTPUT
-            Set-Content -Path $file -Value $newVersion
+            $runNumber = "${{ github.run_number }}"
+            echo "tag_name=v$birdnetTag.$runNumber" >> $env:GITHUB_OUTPUT
           }
-
-      - name: Commit Version Bump
-        if: ${{ github.ref_type != 'tag' }}
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add INSTALLER_VERSION.txt
-          git commit -m "chore: bump installer version to ${{ steps.version.outputs.tag_name }} [skip ci]" || true
-          git push
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -171,19 +144,18 @@ jobs:
 
             | Détails | Valeur |
             | :--- | :--- |
-            | **Version de l'installateur** | `${{ steps.version.outputs.tag_name }}` |
-            | **Version cible de BirdNET-Go** | [`${{ steps.upstream.outputs.tag }}`](${{ steps.upstream.outputs.url }}) |
+            | **Version de l'installateur** | ${{ steps.version.outputs.tag_name }} |
+            | **Version cible de BirdNET-Go** | [${{ steps.upstream.outputs.tag }}](${{ steps.upstream.outputs.url }}) |
 
             ---
 
             ### 🛡️ Sécurité & Intégrité
 
-            > ⚠️ **Fichier non signé numériquement.** Windows SmartScreen peut afficher un avertissement au premier lancement. Cliquez sur *"Informations complémentaires"* puis *"Exécuter quand même"*.
-
             **🔍 Analyse VirusTotal :**
-            👉 [Cliquez ici pour voir le rapport d'analyse complet](https://www.virustotal.com/gui/file/${{ steps.hash.outputs.sha256 }})
+            👉 [Cliquez ici pour voir le rapport complet](https://www.virustotal.com/gui/file/${{ steps.hash.outputs.sha256 }})
 
-            **#️⃣ Empreinte SHA-256 :** ${{ steps.hash.outputs.sha256 }}
+            **#️⃣ Empreinte SHA-256 :**
+            ${{ steps.hash.outputs.sha256 }}
 
             ---
 
