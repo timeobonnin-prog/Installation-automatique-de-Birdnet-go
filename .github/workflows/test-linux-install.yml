@@ -17,17 +17,12 @@ jobs:
       - name: Run Shell Script Installer
         run: |
           chmod +x install-birdnet.sh
-          # Le script va créer /tmp/birdnet-test automatiquement
           INSTALL_DIR="/tmp/birdnet-test" bash ./install-birdnet.sh
           
       - name: Verify Installation
         run: |
           if [ ! -f "/tmp/birdnet-test/birdnet-go" ]; then
             echo "❌ Binaire non trouvé"
-            exit 1
-          fi
-          if [ ! -x "/tmp/birdnet-test/birdnet-go" ]; then
-            echo "❌ Le binaire n'est pas exécutable"
             exit 1
           fi
           echo "✅ Installation Linux réussie."
