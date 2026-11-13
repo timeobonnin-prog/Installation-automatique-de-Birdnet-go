@@ -20,7 +20,7 @@ jobs:
           TAG=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | jq -r .tag_name)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Update VERSION.txt and tag if changed
+      - name: Update VERSION.txt and trigger
         env:
           TAG: ${{ steps.latest.outputs.tag }}
         run: |
@@ -34,7 +34,3 @@ jobs:
           fi
           git commit -m "chore: BirdNET-Go $TAG"
           git push
-          if ! git rev-parse "v-$TAG" >/dev/null 2>&1; then
-            git tag "v-$TAG"
-            git push origin "v-$TAG"
-          fi
