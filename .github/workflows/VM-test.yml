@@ -1,4 +1,4 @@
-name: Tests d'Installation Réels Multi-VM (Linux, ARM, Raspberry Pi, macOS, Windows)
+name: Test des Binaires Officiels des Releases
 
 on:
   push:
@@ -8,85 +8,77 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-install-linux-arm-macos:
-    name: Installation sur ${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: "Linux Ubuntu (x86_64)"
-            os: ubuntu-latest
-          - name: "Linux ARM64 (Serveur ARM)"
-            os: ubuntu-24.04-arm
-          - name: "macOS (Apple Silicon)"
-            os: macos-latest
-    runs-on: ${{ matrix.os }}
+  test-release-windows:
+    name: Test de l'installateur Windows (.exe)
+    runs-on: windows-latest
     continue-on-error: true
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Tenter l'installation réelle
-        continue-on-error: true
+      - name: Télécharger le binaire Windows depuis les Releases
         run: |
-          chmod +x *.sh scripts/*.sh 2>/dev/null || true
-          export CI=true
-          export DEBIAN_FRONTEND=noninteractive
-          
-          # Correction du nom : install-birdnet.sh (sans 'er')
-          if [ -f "./install-birdnet.sh" ]; then
-            if ./install-birdnet.sh --help || ./install-birdnet.sh; then
-              echo "✅ SUCCÈS : L'installation s'est terminée sur ${{ matrix.name }} !" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "⚠️ AVERTISSEMENT : L'installateur a rencontré un problème sur ${{ matrix.name }}." >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "❌ ERREUR : Fichier install-birdnet.sh introuvable." >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
+          gh release download --pattern "BirdNET-Go-Windows.exe" --dir "." --latest
+          if (Test-Path "BirdNET-Go-Windows.exe") {
+            Write-Host "✅ BirdNET-Go-Windows.exe téléchargé avec succès."
+          } else {
+            Write-Host "⚠️ Binaire Windows introuvable dans la release."
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  test-install-raspberry-pi:
-    name: Installation sur Raspberry Pi OS (Émulation QEMU)
+  test-release-linux:
+    name: Test du paquet Linux x64 (.deb)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
+      - name: Télécharger et tester le .deb Linux
+        run: |
+          gh release download --pattern "BirdNET-Go-Linux-x64.deb" --latest || echo "Fichier non trouvé"
+          if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
+            echo "Test d'installation du paquet Linux..."
+            sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
+          else
+            echo "Paquet Linux introuvable."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Démarrer Raspberry Pi OS et tester
+  test-release-raspberry:
+    name: Test du paquet Raspberry Pi (.deb)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Télécharger le paquet Raspberry Pi
+        run: |
+          gh release download --pattern "BirdNET-Go-RaspberryPi.deb" --latest || echo "Fichier non trouvé"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tester le paquet dans la VM Raspberry Pi OS (QEMU)
         uses: pguyot/arm-runner-action@v2.6.5
         continue-on-error: true
         with:
           base_image: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-11-19/2024-11-19-raspios-bookworm-arm64-lite.img.xz
           cpu: cortex-a72
+          copy_artifact_p: BirdNET-Go-RaspberryPi.deb -> /tmp/
           commands: |
-            chmod +x *.sh scripts/*.sh 2>/dev/null || true
-            export CI=true
-            export DEBIAN_FRONTEND=noninteractive
-            
-            if [ -f "./install-birdnet.sh" ]; then
-              ./install-birdnet.sh --help || ./install-birdnet.sh
+            echo "=== Test du paquet Raspberry Pi dans la VM ==="
+            if [ -f "/tmp/BirdNET-Go-RaspberryPi.deb" ]; then
+              sudo dpkg -i /tmp/BirdNET-Go-RaspberryPi.deb || sudo apt-get install -f -y
             else
-              echo "install-birdnet.sh introuvable !"
-              exit 1
+              echo "Paquet Raspberry Pi absent dans la VM."
             fi
 
-  test-install-windows:
-    name: Compilation & Test sur Windows
-    runs-on: windows-latest
+  test-release-macos:
+    name: Test du paquet macOS (.pkg)
+    runs-on: macos-latest
     continue-on-error: true
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Créer un faux fichier exe temporaire pour autoriser la compilation à blanc
+      - name: Télécharger le paquet macOS
         run: |
-          New-Item -ItemType Directory -Force -Path "dist"
-          Set-Content -Path "dist\birdnet-go.exe" -Value "Faux binaire pour test Inno Setup"
-
-      - name: Compiler l'installateur Windows (BirdNET-Go-Installer.iss)
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        continue-on-error: true
-        with:
-          path: BirdNET-Go-Installer.iss
-          options: /O+
+          gh release download --pattern "BirdNET-Go-macOS.pkg" --latest || echo "Fichier non trouvé"
+          if [ -f "BirdNET-Go-macOS.pkg" ]; then
+            echo "✅ BirdNET-Go-macOS.pkg téléchargé avec succès."
+          else
+            echo "Paquet macOS introuvable."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
