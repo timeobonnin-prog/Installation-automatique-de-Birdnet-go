@@ -1,19 +1,18 @@
 @echo off
-title BirdNET-Go
+title BirdNET-Go Server
+color 0A
 echo ====================================================
 echo   Lancement de BirdNET-Go...
-echo   L'interface Web va s'ouvrir dans votre navigateur.
-echo   Adresse : http://localhost:8080
 echo ====================================================
 echo.
-echo Ne fermez pas cette fenetre, c'est le serveur !
-echo.
 
-:: Lancement du serveur en arrière-plan
-start "" "%~dp0birdnet-go.exe"
-
-:: Attente de 3 secondes pour laisser le temps au serveur de démarrer
-timeout /t 3 /nobreak > NUL
-
-:: Ouverture du navigateur par défaut
+:: Ouvre le navigateur en arrière-plan
 start http://localhost:8080
+
+:: Lance le serveur (la fenêtre restera ouverte grâce à l'appel direct)
+"%~dp0birdnet-go.exe"
+
+:: Si le serveur s'arrête ou plante, on met en pause pour que l'utilisateur puisse lire l'erreur
+echo.
+echo Le serveur s'est arrete. Appuyez sur une touche pour fermer.
+pause > nul
