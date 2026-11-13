@@ -58,28 +58,6 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      # --- ÉTAPE SIGNPATH (À décommenter quand vous aurez les identifiants) ---
-      # - name: Upload unsigned artifact
-      #   id: upload-unsigned
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     path: Output\BirdNET-Go-Installer.exe
-      #     archive: false
-      #
-      # - name: Sign installer
-      #   uses: signpath/github-action-submit-signing-request@v3
-      #   with:
-      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-      #     organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-      #     project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-      #     signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-      #     github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
-      #     wait-for-completion: true
-      #     output-artifact-directory: './signed-output'
-      #
-      # - name: Replace with signed installer
-      #   run: Copy-Item -Path '.\signed-output\BirdNET-Go-Installer.exe' -Destination 'Output\BirdNET-Go-Installer.exe' -Force
-
       - name: Compute SHA-256
         id: hash
         shell: pwsh
@@ -150,6 +128,6 @@ jobs:
             **🔍 Analyse VirusTotal :**
             👉 [Cliquez ici pour voir le rapport d'analyse complet](https://www.virustotal.com/gui/file/${{ steps.hash.outputs.sha256 }})
 
-            **#️⃣ Empreinte SHA-256 :** `${{ steps.hash.outputs.sha256 }}`
+            **#️⃣ Empreinte SHA-256 :** ${{ steps.hash.outputs.sha256 }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
