@@ -27,15 +27,23 @@ jobs:
           cat <<EOF > Dockerfile.arm
           FROM --platform=linux/arm64 debian:bookworm-slim
           RUN apt-get update && apt-get install -y curl tar ca-certificates jq sudo
+          
+          # On récupère le token passé en argument
+          ARG GITHUB_TOKEN
+          ENV GITHUB_TOKEN=\$GITHUB_TOKEN
+          
           WORKDIR /app
           COPY install-birdnet.sh .
           RUN chmod +x install-birdnet.sh
-          # On exécute le script avec l'utilisateur root
+          
           RUN INSTALL_DIR="/tmp/test-birdnet" ./install-birdnet.sh
           RUN test -x /tmp/test-birdnet/birdnet-go
           EOF
 
-          docker buildx build --platform linux/arm64 -f Dockerfile.arm -t birdnet-arm-test .
+          # On passe le token lors de la construction
+          docker buildx build --platform linux/arm64 \
+            --build-arg GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            -f Dockerfile.arm -t birdnet-arm-test .
           
       - name: Verify ARM Binary
         run: echo "✅ Le binaire ARM64 (Raspberry Pi) a été installé avec succès !"
