@@ -24,24 +24,17 @@ jobs:
 
       - name: Run Installer in ARM64 Container
         run: |
-          # Création d'un Dockerfile qui simule un Raspberry Pi
           cat <<EOF > Dockerfile.arm
           FROM --platform=linux/arm64 debian:bookworm-slim
           RUN apt-get update && apt-get install -y curl tar sudo
           WORKDIR /app
           COPY install-birdnet.sh .
           RUN chmod +x install-birdnet.sh
-          
-          # Le script va créer ce dossier automatiquement
           RUN INSTALL_DIR="/tmp/test-birdnet" ./install-birdnet.sh
-          
-          # Vérification que le fichier est là
           RUN test -x /tmp/test-birdnet/birdnet-go
           EOF
 
-          # Construction et exécution du test
           docker buildx build --platform linux/arm64 -f Dockerfile.arm -t birdnet-arm-test .
           
       - name: Verify ARM Binary
-        run: |
-          echo "✅ Le binaire ARM64 (Raspberry Pi) a été installé et est exécutable dans le conteneur !"
+        run: echo "✅ Le binaire ARM64 (Raspberry Pi) a été installé avec succès !"
