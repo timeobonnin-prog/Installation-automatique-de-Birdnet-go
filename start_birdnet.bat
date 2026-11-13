@@ -6,11 +6,11 @@ echo   Lancement de BirdNET-Go...
 echo ====================================================
 echo.
 
-:: Ouvre le navigateur en arrière-plan
-start http://localhost:8080
+:: Ouvre le navigateur en arrière-plan (après 2 secondes)
+start "" cmd /c "timeout /t 2 >nul & start http://localhost:8080"
 
-:: Lance le serveur (la fenêtre restera ouverte grâce à l'appel direct)
-"%~dp0birdnet-go.exe"
+:: Lance le serveur (avec l'argument "serve" !)
+"%~dp0birdnet-go.exe" serve
 
 :: Si le serveur s'arrête ou plante, on met en pause pour que l'utilisateur puisse lire l'erreur
 echo.
