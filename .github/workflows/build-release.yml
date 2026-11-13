@@ -162,6 +162,7 @@ jobs:
   build-macos:
     needs: build-windows
     runs-on: macos-latest
+    continue-on-error: true  # <--- AJOUT : Permet de ne pas bloquer la Release si le Mac plante
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -194,10 +195,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ==========================================
-  # JOB 4 : PUBLIER LA RELEASE (Une fois tout fini)
+  # JOB 4 : PUBLIER LA RELEASE (Une fois Windows et Linux finis)
   # ==========================================
   publish-release:
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-windows, build-linux] # <--- MODIFICATION : Retrait de build-macos
     runs-on: ubuntu-latest
     steps:
       - name: Publish Release
