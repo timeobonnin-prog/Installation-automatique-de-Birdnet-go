@@ -15,11 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Run Shell Script Installer
+        shell: bash
         run: |
           chmod +x install-birdnet.sh
           INSTALL_DIR="/tmp/birdnet-test" bash ./install-birdnet.sh
           
       - name: Verify Installation
+        shell: bash
         run: |
           if [ ! -f "/tmp/birdnet-test/birdnet-go" ]; then
             echo "❌ Binaire non trouvé"
