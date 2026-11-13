@@ -42,7 +42,8 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""BirdNET-Go Server"" dir=in action=allow protocol=TCP localport=8080"; Flags: runhidden; Tasks: firewall
 
 [UninstallRun]
-Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""BirdNET-Go Server""; Flags: runhidden
+; CORRECTION ICI : Le guillemet fermant a été ajouté à la fin de la commande
+Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""BirdNET-Go Server"""; Flags: runhidden
 
 [Code]
 var
