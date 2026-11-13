@@ -21,24 +21,17 @@ else
     ARCH_NAME="arm64"
 fi
 
-# 3. Authentification (si GITHUB_TOKEN est fourni, on l'utilise)
-AUTH_HEADER=""
+# 3. Préparation des arguments pour curl
+CURL_ARGS=("-s" "-H" "User-Agent: GitHub-Actions")
 if [ -n "$GITHUB_TOKEN" ]; then
-    AUTH_HEADER="Authorization: Bearer $GITHUB_TOKEN"
-    echo "[OK] Utilisation du GITHUB_TOKEN pour éviter les limites d'API."
+    CURL_ARGS+=("-H" "Authorization: Bearer $GITHUB_TOKEN")
+    echo "[OK] Authentification avec GITHUB_TOKEN activée."
 else
-    echo "[ATTENTION] Pas de GITHUB_TOKEN. Risque de blocage par l'API GitHub."
+    echo "[ATTENTION] Pas de GITHUB_TOKEN fourni."
 fi
 
-# 4. Récupération des infos via l'API GitHub
-echo "[...] Recherche de la dernière version..."
-API_JSON=$(curl -s -H "User-Agent: GitHub-Actions" -H "$AUTH_HEADER" https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
-
-# Vérification si l'API a renvoyé une erreur (Rate Limit)
-if echo "$API_JSON" | grep -q "API rate limit exceeded"; then
-    echo "❌ Erreur : Limite d'API GitHub atteinte. Veuillez réessayer plus tard."
-    exit 1
-fi
+echo "[...] Recherche de la dernière version sur l'API GitHub..."
+API_JSON=$(curl "${CURL_ARGS[@]}" https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
 
 if command -v jq >/dev/null 2>&1; then
     LATEST_TAG=$(echo "$API_JSON" | jq -r .tag_name)
@@ -48,8 +41,9 @@ else
     ARCHIVE_URL=$(echo "$API_JSON" | grep "browser_download_url.*linux_${ARCH_NAME}.tar.gz" | cut -d '"' -f 4 || true)
 fi
 
+# Vérification si l'API a renvoyé une erreur
 if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-    echo "❌ Impossible de trouver la dernière version. Voici la réponse de l'API :"
+    echo "❌ Impossible de trouver la dernière version. Voici ce que l'API a répondu :"
     echo "$API_JSON"
     exit 1
 fi
@@ -60,12 +54,12 @@ if [ -z "$ARCHIVE_URL" ] || [ "$ARCHIVE_URL" = "null" ]; then
     exit 1
 fi
 
-# 5. Téléchargement
+# 4. Téléchargement
 TMP_DIR=$(mktemp -d)
 echo "[...] Téléchargement de l'archive depuis $ARCHIVE_URL..."
 curl -fsSL -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
 
-# 6. Installation
+# 5. Installation
 echo "[...] Installation dans $INSTALL_DIR..."
 if [ "$EUID" -eq 0 ]; then
     mkdir -p "$INSTALL_DIR"
@@ -77,7 +71,7 @@ else
 fi
 rm -rf "$TMP_DIR"
 
-# 7. Création du service systemd
+# 6. Création du service systemd
 if command -v systemctl >/dev/null 2>&1 && [ "$INSTALL_DIR" = "/opt/birdnet-go" ] && [ "$EUID" -ne 0 ]; then
     echo "[...] Création du service systemd..."
     sudo bash -c "cat > /etc/systemd/system/birdnet-go.service <<EOF
