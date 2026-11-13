@@ -8,6 +8,9 @@ on:
       - '.github/workflows/test-linux-install.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test-linux:
     runs-on: ubuntu-latest
