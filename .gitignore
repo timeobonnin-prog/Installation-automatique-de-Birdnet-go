@@ -1,0 +1,28 @@
+# --- Dossiers générés par Inno Setup (Compilation Windows) ---
+Output/
+*.exe
+*.iss.bak
+
+# --- Dossiers de test locaux ---
+test-appdata/
+birdnet-test/
+
+# --- Fichiers temporaires et logs ---
+*.tmp
+*.log
+*.bak
+*.swp
+
+# --- Fichiers systèmes Windows ---
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Fichiers systèmes macOS ---
+.DS_Store
+
+# --- Éditeurs de code (VS Code, Visual Studio, JetBrains) ---
+.vscode/
+.idea/
+*.suo
+*.user
