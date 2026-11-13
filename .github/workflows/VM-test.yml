@@ -21,7 +21,7 @@ jobs:
 
       - name: Télécharger le binaire Windows depuis les Releases
         run: |
-          gh release download --pattern "BirdNET-Go-Windows.exe" --dir "." --latest || Write-Host "Téléchargement impossible, binaire absent."
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "." --latest || Write-Host "Téléchargement impossible, binaire absent."
           if (Test-Path "BirdNET-Go-Windows.exe") {
             Write-Host "✅ BirdNET-Go-Windows.exe téléchargé avec succès."
           } else {
@@ -47,7 +47,7 @@ jobs:
 
       - name: Télécharger et tester le .deb Linux
         run: |
-          gh release download --pattern "BirdNET-Go-Linux-x64.deb" --latest || echo "Fichier non trouvé"
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb" --latest || echo "Fichier non trouvé"
           if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
             echo "Test d'installation du paquet Linux..."
             sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y || true
@@ -67,7 +67,7 @@ jobs:
 
       - name: Télécharger le paquet Raspberry Pi
         run: |
-          gh release download --pattern "BirdNET-Go-RaspberryPi.deb" --latest || echo "Fichier non trouvé"
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-RaspberryPi.deb" --latest || echo "Fichier non trouvé"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -97,7 +97,7 @@ jobs:
 
       - name: Télécharger le paquet macOS
         run: |
-          gh release download --pattern "BirdNET-Go-macOS.pkg" --latest || echo "Fichier non trouvé"
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-macOS.pkg" --latest || echo "Fichier non trouvé"
           if [ -f "BirdNET-Go-macOS.pkg" ]; then
             echo "✅ BirdNET-Go-macOS.pkg téléchargé avec succès."
           else
