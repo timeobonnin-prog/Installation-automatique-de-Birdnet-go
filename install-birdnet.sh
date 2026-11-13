@@ -15,32 +15,39 @@ if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "arm64" ] && [ "$ARCH" != "x86_64" ]
     exit 1
 fi
 
-# 3. Récupération de la dernière version
-echo "[...] Recherche de la dernière version..."
-LATEST_TAG=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-
-if [ -z "$LATEST_TAG" ]; then
-    echo "❌ Impossible de trouver la dernière version."
-    exit 1
-fi
-echo "[OK] Version détectée : $LATEST_TAG"
-
-# 4. Téléchargement du binaire natif (Correction du nom de l'archive)
 if [ "$ARCH" = "x86_64" ]; then
     ARCH_NAME="amd64"
 else
     ARCH_NAME="arm64"
 fi
 
-# Le format exact utilisé par BirdNET-Go est : gobirdnet_<version>_linux_<arch>.tar.gz
-ARCHIVE_URL="https://github.com/tphakala/birdnet-go/releases/download/${LATEST_TAG}/gobirdnet_${LATEST_TAG}_linux_${ARCH_NAME}.tar.gz"
+# 3. Récupération des infos de la dernière version via l'API GitHub
+echo "[...] Recherche de la dernière version..."
+API_JSON=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
+
+LATEST_TAG=$(echo "$API_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+if [ -z "$LATEST_TAG" ]; then
+    echo "❌ Impossible de trouver la dernière version."
+    exit 1
+fi
+echo "[OK] Version détectée : $LATEST_TAG"
+
+# 4. Extraction de l'URL exacte de téléchargement depuis l'API
+# On cherche la ligne qui contient "browser_download_url" et "linux_amd64.tar.gz"
+ARCHIVE_URL=$(echo "$API_JSON" | grep "browser_download_url.*linux_${ARCH_NAME}.tar.gz" | cut -d '"' -f 4)
+
+if [ -z "$ARCHIVE_URL" ]; then
+    echo "❌ Impossible de trouver l'URL de l'archive pour Linux $ARCH_NAME."
+    exit 1
+fi
+
+# 5. Téléchargement
 TMP_DIR=$(mktemp -d)
-echo "[...] Téléchargement de l'archive ($ARCH_NAME)..."
+echo "[...] Téléchargement de l'archive depuis $ARCHIVE_URL..."
 curl -sL -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
 
-# 5. Installation
+# 6. Installation
 echo "[...] Installation dans $INSTALL_DIR..."
-# Si on est root (dans Docker), pas besoin de sudo.
 if [ "$EUID" -eq 0 ]; then
     mkdir -p "$INSTALL_DIR"
     tar -xzf "$TMP_DIR/birdnet.tar.gz" -C "$INSTALL_DIR" --strip-components=1
@@ -51,7 +58,7 @@ else
 fi
 rm -rf "$TMP_DIR"
 
-# 6. Création du service systemd (Uniquement sur un vrai système)
+# 7. Création du service systemd (uniquement si on est sur un vrai système, pas dans Docker)
 if command -v systemctl >/dev/null 2>&1 && [ "$INSTALL_DIR" = "/opt/birdnet-go" ] && [ "$EUID" -ne 0 ]; then
     echo "[...] Création du service systemd..."
     sudo bash -c "cat > /etc/systemd/system/birdnet-go.service <<EOF
