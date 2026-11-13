@@ -1,5 +1,5 @@
 [Setup]
-AppName=BirdNET-Go
+AppName=BirdNET-Go (Community Installer)
 AppVersion=1.0.0
 AppPublisher=timeobonnin-prog
 DefaultDirName={localappdata}\BirdNET-Go
@@ -19,6 +19,9 @@ SetupIconFile=icon.ico
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Tasks]
+Name: "firewall"; Description: "{cm:FirewallTask}"; GroupDescription: "{cm:AdditionalIcons}"
+
 [Files]
 Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -34,6 +37,12 @@ Name: "{group}\Désinstaller BirdNET-Go"; Filename: "{uninstallexe}"
 
 [Registry]
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath('{app}')
+
+[Run]
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""BirdNET-Go Server"" dir=in action=allow protocol=TCP localport=8080"; Flags: runhidden; Tasks: firewall
+
+[UninstallRun]
+Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""BirdNET-Go Server""; Flags: runhidden
 
 [Code]
 var
@@ -54,52 +63,27 @@ end;
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
-  MsgText: String;
 begin
   Result := True;
   IsUpdate := False;
 
+  { Vérifie si BirdNET-Go tourne }
   if Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq birdnet-go.exe" | find /I "birdnet-go.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
     if ResultCode = 0 then
     begin
-      if ActiveLanguage = 'french' then
-        MsgText := 'BirdNET-Go est en cours d''exécution.' + #13#10 + 'L''installateur doit le fermer pour pouvoir le mettre à jour. Continuer ?'
-      else
-        MsgText := 'BirdNET-Go is currently running.' + #13#10 + 'The installer needs to close it to update. Continue?';
-
-      if MsgBox(MsgText, mbConfirmation, MB_YESNO) = IDYES then
-      begin
-        Exec('taskkill.exe', '/F /IM birdnet-go.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      end
-      else
-      begin
-        Result := False;
-        exit;
-      end;
+      Exec('taskkill.exe', '/F /IM birdnet-go.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     end;
   end;
 
+  { Vérifie si c'est une mise à jour }
   if RegKeyExists(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\BirdNET-Go_is1') then
     IsUpdate := True;
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  MsgText: String;
-begin
-  if CurStep = ssPostInstall then
-  begin
-    if ActiveLanguage = 'french' then
-    begin
-      if IsUpdate then MsgText := 'Mise à jour terminée avec succès !' else MsgText := 'Installation terminée avec succès !';
-      MsgText := MsgText + #13#10 + #13#10 + 'Vos réglages (config.yaml) ont été conservés.' + #13#10 + 'L''interface est disponible sur : http://localhost:8080';
-    end
-    else
-    begin
-      if IsUpdate then MsgText := 'Update completed successfully!' else MsgText := 'Installation completed successfully!';
-      MsgText := MsgText + #13#10 + #13#10 + 'Your settings (config.yaml) have been preserved.' + #13#10 + 'The interface is available at: http://localhost:8080';
-    end;
-    MsgBox(MsgText, mbInformation, MB_OK);
-  end;
-end;
+{ Ajout des traductions pour la case à cocher }
+[CustomMessages]
+french.FirewallTask=Autoriser BirdNET-Go dans le Pare-feu Windows (Port 8080)
+french.AdditionalIcons=Options supplémentaires :
+english.FirewallTask=Allow BirdNET-Go in Windows Firewall (Port 8080)
+english.AdditionalIcons=Additional options:
