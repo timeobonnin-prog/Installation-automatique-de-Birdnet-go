@@ -6,6 +6,7 @@ on:
     paths:
       - 'BirdNET-Go-Installer.iss'
       - 'nfpm.yaml'
+      - 'start_birdnet.bat'
       - '.github/workflows/build-release.yml'
   create:
     tags:
@@ -32,10 +33,11 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Fetch Upstream Release Info
+      - name: Fetch BirdNET-Go and FFmpeg
         id: upstream
         shell: pwsh
         run: |
+          # 1. Téléchargement de BirdNET-Go
           $apiUrl = "https://api.github.com/repos/tphakala/birdnet-go/releases/latest"
           $headers = @{ "User-Agent" = "PowerShell" }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
@@ -54,6 +56,18 @@ jobs:
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
+          # 2. Téléchargement de FFmpeg (version Windows essentials)
+          Write-Host "Téléchargement de FFmpeg..."
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg-temp"
+          
+          # On cherche ffmpeg.exe dans le dossier extrait et on le copie dans dist
+          $ffmpegExe = Get-ChildItem -Path "ffmpeg-temp" -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
+          Copy-Item -Path $ffmpegExe.FullName -Destination "dist\ffmpeg.exe"
+          
+          # Nettoyage
+          Remove-Item -Recurse -Force "ffmpeg-temp", "ffmpeg.zip"
+
       - name: Compile installer
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
@@ -65,7 +79,6 @@ jobs:
           $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Windows.exe').Hash.ToLower()
           echo "sha256=$h" >> $env:GITHUB_OUTPUT
 
-      # --- CACHE VIRUSTOTAL POUR ÉCONOMISER LE QUOTA ---
       - name: Cache VirusTotal Result
         id: cache-vt
         uses: actions/cache@v4
