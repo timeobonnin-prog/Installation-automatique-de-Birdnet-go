@@ -21,11 +21,10 @@ else
     ARCH_NAME="arm64"
 fi
 
-# 3. Récupération des infos via l'API GitHub
+# 3. Récupération des infos via l'API GitHub (avec User-Agent obligatoire)
 echo "[...] Recherche de la dernière version..."
-API_JSON=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
+API_JSON=$(curl -s -H "User-Agent: GitHub-Actions" https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
 
-# Utilisation de jq si disponible (beaucoup plus fiable), sinon fallback sur grep
 if command -v jq >/dev/null 2>&1; then
     LATEST_TAG=$(echo "$API_JSON" | jq -r .tag_name)
     ARCHIVE_URL=$(echo "$API_JSON" | jq -r ".assets[] | select(.name | contains(\"linux_${ARCH_NAME}.tar.gz\")) | .browser_download_url" | head -n 1)
@@ -47,8 +46,9 @@ fi
 
 # 4. Téléchargement
 TMP_DIR=$(mktemp -d)
-echo "[...] Téléchargement de l'archive..."
-curl -sL -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
+echo "[...] Téléchargement de l'archive depuis $ARCHIVE_URL..."
+# -f permet à curl d'échouer avec un code d'erreur si la page est introuvable (404)
+curl -fsSL -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
 
 # 5. Installation
 echo "[...] Installation dans $INSTALL_DIR..."
