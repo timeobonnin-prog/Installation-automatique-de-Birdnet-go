@@ -21,32 +21,36 @@ else
     ARCH_NAME="arm64"
 fi
 
-# 3. Récupération des infos de la dernière version via l'API GitHub
+# 3. Récupération des infos via l'API GitHub
 echo "[...] Recherche de la dernière version..."
 API_JSON=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
 
-LATEST_TAG=$(echo "$API_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-if [ -z "$LATEST_TAG" ]; then
+# Utilisation de jq si disponible (beaucoup plus fiable), sinon fallback sur grep
+if command -v jq >/dev/null 2>&1; then
+    LATEST_TAG=$(echo "$API_JSON" | jq -r .tag_name)
+    ARCHIVE_URL=$(echo "$API_JSON" | jq -r ".assets[] | select(.name | contains(\"linux_${ARCH_NAME}.tar.gz\")) | .browser_download_url" | head -n 1)
+else
+    LATEST_TAG=$(echo "$API_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+    ARCHIVE_URL=$(echo "$API_JSON" | grep "browser_download_url.*linux_${ARCH_NAME}.tar.gz" | cut -d '"' -f 4 || true)
+fi
+
+if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
     echo "❌ Impossible de trouver la dernière version."
     exit 1
 fi
 echo "[OK] Version détectée : $LATEST_TAG"
 
-# 4. Extraction de l'URL exacte de téléchargement depuis l'API
-# On cherche la ligne qui contient "browser_download_url" et "linux_amd64.tar.gz"
-ARCHIVE_URL=$(echo "$API_JSON" | grep "browser_download_url.*linux_${ARCH_NAME}.tar.gz" | cut -d '"' -f 4)
-
-if [ -z "$ARCHIVE_URL" ]; then
+if [ -z "$ARCHIVE_URL" ] || [ "$ARCHIVE_URL" = "null" ]; then
     echo "❌ Impossible de trouver l'URL de l'archive pour Linux $ARCH_NAME."
     exit 1
 fi
 
-# 5. Téléchargement
+# 4. Téléchargement
 TMP_DIR=$(mktemp -d)
-echo "[...] Téléchargement de l'archive depuis $ARCHIVE_URL..."
+echo "[...] Téléchargement de l'archive..."
 curl -sL -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
 
-# 6. Installation
+# 5. Installation
 echo "[...] Installation dans $INSTALL_DIR..."
 if [ "$EUID" -eq 0 ]; then
     mkdir -p "$INSTALL_DIR"
@@ -58,7 +62,7 @@ else
 fi
 rm -rf "$TMP_DIR"
 
-# 7. Création du service systemd (uniquement si on est sur un vrai système, pas dans Docker)
+# 6. Création du service systemd
 if command -v systemctl >/dev/null 2>&1 && [ "$INSTALL_DIR" = "/opt/birdnet-go" ] && [ "$EUID" -ne 0 ]; then
     echo "[...] Création du service systemd..."
     sudo bash -c "cat > /etc/systemd/system/birdnet-go.service <<EOF
