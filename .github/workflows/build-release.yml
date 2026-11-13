@@ -74,19 +74,17 @@ jobs:
             if ($response.StatusCode -eq 200) {
               Write-Host "Fichier déjà connu de VirusTotal."
             } elseif ($response.StatusCode -eq 404) {
-              Write-Host "Fichier inconnu, demande d'une URL d'upload spéciale (fichier > 32Mo)..."
+              Write-Host "Fichier inconnu, demande d'une URL d'upload spéciale..."
               
-              # On demande l'URL d'upload pour les gros fichiers
               $uploadUrlReq = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/upload_url" -Headers $headers -Method Get
               $targetUrl = $uploadUrlReq.data
               
               Write-Host "Upload en cours..."
-              # Utilisation de curl.exe qui gère mieux les fichiers volumineux
               $curlOutput = & curl.exe -s -X POST $targetUrl -H "x-apikey: $($env:VT_API_KEY)" -F "file=@$($file.FullName)"
               
               $uploadData = $curlOutput | ConvertFrom-Json
               $analysisId = $uploadData.data.id
-              Write-Host "Upload réussi. Analyse en cours sur VirusTotal..."
+              Write-Host "Upload réussi. Analyse en cours..."
 
               for ($i=0; $i -lt 30; $i++) {
                 Start-Sleep -Seconds 10
@@ -107,7 +105,7 @@ jobs:
             Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
 
             if ($stats.malicious -gt 15) {
-              Write-Error "Trop de détections ($($stats.malicious))."
+              Write-Error "Trop de détections."
               exit 1
             }
           } catch {
@@ -186,5 +184,12 @@ jobs:
             👉 [Cliquez ici pour voir le rapport d'analyse complet](https://www.virustotal.com/gui/file/${{ steps.hash.outputs.sha256 }})
 
             **#️⃣ Empreinte SHA-256 :** ${{ steps.hash.outputs.sha256 }}
+
+            ---
+
+            ### 🔏 Code signing policy
+            Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+            - **Committers and reviewers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
+            - **Approvers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
