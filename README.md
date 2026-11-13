@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="logo.png" alt="BirdNET-Go Installer Logo" width="200"/>
+</p>
 # 🪶 Installation automatique de BirdNET-Go
 
 Ce dépôt fournit des installateurs automatisés pour déployer facilement la dernière version de [BirdNET-Go](https://github.com/tphakala/birdnet-go) sur **Windows**, **Linux (Debian/Ubuntu)**, **Raspberry Pi** et **macOS**.
