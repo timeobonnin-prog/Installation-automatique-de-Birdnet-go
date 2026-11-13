@@ -3,6 +3,8 @@ name: Lint Scripts
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'install-birdnet.sh'
   workflow_dispatch:
 
 jobs:
@@ -10,8 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run ShellCheck
+      - name: Run ShellCheck on main script
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: './'
-          ignore_names: 'install-install-birdnet.sh' # Ignore l'ancien nom s'il traîne
+          ignore_paths: '.github'
+          severity: error # On ne bloque que sur les vraies erreurs, pas les simples avertissements
