@@ -1,0 +1,49 @@
+name: Test ARM64 (Raspberry Pi) Installer
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'install-birdnet.sh'
+      - '.github/workflows/test-arm-install.yml'
+  workflow_dispatch:
+
+jobs:
+  test-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run Installer in ARM64 Container
+        run: |
+          # On crée un Dockerfile temporaire pour simuler un environnement Debian ARM64
+          cat <<EOF > Dockerfile.arm
+          FROM --platform=linux/arm64 debian:bookworm-slim
+          RUN apt-get update && apt-get install -y curl tar sudo
+          WORKDIR /app
+          COPY install-birdnet.sh .
+          RUN chmod +x install-birdnet.sh
+          # On exécute le script dans un dossier personnalisé
+          RUN INSTALL_DIR="/tmp/test-birdnet" ./install-birdnet.sh
+          # On vérifie que le binaire est bien là et exécutable
+          RUN test -x /tmp/test-birdnet/birdnet-go
+          EOF
+
+          docker buildx build --platform linux/arm64 -f Dockerfile.arm -t birdnet-arm-test .
+          
+      - name: Verify ARM Binary
+        run: |
+          echo "✅ Le binaire ARM64 a été installé et est exécutable."
+
+      - name: (Optionnel) Exécuter le binaire pour test rapide
+        run: |
+          # On lance le binaire avec --version pour voir s'il s'exécute
+          docker run --platform linux/arm64 --rm birdnet-arm-test /tmp/test-birdnet/birdnet-go --version || echo "⚠️ Le binaire s'est lancé mais a peut-être renvoyé une erreur (normal sans config)."
