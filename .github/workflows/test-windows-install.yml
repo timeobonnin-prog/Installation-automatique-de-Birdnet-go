@@ -13,12 +13,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Run PowerShell Installer
         shell: pwsh
         run: |
-          # Exécute le script avec un dossier d'installation temporaire pour ne pas polluer le runner
-          $env:LOCALAPPDATA = "${{ github.workspace }}\test-appdata"
+          # Création du dossier de test automatique
+          $testDir = "${{ github.workspace }}\test-appdata"
+          New-Item -ItemType Directory -Path $testDir -Force | Out-Null
+          
+          # On force le script à utiliser ce dossier
+          $env:LOCALAPPDATA = $testDir
           .\install-birdnet.ps1
+          
       - name: Verify Installation
         shell: pwsh
         run: |
@@ -27,4 +33,4 @@ jobs:
             Write-Error "❌ birdnet-go.exe non trouvé dans $installDir"
             exit 1
           }
-          Write-Host "✅ Installation Windows réussie : le binaire est présent."
+          Write-Host "✅ Installation Windows réussie : le binaire est bien présent."
