@@ -16,18 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
-        
       - name: Run Shell Script Installer
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          sed -i 's/\r$//' install-birdnet.sh
           chmod +x install-birdnet.sh
           INSTALL_DIR="/tmp/birdnet-test" bash ./install-birdnet.sh
-          
       - name: Verify Installation
         shell: bash
         run: |
