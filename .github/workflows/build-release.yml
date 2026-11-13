@@ -58,7 +58,7 @@ jobs:
                 -Headers $headers `
                 -Form @{ file = $file }
               $analysisId = $upload.data.id
-              Write-Host "Upload réussi. Analyse en cours sur VirusTotal..."
+              Write-Host "Upload réussi. Analyse en cours..."
 
               for ($i=0; $i -lt 15; $i++) {
                 Start-Sleep -Seconds 10
@@ -69,7 +69,7 @@ jobs:
                 }
               }
             } else {
-              Write-Warning "Erreur API ($($response.StatusCode)). On ignore le scan et on continue."
+              Write-Warning "Erreur API ($($response.StatusCode)). On continue."
               exit 0
             }
 
@@ -82,9 +82,6 @@ jobs:
               Write-Error "Trop de détections ($($stats.malicious)). Publication annulée."
               exit 1
             }
-
-            Write-Host "Le fichier est validé."
-            exit 0
           } catch {
             Write-Warning "Erreur lors du scan : $_"
             exit 0
@@ -112,7 +109,7 @@ jobs:
             echo "url=https://github.com/tphakala/birdnet-go/releases" >> $env:GITHUB_OUTPUT
           }
 
-      # Calcul de la version 1.1 -> 1.2 -> ... -> 2.0
+      # --- NOUVELLE LOGIQUE DE VERSION (ex: 20261031.1) ---
       - name: Calculate Next Version
         id: version
         shell: pwsh
@@ -120,24 +117,30 @@ jobs:
           if ("${{ github.ref_type }}" -eq "tag") {
             echo "tag_name=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
           } else {
+            $birdnetTag = "${{ steps.upstream.outputs.tag }}"
             $file = "INSTALLER_VERSION.txt"
+            $newVersion = "$birdnetTag.1"
+
             if (Test-Path $file) {
-              $v = (Get-Content $file -Raw).Trim()
-              $parts = $v.Split('.')
-              $major = [int]$parts[0]
-              $minor = [int]$parts[1]
-              $minor++
-              if ($minor -ge 10) { $major++; $minor = 0 }
-              $newVersion = "$major.$minor"
-            } else {
-              $newVersion = "1.1"
+              $oldVersion = (Get-Content $file -Raw).Trim()
+              $lastDotIndex = $oldVersion.LastIndexOf('.')
+              
+              if ($lastDotIndex -gt 0) {
+                $prefix = $oldVersion.Substring(0, $lastDotIndex)
+                $buildNum = [int]$oldVersion.Substring($lastDotIndex + 1)
+                
+                if ($prefix -eq $birdnetTag) {
+                  $buildNum++
+                  $newVersion = "$birdnetTag.$buildNum"
+                }
+              }
             }
-            Write-Host "Nouvelle version : $newVersion"
+            
+            Write-Host "Nouvelle version calculée : $newVersion"
             echo "tag_name=v$newVersion" >> $env:GITHUB_OUTPUT
             Set-Content -Path $file -Value $newVersion
           }
 
-      # Sauvegarde de la version pour la prochaine fois
       - name: Commit Version Bump
         if: ${{ github.ref_type != 'tag' }}
         shell: bash
@@ -148,7 +151,6 @@ jobs:
           git commit -m "chore: bump installer version to ${{ steps.version.outputs.tag_name }} [skip ci]"
           git push
 
-      # --- LA RELEASE PROPRE ET PROFESSIONNELLE ---
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -179,4 +181,3 @@ jobs:
             **#️⃣ Empreinte SHA-256 :**
             ```text
             ${{ steps.hash.outputs.sha256 }}
-
