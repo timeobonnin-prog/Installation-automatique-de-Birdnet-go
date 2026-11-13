@@ -26,66 +26,59 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
+      - name: Fetch Upstream Release Info
+        id: upstream
+        shell: pwsh
+        run: |
+          $apiUrl = "https://api.github.com/repos/tphakala/birdnet-go/releases/latest"
+          $headers = @{ "User-Agent" = "PowerShell" }
+          $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
+          echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
+          echo "url=$($release.html_url)" >> $env:GITHUB_OUTPUT
+          
+          # Téléchargement de l'archive
+          $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
+          
+          # Extraction
+          mkdir dist -Force | Out-Null
+          tar -xzf birdnet.tar.gz -C dist
+          
+          # Déplacement du .exe à la racine de dist pour Inno Setup
+          $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
+          Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
+          
+          # Création du fichier VERSION.txt
+          Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
+          
+          # Nettoyage
+          Remove-Item birdnet.tar.gz
+
       - name: Compile installer
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      - name: Scan with VirusTotal
-        shell: pwsh
-        env:
-          VT_API_KEY: ${{ secrets.VT_API_KEY }}
-        run: |
-          try {
-            if (-not $env:VT_API_KEY) {
-              Write-Warning "Secret VT_API_KEY manquant. Le scan est ignoré."
-              exit 0
-            }
-            
-            $file = Get-Item 'Output\BirdNET-Go-Installer.exe'
-            $hash = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
-            $headers = @{ 'x-apikey' = $env:VT_API_KEY }
-            $lookup = "https://www.virustotal.com/api/v3/files/$hash"
-            
-            $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing -SkipHttpErrorCheck
-
-            if ($response.StatusCode -eq 200) {
-              Write-Host "Fichier déjà connu de VirusTotal."
-            } elseif ($response.StatusCode -eq 404) {
-              Write-Host "Fichier inconnu, upload en cours..."
-              
-              $upload = Invoke-RestMethod -Method Post `
-                -Uri 'https://www.virustotal.com/api/v3/files' `
-                -Headers $headers `
-                -Form @{ file = $file }
-              $analysisId = $upload.data.id
-              Write-Host "Upload réussi. Analyse en cours..."
-
-              for ($i=0; $i -lt 15; $i++) {
-                Start-Sleep -Seconds 10
-                $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
-                if ($analysis.data.attributes.status -eq 'completed') {
-                  Write-Host "Analyse terminée."
-                  break
-                }
-              }
-            } else {
-              Write-Warning "Erreur API ($($response.StatusCode)). On continue."
-              exit 0
-            }
-
-            Start-Sleep -Seconds 5
-            $finalReport = Invoke-RestMethod -Uri $lookup -Headers $headers
-            $stats = $finalReport.data.attributes.last_analysis_stats
-            Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
-
-            if ($stats.malicious -gt 15) {
-              Write-Error "Trop de détections ($($stats.malicious)). Publication annulée."
-              exit 1
-            }
-          } catch {
-            Write-Warning "Erreur lors du scan : $_"
-            exit 0
-          }
+      # --- ÉTAPE SIGNPATH (À décommenter quand vous aurez les identifiants) ---
+      # - name: Upload unsigned artifact
+      #   id: upload-unsigned
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     path: Output\BirdNET-Go-Installer.exe
+      #     archive: false
+      #
+      # - name: Sign installer
+      #   uses: signpath/github-action-submit-signing-request@v3
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      #     project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      #     signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+      #     github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+      #     wait-for-completion: true
+      #     output-artifact-directory: './signed-output'
+      #
+      # - name: Replace with signed installer
+      #   run: Copy-Item -Path '.\signed-output\BirdNET-Go-Installer.exe' -Destination 'Output\BirdNET-Go-Installer.exe' -Force
 
       - name: Compute SHA-256
         id: hash
@@ -94,22 +87,6 @@ jobs:
           $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Installer.exe').Hash.ToLower()
           echo "sha256=$h" >> $env:GITHUB_OUTPUT
 
-      - name: Fetch Upstream Release Info
-        id: upstream
-        shell: pwsh
-        run: |
-          $apiUrl = "https://api.github.com/repos/tphakala/birdnet-go/releases/latest"
-          $headers = @{ "User-Agent" = "PowerShell" }
-          try {
-            $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
-            echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-            echo "url=$($release.html_url)" >> $env:GITHUB_OUTPUT
-          } catch {
-            echo "tag=Inconnue" >> $env:GITHUB_OUTPUT
-            echo "url=https://github.com/tphakala/birdnet-go/releases" >> $env:GITHUB_OUTPUT
-          }
-
-      # --- NOUVELLE LOGIQUE DE VERSION (ex: 20261031.1) ---
       - name: Calculate Next Version
         id: version
         shell: pwsh
@@ -124,19 +101,15 @@ jobs:
             if (Test-Path $file) {
               $oldVersion = (Get-Content $file -Raw).Trim()
               $lastDotIndex = $oldVersion.LastIndexOf('.')
-              
               if ($lastDotIndex -gt 0) {
                 $prefix = $oldVersion.Substring(0, $lastDotIndex)
                 $buildNum = [int]$oldVersion.Substring($lastDotIndex + 1)
-                
                 if ($prefix -eq $birdnetTag) {
                   $buildNum++
                   $newVersion = "$birdnetTag.$buildNum"
                 }
               }
             }
-            
-            Write-Host "Nouvelle version calculée : $newVersion"
             echo "tag_name=v$newVersion" >> $env:GITHUB_OUTPUT
             Set-Content -Path $file -Value $newVersion
           }
@@ -148,7 +121,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add INSTALLER_VERSION.txt
-          git commit -m "chore: bump installer version to ${{ steps.version.outputs.tag_name }} [skip ci]"
+          git commit -m "chore: bump installer version to ${{ steps.version.outputs.tag_name }} [skip ci]" || true
           git push
 
       - name: Create GitHub Release
@@ -161,7 +134,7 @@ jobs:
           body: |
             ### 🪶 BirdNET-Go pour Windows (x64 / ARM64)
 
-            Cet installateur télécharge et configure automatiquement la dernière version de BirdNET-Go sur votre machine.
+            Cet installateur inclut directement la dernière version de BirdNET-Go.
 
             | Détails | Valeur |
             | :--- | :--- |
@@ -176,7 +149,6 @@ jobs:
 
             **🔍 Analyse VirusTotal :**
             👉 [Cliquez ici pour voir le rapport d'analyse complet](https://www.virustotal.com/gui/file/${{ steps.hash.outputs.sha256 }})
-            *(Quelques faux positifs sont normaux pour un installateur non signé).*
 
             **#️⃣ Empreinte SHA-256 :**
             ```text
