@@ -36,27 +36,79 @@ jobs:
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
           echo "url=$($release.html_url)" >> $env:GITHUB_OUTPUT
           
-          # Téléchargement de l'archive
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
           
-          # Extraction
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
           
-          # Déplacement du .exe à la racine de dist pour Inno Setup
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
           
-          # Création du fichier VERSION.txt
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           
-          # Nettoyage
           Remove-Item birdnet.tar.gz
 
       - name: Compile installer
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+
+      - name: Scan with VirusTotal
+        shell: pwsh
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          try {
+            if (-not $env:VT_API_KEY) {
+              Write-Warning "Secret VT_API_KEY manquant. Le scan est ignoré."
+              exit 0
+            }
+            
+            $file = Get-Item 'Output\BirdNET-Go-Installer.exe'
+            $hash = (Get-FileHash -Algorithm SHA256 $file.FullName).Hash.ToLower()
+            $headers = @{ 'x-apikey' = $env:VT_API_KEY }
+            $lookup = "https://www.virustotal.com/api/v3/files/$hash"
+            
+            $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing -SkipHttpErrorCheck
+
+            if ($response.StatusCode -eq 200) {
+              Write-Host "Fichier déjà connu de VirusTotal."
+            } elseif ($response.StatusCode -eq 404) {
+              Write-Host "Fichier inconnu, upload en cours..."
+              
+              $upload = Invoke-RestMethod -Method Post `
+                -Uri 'https://www.virustotal.com/api/v3/files' `
+                -Headers $headers `
+                -Form @{ file = $file }
+              $analysisId = $upload.data.id
+              Write-Host "Upload réussi. Analyse en cours..."
+
+              for ($i=0; $i -lt 15; $i++) {
+                Start-Sleep -Seconds 10
+                $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
+                if ($analysis.data.attributes.status -eq 'completed') {
+                  Write-Host "Analyse terminée."
+                  break
+                }
+              }
+            } else {
+              Write-Warning "Erreur API ($($response.StatusCode)). On ignore le scan et on continue."
+              exit 0
+            }
+
+            Start-Sleep -Seconds 5
+            $finalReport = Invoke-RestMethod -Uri $lookup -Headers $headers
+            $stats = $finalReport.data.attributes.last_analysis_stats
+            Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
+
+            if ($stats.malicious -gt 15) {
+              Write-Error "Trop de détections ($($stats.malicious)). Publication annulée."
+              exit 1
+            }
+          } catch {
+            Write-Warning "Erreur lors du scan : $_"
+            exit 0
+          }
 
       - name: Compute SHA-256
         id: hash
