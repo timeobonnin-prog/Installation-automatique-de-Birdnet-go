@@ -136,11 +136,8 @@ jobs:
           find dist -name "birdnet-go" -type f -exec mv {} dist/ \;
           chmod +x dist/birdnet-go
 
-      - name: Install NFPM
-        run: |
-          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
-          sudo apt update
-          sudo apt install nfpm -y
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
       - name: Build .deb package
         env:
@@ -149,7 +146,7 @@ jobs:
         run: |
           sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
-          nfpm package -p deb -f nfpm.yaml
+          ~/go/bin/nfpm package -p deb -f nfpm.yaml
 
       - name: Upload .deb to Release
         uses: softprops/action-gh-release@v2
