@@ -58,11 +58,18 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
+      - name: Rename Windows Installer
+        shell: pwsh
+        run: |
+          $newName = "BirdNET-Go-Windows-v${{ steps.upstream.outputs.tag }}.exe"
+          Rename-Item -Path "Output\BirdNET-Go-Installer.exe" -NewName $newName
+          echo "NEW_EXE=Output\$newName" >> $env:GITHUB_ENV
+
       - name: Compute SHA-256
         id: hash
         shell: pwsh
         run: |
-          $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Installer.exe').Hash.ToLower()
+          $h = (Get-FileHash -Algorithm SHA256 $env:NEW_EXE).Hash.ToLower()
           echo "sha256=$h" >> $env:GITHUB_OUTPUT
 
       - name: Calculate Unique Version
@@ -78,7 +85,6 @@ jobs:
           }
 
       - name: Create GitHub Release (Draft)
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
@@ -86,7 +92,7 @@ jobs:
           draft: true
           generate_release_notes: false
           body: |
-            ### 🪶 BirdNET-Go (Windows, Linux, Mac)
+            ### 🪶 BirdNET-Go (Windows, Linux, Raspberry Pi, Mac)
 
             Cette release contient les installateurs natifs pour toutes les plateformes.
 
@@ -111,7 +117,7 @@ jobs:
             Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
             - **Committers and reviewers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
             - **Approvers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
-          files: Output/BirdNET-Go-Installer.exe
+          files: ${{ env.NEW_EXE }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -148,6 +154,14 @@ jobs:
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
 
+      - name: Rename .deb package
+        run: |
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            mv birdnet-go_*.deb "BirdNET-Go-Linux-x64-v${{ needs.build-windows.outputs.upstream_tag }}.deb"
+          else
+            mv birdnet-go_*.deb "BirdNET-Go-RaspberryPi-arm64-v${{ needs.build-windows.outputs.upstream_tag }}.deb"
+          fi
+
       - name: Upload .deb to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -157,15 +171,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ==========================================
-  # JOB 3 : MACOS (.pkg)
+  # JOB 3 : MACOS (.pkg) - Apple Silicon
   # ==========================================
   build-macos:
     needs: build-windows
     runs-on: macos-latest
-    continue-on-error: true  # <--- AJOUT : Permet de ne pas bloquer la Release si le Mac plante
+    continue-on-error: true
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        arch: [arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -184,7 +198,7 @@ jobs:
                    --identifier com.github.timeobonnin.birdnetgo \
                    --version ${{ needs.build-windows.outputs.upstream_tag }} \
                    --install-location / \
-                   "BirdNET-Go-macOS-${{ matrix.arch }}.pkg"
+                   "BirdNET-Go-macOS-AppleSilicon-v${{ needs.build-windows.outputs.upstream_tag }}.pkg"
 
       - name: Upload .pkg to Release
         uses: softprops/action-gh-release@v2
@@ -198,7 +212,7 @@ jobs:
   # JOB 4 : PUBLIER LA RELEASE (Une fois Windows et Linux finis)
   # ==========================================
   publish-release:
-    needs: [build-windows, build-linux] # <--- MODIFICATION : Retrait de build-macos
+    needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Publish Release
