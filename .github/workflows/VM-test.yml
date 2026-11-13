@@ -1,0 +1,133 @@
+name: Audit Complet et Tests Multi-OS (Non-bloquant)
+
+on:
+  push:
+    branches: [ main, master, principal ]
+  pull_request:
+    branches: [ main, master, principal ]
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+jobs:
+  analyse-statique-et-securite:
+    name: 1. Sécurité, Secrets et Syntaxe
+    runs-on: ubuntu-latest
+    continue-on-error: true # N'empêche pas le projet de passer en cas d'erreur
+    steps:
+      - name: Récupérer le code complet
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Détection de mots de passe ou clés API oubliés (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Vérification stricte des scripts Shell (ShellCheck)
+        uses: ludeeus/action-shellcheck@master
+        continue-on-error: true
+        with:
+          severity: style
+
+      - name: Vérifier les fins de ligne (CRLF vs LF) et Shebang
+        continue-on-error: true
+        run: |
+          if grep -rn $'\r' --include="*.sh" .; then
+            echo "AVERTISSEMENT : Un script .sh contient des retours à la ligne Windows (CRLF) !"
+            exit 1
+          fi
+          for file in $(find . -name "*.sh"); do
+            if ! head -n 1 "$file" | grep -q "^#!"; then
+              echo "AVERTISSEMENT : $file n'a pas de shebang en première ligne !"
+              exit 1
+            fi
+          done
+
+      - name: Audit YAML strict
+        uses: ibiqlik/action-yamllint@v3
+        continue-on-error: true
+        with:
+          config_data: |
+            extends: default
+            rules:
+              line-length: {max: 120, level: warning}
+              document-start: disable
+
+  test-vm-multi-os:
+    name: 2. Test en VM (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true # Le test en VM informe sans bloquer
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Afficher l'architecture matérielle de la VM
+        run: uname -a && uname -m
+
+      - name: Rendre tous les scripts exécutables
+        run: chmod +x *.sh scripts/*.sh 2>/dev/null || true
+
+      - name: Test de syntaxe à blanc (bash -n)
+        continue-on-error: true
+        run: |
+          for file in $(find . -name "*.sh"); do
+            echo "Vérification syntaxique sur ${{ matrix.os }} : $file"
+            bash -n "$file"
+          done
+
+      - name: Vérifier la compatibilité des commandes (Linux / ARM / macOS)
+        continue-on-error: true
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            if grep -rn "sed -i " --include="*.sh" . | grep -v "sed -i ''"; then
+              echo "AVERTISSEMENT : 'sed -i' sans extension échoue souvent sur macOS !"
+            fi
+          fi
+          if [[ "${{ matrix.os }}" == "ubuntu-24.04-arm" ]]; then
+            echo "Vérification de la détection d'architecture ARM (aarch64/arm64)..."
+            grep -rn "uname" --include="*.sh" . || echo "Info : Aucune détection uname trouvée."
+          fi
+
+      - name: Simulation d'exécution / Aide du script
+        continue-on-error: true
+        run: |
+          if [ -f "./installer-birdnet.sh" ]; then
+            ./installer-birdnet.sh --help || ./installer-birdnet.sh -h || echo "Exécution de base testée"
+          fi
+
+  test-compilation-windows:
+    name: 3. Test en VM Windows (Inno Setup)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Compiler BirdNET-Go-Installer.iss à blanc
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        continue-on-error: true
+        with:
+          path: BirdNET-Go-Installer.iss
+          options: /O+
+
+  verification-liens-et-doc:
+    name: 4. Liens morts et propreté du dépôt
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Vérifier les liens dans les fichiers Markdown
+        uses: lycheeverse/lychee-action@v2
+        continue-on-error: true
+        with:
+          args: --verbose --no-progress './**/*.md'
+          fail: true
