@@ -1,0 +1,15 @@
+name: Close Stale Issues
+
+on:
+  schedule:
+    - cron: '30 1 * * *'
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: 'Cette issue est inactive depuis 30 jours. Elle sera fermée dans 7 jours.'
+          days-before-stale: 30
+          days-before-close: 7
