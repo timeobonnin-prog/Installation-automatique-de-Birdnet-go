@@ -29,9 +29,9 @@ jobs:
         run: |
           cat <<EOF > Dockerfile.arm
           FROM --platform=linux/arm64 debian:bookworm-slim
+          # Installation de tous les outils nécessaires
           RUN apt-get update && apt-get install -y curl tar ca-certificates jq sudo
           
-          # Récupération du token pour l'API GitHub
           ARG GITHUB_TOKEN
           ENV GITHUB_TOKEN=\$GITHUB_TOKEN
           
