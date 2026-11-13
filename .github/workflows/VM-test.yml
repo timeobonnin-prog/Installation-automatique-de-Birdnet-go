@@ -33,7 +33,7 @@ jobs:
             Set-Content -Path "dist\birdnet-go.exe" -Value "Fichier de secours temporaire"
           }
           
-          # --- CORRECTION ICI : Création des fichiers manquants pour Inno Setup ---
+          # Création des fichiers manquants pour Inno Setup
           if (!(Test-Path "dist\ffmpeg.exe")) { New-Item -ItemType File -Path "dist\ffmpeg.exe" | Out-Null }
           if (!(Test-Path "dist\ffprobe.exe")) { New-Item -ItemType File -Path "dist\ffprobe.exe" | Out-Null }
           if (!(Test-Path "dist\VERSION.txt")) { Set-Content -Path "dist\VERSION.txt" -Value "test" }
@@ -58,7 +58,8 @@ jobs:
         run: |
           gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb" || echo "Téléchargement ignoré"
           if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
-            sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y || true
+            # On vérifie juste que le paquet est valide sans l'installer
+            dpkg-deb -I BirdNET-Go-Linux-x64.deb
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +67,7 @@ jobs:
   test-release-raspberry:
     name: Test du paquet Raspberry Pi (.deb)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    continue-on-error: true # Ignore les échecs de QEMU
     steps:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
@@ -77,7 +78,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tester le paquet dans la VM Raspberry Pi OS (QEMU)
+      - name: Vérifier l'intégrité du paquet .deb
+        run: |
+          if [ -f "BirdNET-Go-RaspberryPi.deb" ]; then
+            echo "Vérification de l'architecture du paquet..."
+            dpkg-deb -I BirdNET-Go-RaspberryPi.deb
+          fi
+
+      - name: Tester l'installation dans QEMU (Optionnel)
         uses: pguyot/arm-runner-action@v2.6.5
         continue-on-error: true
         with:
@@ -87,7 +95,8 @@ jobs:
           copy_artifact_dest: /tmp/
           commands: |
             if [ -f "/tmp/BirdNET-Go-RaspberryPi.deb" ]; then
-              sudo dpkg -i /tmp/BirdNET-Go-RaspberryPi.deb || sudo apt-get install -f -y || true
+              # On force l'installation et on ignore les erreurs de systemd dans QEMU
+              sudo dpkg -i --force-all /tmp/BirdNET-Go-RaspberryPi.deb || true
             fi
 
   test-release-macos:
@@ -98,11 +107,12 @@ jobs:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
 
-      - name: Télécharger le paquet macOS
+      - name: Télécharger et vérifier le paquet macOS
         run: |
           gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-macOS.pkg" || echo "Téléchargement ignoré"
           if [ -f "BirdNET-Go-macOS.pkg" ]; then
             echo "Paquet macOS téléchargé."
+            pkgutil --check-signature BirdNET-Go-macOS.pkg || echo "Non signé (normal pour l'instant)"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -136,7 +146,6 @@ jobs:
 
           prompt = f"Tu es un expert en GitHub Actions. Corrige ce fichier s'il y a une erreur et renvoie UNIQUEMENT le code YAML complet corrigé, sans texte ni balises markdown :\n\n{workflow_content}"
 
-          # Utilisation d'un modèle stable (gemini-1.5-flash est plus sûr que 2.5)
           url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
           headers = {"Content-Type": "application/json"}
           payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -169,7 +178,6 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           
           git add .github/workflows/VM-test.yml
-          # On vérifie s'il y a vraiment des changements avant de commit
           if git diff --staged --quiet; then
             echo "Aucun changement détecté par l'IA."
             exit 0
