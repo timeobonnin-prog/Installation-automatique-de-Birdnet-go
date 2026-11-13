@@ -13,12 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Run Shell Script Installer
         run: |
-          # Utilisation d'un dossier temporaire pour l'installation
           chmod +x install-birdnet.sh
-          # On surcharge la variable INSTALL_DIR pour le test
-          sudo env INSTALL_DIR="/tmp/birdnet-test" bash ./install-birdnet.sh
+          # Le script va créer /tmp/birdnet-test automatiquement
+          INSTALL_DIR="/tmp/birdnet-test" bash ./install-birdnet.sh
+          
       - name: Verify Installation
         run: |
           if [ ! -f "/tmp/birdnet-test/birdnet-go" ]; then
