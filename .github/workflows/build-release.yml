@@ -58,19 +58,65 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      - name: Rename Windows Installer
-        shell: pwsh
-        run: |
-          $newName = "BirdNET-Go-Windows-v${{ steps.upstream.outputs.tag }}.exe"
-          Rename-Item -Path "Output\BirdNET-Go-Installer.exe" -NewName $newName
-          echo "NEW_EXE=Output\$newName" >> $env:GITHUB_ENV
-
       - name: Compute SHA-256
         id: hash
         shell: pwsh
         run: |
-          $h = (Get-FileHash -Algorithm SHA256 $env:NEW_EXE).Hash.ToLower()
+          $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Windows.exe').Hash.ToLower()
           echo "sha256=$h" >> $env:GITHUB_OUTPUT
+
+      # --- CACHE VIRUSTOTAL POUR ÉCONOMISER LE QUOTA ---
+      - name: Cache VirusTotal Result
+        id: cache-vt
+        uses: actions/cache@v4
+        with:
+          path: vt-cache
+          key: vt-${{ steps.hash.outputs.sha256 }}
+
+      - name: Scan with VirusTotal
+        if: steps.cache-vt.outputs.cache-hit != 'true'
+        shell: pwsh
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          try {
+            if (-not $env:VT_API_KEY) { exit 0 }
+            
+            $file = Get-Item 'Output\BirdNET-Go-Windows.exe'
+            $hash = "${{ steps.hash.outputs.sha256 }}"
+            $headers = @{ 'x-apikey' = $env:VT_API_KEY }
+            $lookup = "https://www.virustotal.com/api/v3/files/$hash"
+            
+            $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing -SkipHttpErrorCheck
+
+            if ($response.StatusCode -eq 200) {
+              Write-Host "Fichier déjà connu de VirusTotal."
+            } elseif ($response.StatusCode -eq 404) {
+              Write-Host "Fichier inconnu, demande d'upload speciale..."
+              $uploadUrlReq = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/upload_url" -Headers $headers -Method Get
+              $targetUrl = $uploadUrlReq.data
+              
+              Write-Host "Upload en cours..."
+              $curlOutput = & curl.exe -s -X POST $targetUrl -H "x-apikey: $($env:VT_API_KEY)" -F "file=@$($file.FullName)"
+              
+              $uploadData = $curlOutput | ConvertFrom-Json
+              if ($uploadData.error) { throw "Erreur API: $($uploadData.error.message)" }
+              
+              $analysisId = $uploadData.data.id
+              
+              for ($i=0; $i -lt 30; $i++) {
+                Start-Sleep -Seconds 10
+                $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
+                if ($analysis.data.attributes.status -eq 'completed') { break }
+              }
+            }
+            
+            New-Item -ItemType Directory -Path vt-cache -Force | Out-Null
+            $stats = (Invoke-RestMethod -Uri $lookup -Headers $headers).data.attributes.last_analysis_stats
+            $stats | ConvertTo-Json | Set-Content "vt-cache\$hash.json"
+          } catch {
+            Write-Warning "Quota ou erreur VirusTotal. On continue sans scan."
+          }
 
       - name: Calculate Unique Version
         id: version
@@ -79,45 +125,37 @@ jobs:
           if ("${{ github.ref_type }}" -eq "tag") {
             echo "tag_name=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
           } else {
-            $birdnetTag = "${{ steps.upstream.outputs.tag }}"
-            $runNumber = "${{ github.run_number }}"
-            echo "tag_name=v$birdnetTag.$runNumber" >> $env:GITHUB_OUTPUT
+            echo "tag_name=v${{ steps.upstream.outputs.tag }}.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
           }
 
       - name: Create GitHub Release (Draft)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
-          name: "Installateur Multi-Plateformes ${{ steps.version.outputs.tag_name }}"
+          name: "Version ${{ steps.version.outputs.tag_name }}"
           draft: true
           generate_release_notes: false
           body: |
-            ### 🪶 BirdNET-Go (Windows, Linux, Raspberry Pi, Mac)
+            <p align="center">
+              <img src="https://raw.githubusercontent.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/main/logo.png" width="150" alt="Logo">
+            </p>
 
-            Cette release contient les installateurs natifs pour toutes les plateformes.
+            ### 🪶 BirdNET-Go Multi-Plateformes
 
-            | Détails | Valeur |
+            | Plateforme | Lien direct de téléchargement |
             | :--- | :--- |
-            | **Version de l'installateur** | ${{ steps.version.outputs.tag_name }} |
-            | **Version cible de BirdNET-Go** | [${{ steps.upstream.outputs.tag }}](${{ steps.upstream.outputs.url }}) |
+            | 🪟 **Windows** | [Télécharger l'installateur (.exe)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-Windows.exe) |
+            | 🐧 **Linux (PC)** | [Télécharger le paquet (.deb)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-Linux-x64.deb) |
+            | 🍓 **Raspberry Pi** | [Télécharger le paquet (.deb)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-RaspberryPi.deb) |
+            | 🍎 **macOS** | [Télécharger le paquet (.pkg)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-macOS.pkg) |
 
             ---
 
-            ### 🛡️ Sécurité & Intégrité
-
-            **🔍 Analyse VirusTotal (Windows) :**
+            **🔍 Analyse VirusTotal :**
             👉 [Cliquez ici pour voir le rapport complet](https://www.virustotal.com/gui/file/${{ steps.hash.outputs.sha256 }})
 
-            **#️⃣ Empreinte SHA-256 (Windows) :**
-            ${{ steps.hash.outputs.sha256 }}
-
-            ---
-
-            ### 🔏 Code signing policy
-            Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
-            - **Committers and reviewers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
-            - **Approvers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
-          files: ${{ env.NEW_EXE }}
+            **#️⃣ Empreinte SHA-256 :** ${{ steps.hash.outputs.sha256 }}
+          files: Output/BirdNET-Go-Windows.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -132,8 +170,7 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download BirdNET-Go Binary
+      - name: Download Binary
         run: |
           mkdir -p dist
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-linux-${{ matrix.arch }}-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
@@ -141,11 +178,9 @@ jobs:
           tar -xzf birdnet.tar.gz -C dist
           find dist -name "birdnet-go" -type f -exec mv {} dist/ \;
           chmod +x dist/birdnet-go
-
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-
-      - name: Build .deb package
+      - name: Build .deb
         env:
           ARCH: ${{ matrix.arch }}
           VERSION: ${{ needs.build-windows.outputs.upstream_tag }}
@@ -153,16 +188,10 @@ jobs:
           sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
-
-      - name: Rename .deb package
+      - name: Rename .deb
         run: |
-          if [ "${{ matrix.arch }}" = "amd64" ]; then
-            mv birdnet-go_*.deb "BirdNET-Go-Linux-x64-v${{ needs.build-windows.outputs.upstream_tag }}.deb"
-          else
-            mv birdnet-go_*.deb "BirdNET-Go-RaspberryPi-arm64-v${{ needs.build-windows.outputs.upstream_tag }}.deb"
-          fi
-
-      - name: Upload .deb to Release
+          if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
+      - name: Upload .deb
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build-windows.outputs.tag_name }}
@@ -171,36 +200,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ==========================================
-  # JOB 3 : MACOS (.pkg) - Apple Silicon
+  # JOB 3 : MACOS (.pkg)
   # ==========================================
   build-macos:
     needs: build-windows
     runs-on: macos-latest
     continue-on-error: true
-    strategy:
-      matrix:
-        arch: [arm64]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download BirdNET-Go Binary
+      - name: Download Binary
         run: |
           mkdir -p payload/usr/local/bin
-          URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-darwin-${{ matrix.arch }}-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
+          URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-darwin-arm64-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C payload/usr/local/bin
           find payload/usr/local/bin -name "birdnet-go" -type f -exec mv {} payload/usr/local/bin/ \;
           chmod +x payload/usr/local/bin/birdnet-go
-
       - name: Build .pkg
         run: |
-          pkgbuild --root payload \
-                   --identifier com.github.timeobonnin.birdnetgo \
-                   --version ${{ needs.build-windows.outputs.upstream_tag }} \
-                   --install-location / \
-                   "BirdNET-Go-macOS-AppleSilicon-v${{ needs.build-windows.outputs.upstream_tag }}.pkg"
-
-      - name: Upload .pkg to Release
+          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version ${{ needs.build-windows.outputs.upstream_tag }} --install-location / BirdNET-Go-macOS.pkg
+      - name: Upload .pkg
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build-windows.outputs.tag_name }}
@@ -209,7 +228,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ==========================================
-  # JOB 4 : PUBLIER LA RELEASE (Une fois Windows et Linux finis)
+  # JOB 4 : PUBLIER LA RELEASE
   # ==========================================
   publish-release:
     needs: [build-windows, build-linux]
