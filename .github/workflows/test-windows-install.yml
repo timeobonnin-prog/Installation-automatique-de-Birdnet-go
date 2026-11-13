@@ -1,0 +1,30 @@
+name: Test Windows Installer
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'install-birdnet.ps1'
+      - '.github/workflows/test-windows-install.yml'
+  workflow_dispatch:
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run PowerShell Installer
+        shell: pwsh
+        run: |
+          # Exécute le script avec un dossier d'installation temporaire pour ne pas polluer le runner
+          $env:LOCALAPPDATA = "${{ github.workspace }}\test-appdata"
+          .\install-birdnet.ps1
+      - name: Verify Installation
+        shell: pwsh
+        run: |
+          $installDir = "${{ github.workspace }}\test-appdata\BirdNET-Go"
+          if (-not (Test-Path "$installDir\birdnet-go.exe")) {
+            Write-Error "❌ birdnet-go.exe non trouvé dans $installDir"
+            exit 1
+          }
+          Write-Host "✅ Installation Windows réussie : le binaire est présent."
