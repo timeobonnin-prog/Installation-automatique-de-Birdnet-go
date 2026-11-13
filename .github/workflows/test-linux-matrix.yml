@@ -1,0 +1,58 @@
+name: Test Linux & ARM (Matrix)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'install-birdnet.sh'
+      - '.github/workflows/test-linux-matrix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+        
+      - name: Run Native Linux Test (amd64)
+        if: matrix.platform == 'amd64'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sed -i 's/\r$//' install-birdnet.sh
+          chmod +x install-birdnet.sh
+          INSTALL_DIR="/tmp/birdnet-test" bash ./install-birdnet.sh
+          
+      - name: Run ARM64 Docker Test (Raspberry Pi)
+        if: matrix.platform == 'arm64'
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            -v $PWD/install-birdnet.sh:/tmp/install.sh \
+            debian:bookworm-slim bash -c "
+              apt-get update && apt-get install -y curl tar ca-certificates jq sudo
+              sed -i 's/\r$//' /tmp/install.sh
+              chmod +x /tmp/install.sh
+              INSTALL_DIR='/tmp/test-birdnet' bash /tmp/install.sh
+              test -x /tmp/test-birdnet/birdnet-go
+            "
+
+      - name: Verify Installation
+        run: |
+          if [ "${{ matrix.platform }}" = "amd64" ]; then
+            if [ ! -f "/tmp/birdnet-test/birdnet-go" ]; then exit 1; fi
+            echo "✅ Installation Linux (amd64) réussie."
+          else
+            echo "✅ Installation ARM64 (Raspberry Pi) réussie."
+          fi
