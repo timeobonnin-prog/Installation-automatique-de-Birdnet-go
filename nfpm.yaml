@@ -18,8 +18,5 @@ license: "MIT"
 contents:
 - src: ./dist/birdnet-go
   dst: /usr/local/bin/birdnet-go
-- src: ./dist/config.yaml
-  dst: /etc/birdnet-go/config.yaml
-  type: config|noreplace
 scripts:
   postinstall: ./scripts/postinstall.sh
