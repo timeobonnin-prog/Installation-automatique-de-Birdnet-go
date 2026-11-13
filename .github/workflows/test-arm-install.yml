@@ -26,10 +26,11 @@ jobs:
         run: |
           cat <<EOF > Dockerfile.arm
           FROM --platform=linux/arm64 debian:bookworm-slim
-          RUN apt-get update && apt-get install -y curl tar sudo
+          RUN apt-get update && apt-get install -y curl tar ca-certificates
           WORKDIR /app
           COPY install-birdnet.sh .
           RUN chmod +x install-birdnet.sh
+          # Le script est exécuté en tant que root dans le conteneur, c'est parfait pour le test
           RUN INSTALL_DIR="/tmp/test-birdnet" ./install-birdnet.sh
           RUN test -x /tmp/test-birdnet/birdnet-go
           EOF
