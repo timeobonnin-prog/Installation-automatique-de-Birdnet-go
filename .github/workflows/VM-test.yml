@@ -19,15 +19,19 @@ jobs:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
 
-      - name: Télécharger le binaire Windows depuis les Releases
+      - name: Préparer le dossier dist et télécharger le binaire Windows
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path "dist"
           try {
-            gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "." --latest
+            gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "dist" --latest
+            # Renommer si nécessaire pour correspondre au chemin attendu par le fichier .iss
+            if (Test-Path "dist\BirdNET-Go-Windows.exe") {
+              Copy-Item "dist\BirdNET-Go-Windows.exe" "dist\birdnet-go.exe" -Force
+            }
             Write-Host "✅ Binaire Windows téléchargé avec succès."
           } catch {
-            Write-Host "⚠️ Téléchargement impossible, création d'un fichier de secours."
-            New-Item -ItemType Directory -Force -Path "dist"
+            Write-Host "⚠️ Téléchargement impossible, création d'un fichier de secours dans dist."
             Set-Content -Path "dist\birdnet-go.exe" -Value "Fichier de secours pour test"
           }
         env:
