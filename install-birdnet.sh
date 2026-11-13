@@ -21,9 +21,24 @@ else
     ARCH_NAME="arm64"
 fi
 
-# 3. Récupération des infos via l'API GitHub (avec User-Agent obligatoire)
+# 3. Authentification (si GITHUB_TOKEN est fourni, on l'utilise)
+AUTH_HEADER=""
+if [ -n "$GITHUB_TOKEN" ]; then
+    AUTH_HEADER="Authorization: Bearer $GITHUB_TOKEN"
+    echo "[OK] Utilisation du GITHUB_TOKEN pour éviter les limites d'API."
+else
+    echo "[ATTENTION] Pas de GITHUB_TOKEN. Risque de blocage par l'API GitHub."
+fi
+
+# 4. Récupération des infos via l'API GitHub
 echo "[...] Recherche de la dernière version..."
-API_JSON=$(curl -s -H "User-Agent: GitHub-Actions" https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
+API_JSON=$(curl -s -H "User-Agent: GitHub-Actions" -H "$AUTH_HEADER" https://api.github.com/repos/tphakala/birdnet-go/releases/latest)
+
+# Vérification si l'API a renvoyé une erreur (Rate Limit)
+if echo "$API_JSON" | grep -q "API rate limit exceeded"; then
+    echo "❌ Erreur : Limite d'API GitHub atteinte. Veuillez réessayer plus tard."
+    exit 1
+fi
 
 if command -v jq >/dev/null 2>&1; then
     LATEST_TAG=$(echo "$API_JSON" | jq -r .tag_name)
@@ -34,7 +49,8 @@ else
 fi
 
 if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
-    echo "❌ Impossible de trouver la dernière version."
+    echo "❌ Impossible de trouver la dernière version. Voici la réponse de l'API :"
+    echo "$API_JSON"
     exit 1
 fi
 echo "[OK] Version détectée : $LATEST_TAG"
@@ -44,13 +60,12 @@ if [ -z "$ARCHIVE_URL" ] || [ "$ARCHIVE_URL" = "null" ]; then
     exit 1
 fi
 
-# 4. Téléchargement
+# 5. Téléchargement
 TMP_DIR=$(mktemp -d)
 echo "[...] Téléchargement de l'archive depuis $ARCHIVE_URL..."
-# -f permet à curl d'échouer avec un code d'erreur si la page est introuvable (404)
 curl -fsSL -o "$TMP_DIR/birdnet.tar.gz" "$ARCHIVE_URL"
 
-# 5. Installation
+# 6. Installation
 echo "[...] Installation dans $INSTALL_DIR..."
 if [ "$EUID" -eq 0 ]; then
     mkdir -p "$INSTALL_DIR"
@@ -62,7 +77,7 @@ else
 fi
 rm -rf "$TMP_DIR"
 
-# 6. Création du service systemd
+# 7. Création du service systemd
 if command -v systemctl >/dev/null 2>&1 && [ "$INSTALL_DIR" = "/opt/birdnet-go" ] && [ "$EUID" -ne 0 ]; then
     echo "[...] Création du service systemd..."
     sudo bash -c "cat > /etc/systemd/system/birdnet-go.service <<EOF
