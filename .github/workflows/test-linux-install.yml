@@ -16,6 +16,8 @@ jobs:
       
       - name: Run Shell Script Installer
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x install-birdnet.sh
           INSTALL_DIR="/tmp/birdnet-test" bash ./install-birdnet.sh
