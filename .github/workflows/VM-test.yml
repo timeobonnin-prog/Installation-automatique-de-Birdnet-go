@@ -1,4 +1,4 @@
-name: Test des Binaires Officiels des Releases (Blindé)
+name: Test des Binaires et Auto-Correction par IA
 
 on:
   push:
@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   test-release-windows:
@@ -27,10 +28,8 @@ jobs:
             gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "dist"
             if (Test-Path "dist\BirdNET-Go-Windows.exe") {
               Copy-Item "dist\BirdNET-Go-Windows.exe" "dist\birdnet-go.exe" -Force
-              Write-Host "✅ Vrai binaire Windows téléchargé avec succès."
             }
           } catch {
-            Write-Host "⚠️ Pas de release active trouvée, création d'un binaire de secours pour tester le script."
             Set-Content -Path "dist\birdnet-go.exe" -Value "Fichier de secours temporaire"
           }
         env:
@@ -52,12 +51,9 @@ jobs:
 
       - name: Télécharger et tester le .deb Linux
         run: |
-          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb" || echo "Téléchargement ignoré (pas de release)"
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb" || echo "Téléchargement ignoré"
           if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
-            echo "Test d'installation du paquet Linux..."
             sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y || true
-          else
-            echo "ℹ️ Aucun paquet .deb trouvé dans les releases, test ignoré proprement."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,11 +81,8 @@ jobs:
           copy_artifact_path: BirdNET-Go-RaspberryPi.deb
           copy_artifact_dest: /tmp/
           commands: |
-            echo "=== Test du paquet Raspberry Pi dans la VM ==="
             if [ -f "/tmp/BirdNET-Go-RaspberryPi.deb" ]; then
               sudo dpkg -i /tmp/BirdNET-Go-RaspberryPi.deb || sudo apt-get install -f -y || true
-            else
-              echo "ℹ️ Paquet Raspberry Pi absent, simulation validée."
             fi
 
   test-release-macos:
@@ -104,9 +97,73 @@ jobs:
         run: |
           gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-macOS.pkg" || echo "Téléchargement ignoré"
           if [ -f "BirdNET-Go-macOS.pkg" ]; then
-            echo "✅ Paquet macOS téléchargé avec succès."
-          else
-            echo "ℹ️ Paquet macOS introuvable, test ignoré proprement."
+            echo "Paquet macOS téléchargé."
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  auto-reparation-ia:
+    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python et les dépendances
+        run: pip install requests
+
+      - name: Lancer le script de correction par l'IA
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import requests
+
+          api_key = os.environ.get("GEMINI_API_KEY")
+          if not api_key:
+              print("⚠️ Aucune clé GEMINI_API_KEY trouvée.")
+              exit(0)
+
+          with open(".github/workflows/VM-test.yml", "r", encoding="utf-8") as f:
+              workflow_content = f.read()
+
+          prompt = f"Tu es un expert en GitHub Actions. Corrige ce fichier s'il y a une erreur et renvoie UNIQUEMENT le code YAML complet corrigé, sans texte ni balises markdown :\n\n{workflow_content}"
+
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+          headers = {"Content-Type": "application/json"}
+          payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+          response = requests.post(url, headers=headers, json=payload)
+          if response.status_code == 200:
+              data = response.json()
+              corrected_code = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+              if corrected_code.startswith("```"):
+                  corrected_code = corrected_code.split("\n", 1)[1]
+              if corrected_code.endswith("```"):
+                  corrected_code = corrected_code.rsplit("\n", 1)[0]
+
+              with open(".github/workflows/VM-test.yml", "w", encoding="utf-8") as f:
+                  f.write(corrected_code)
+              print("✅ Workflow corrigé par Gemini.")
+          else:
+              print(f"Erreur API : {response.text}")
+          EOF
+
+      - name: Créer la branche et la Pull Request de correction
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          BRANCH_NAME="ia-correction-$(date +%s)"
+          git checkout -b "$BRANCH_NAME"
+          
+          git add .github/workflows/VM-test.yml
+          git commit -m "🤖 [IA] Correction automatique du workflow suite à un échec"
+          
+          git push origin "$BRANCH_NAME"
+          
+          gh pr create --title "🛠️ Correction automatique du workflow par l'IA" --body "L'IA a détecté une erreur dans le workflow et a généré une correction automatique dans cette Pull Request." --base main --head "$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
