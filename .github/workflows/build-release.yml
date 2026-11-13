@@ -60,7 +60,7 @@ jobs:
         run: |
           try {
             if (-not $env:VT_API_KEY) {
-              Write-Warning "Secret VT_API_KEY manquant. Le scan est ignoré."
+              Write-Warning "Secret VT_API_KEY manquant."
               exit 0
             }
             
@@ -74,16 +74,21 @@ jobs:
             if ($response.StatusCode -eq 200) {
               Write-Host "Fichier déjà connu de VirusTotal."
             } elseif ($response.StatusCode -eq 404) {
-              Write-Host "Fichier inconnu, upload en cours..."
+              Write-Host "Fichier inconnu, demande d'une URL d'upload spéciale (fichier > 32Mo)..."
               
-              $upload = Invoke-RestMethod -Method Post `
-                -Uri 'https://www.virustotal.com/api/v3/files' `
-                -Headers $headers `
-                -Form @{ file = $file }
-              $analysisId = $upload.data.id
-              Write-Host "Upload réussi. Analyse en cours..."
+              # On demande l'URL d'upload pour les gros fichiers
+              $uploadUrlReq = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/upload_url" -Headers $headers -Method Get
+              $targetUrl = $uploadUrlReq.data
+              
+              Write-Host "Upload en cours..."
+              # Utilisation de curl.exe qui gère mieux les fichiers volumineux
+              $curlOutput = & curl.exe -s -X POST $targetUrl -H "x-apikey: $($env:VT_API_KEY)" -F "file=@$($file.FullName)"
+              
+              $uploadData = $curlOutput | ConvertFrom-Json
+              $analysisId = $uploadData.data.id
+              Write-Host "Upload réussi. Analyse en cours sur VirusTotal..."
 
-              for ($i=0; $i -lt 15; $i++) {
+              for ($i=0; $i -lt 30; $i++) {
                 Start-Sleep -Seconds 10
                 $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
                 if ($analysis.data.attributes.status -eq 'completed') {
@@ -92,7 +97,7 @@ jobs:
                 }
               }
             } else {
-              Write-Warning "Erreur API ($($response.StatusCode)). On ignore le scan et on continue."
+              Write-Warning "Erreur API ($($response.StatusCode)). On ignore."
               exit 0
             }
 
@@ -102,7 +107,7 @@ jobs:
             Write-Host "Détections : malicious=$($stats.malicious) suspicious=$($stats.suspicious)"
 
             if ($stats.malicious -gt 15) {
-              Write-Error "Trop de détections ($($stats.malicious)). Publication annulée."
+              Write-Error "Trop de détections ($($stats.malicious))."
               exit 1
             }
           } catch {
