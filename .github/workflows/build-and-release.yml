@@ -17,15 +17,15 @@ on:
   # Déclenchement uniquement si on modifie ces fichiers
   push:
     paths:
-      - 'BirdNET-Go-Tray.ps1'
-      - 'BirdNET-Go-Installer.iss'
-      - 'nfpm.yaml'
-      - 'icon.ico'
-      - 'logo.png'
-      - 'start_birdnet.bat'
-      - 'install-birdnet.sh'
-      - 'scripts/**'
-      - '.github/workflows/build-and-release.yml'
+      - "BirdNET-Go-Tray.ps1"
+      - "BirdNET-Go-Installer.iss"
+      - "nfpm.yaml"
+      - "icon.ico"
+      - "logo.png"
+      - "start_birdnet.bat"
+      - "install-birdnet.sh"
+      - "scripts/**"
+      - ".github/workflows/build-and-release.yml"
 
 permissions:
   contents: write
@@ -62,7 +62,7 @@ jobs:
           else
             echo "build_stable=false" >> $GITHUB_OUTPUT
           fi
-          
+
           # 2. Vérifier la Nightly (Maintenant tous les jours !)
           NIGHTLY=$(gh api repos/tphakala/birdnet-go/releases --jq '[.[] | select(.prerelease == true)][0].tag_name')
           CLEAN_NIGHTLY="${NIGHTLY#nightly-}"
@@ -101,7 +101,7 @@ jobs:
         run: |
           if ("${{ matrix.target }}" -eq "stable") { $tag = "${{ needs.check-version.outputs.stable_tag }}" } 
           else { $tag = "nightly-${{ needs.check-version.outputs.nightly_tag }}" }
-          
+
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/tags/$tag" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
@@ -216,7 +216,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
