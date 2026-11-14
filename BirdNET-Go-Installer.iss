@@ -26,13 +26,15 @@ Name: "firewall"; Description: "{cm:FirewallTask}"; GroupDescription: "{cm:Addit
 Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "BirdNET-Go-Tray.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; C'est le nouveau .exe graphique généré par le workflow
+Source: "dist\BirdNET-Go-Control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autodesktop}\BirdNET-Go"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\BirdNET-Go-Tray.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
-Name: "{group}\Lancer BirdNET-Go"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\BirdNET-Go-Tray.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
+; Le raccourci lance directement l'application graphique (plus de fenêtre noire)
+Name: "{autodesktop}\BirdNET-Go"; Filename: "{app}\BirdNET-Go-Control.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
+Name: "{group}\Lancer BirdNET-Go"; Filename: "{app}\BirdNET-Go-Control.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\Désinstaller BirdNET-Go"; Filename: "{uninstallexe}"
 
 [Registry]
@@ -42,7 +44,6 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""BirdNET-Go Server"" dir=in action=allow protocol=TCP localport=8080"; Flags: runhidden; Tasks: firewall
 
 [UninstallRun]
-; CORRECTION ICI : Le guillemet fermant a été ajouté à la fin
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""BirdNET-Go Server"""; Flags: runhidden
 
 [Code]
@@ -87,12 +88,12 @@ begin
     if ActiveLanguage = 'french' then
     begin
       if IsUpdate then MsgText := 'Mise à jour terminée avec succès !' else MsgText := 'Installation terminée avec succès !';
-      MsgText := MsgText + #13#10 + #13#10 + 'Vos réglages et vos sons ont été conservés.' + #13#10 + 'Une icône BirdNET-Go est maintenant dans votre barre des tâches.';
+      MsgText := MsgText + #13#10 + #13#10 + 'Vos réglages et vos sons ont été conservés.';
     end
     else
     begin
       if IsUpdate then MsgText := 'Update completed successfully!' else MsgText := 'Installation completed successfully!';
-      MsgText := MsgText + #13#10 + #13#10 + 'Your settings and clips have been preserved.' + #13#10 + 'A BirdNET-Go icon is now in your system tray.';
+      MsgText := MsgText + #13#10 + #13#10 + 'Your settings and clips have been preserved.';
     end;
     MsgBox(MsgText, mbInformation, MB_OK);
   end;
