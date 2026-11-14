@@ -2,11 +2,11 @@ name: Release Manager (Build & Scan)
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       force_build:
-        description: 'Forcer la compilation même si pas de nouvelle version'
+        description: "Forcer la compilation même si pas de nouvelle version"
         type: boolean
         default: false
 
