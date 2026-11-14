@@ -2,9 +2,9 @@
 
 on:
   push:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   pull_request:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   workflow_dispatch:
 
 permissions:
@@ -134,7 +134,13 @@ jobs:
           kill $SERVER_PID 2>/dev/null || true
 
   auto-reparation-ia:
-    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
+    needs:
+      [
+        test-release-windows,
+        test-release-linux,
+        test-release-raspberry,
+        test-release-macos,
+      ]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
