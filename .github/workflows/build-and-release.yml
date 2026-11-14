@@ -198,10 +198,6 @@ jobs:
           git commit -m "chore: bump to ${{ needs.check-update.outputs.upstream_tag }} [skip ci]" || true
           git push || true
 
-  # ============================================================
-  # SCAN VIRUSTOTAL DE TOUTES LES RELEASES NON SCANNÉES
-  # Tourne toujours, même si les jobs précédents échouent.
-  # ============================================================
   scan-all-releases:
     needs: [publish-release]
     if: always()
@@ -215,138 +211,96 @@ jobs:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
           if [ -z "$VT_API_KEY" ]; then
-            echo "⚠️ VT_API_KEY non configurée — scan ignoré."
+            echo "VT_API_KEY non configuree - scan ignore."
             exit 0
           fi
-
           mkdir -p /tmp/vt_assets
-
-          # Liste toutes les releases non-draft (stables, pre-releases, manuelles)
-          RELEASES=$(gh release list --limit 100 --json tagName,isDraft \
-            -q '.[] | select(.isDraft == false) | .tagName')
-
+          RELEASES=$(gh release list --limit 100 --json tagName,isDraft -q '.[] | select(.isDraft == false) | .tagName')
           if [ -z "$RELEASES" ]; then
-            echo "Aucune release à scanner."
+            echo "Aucune release a scanner."
             exit 0
           fi
-
           SCANNED=0
           SKIPPED=0
           ERRORS=0
-
           for tag in $RELEASES; do
-            echo ""
             echo "============================================================"
             echo "Release : $tag"
             echo "============================================================"
-
-            # Récupérer le body actuel
             BODY=$(gh release view "$tag" --json body -q '.body // ""')
-
-            # Déjà scanné ? (présence d'un lien VirusTotal)
             if echo "$BODY" | grep -qi "virustotal.com"; then
-              echo "⏭️  Déjà scanné — skip."
+              echo "Deja scanne - skip."
               SKIPPED=$((SKIPPED + 1))
               continue
             fi
-
-            # Télécharger les assets
             rm -rf /tmp/vt_assets/*
             if ! gh release download "$tag" --dir /tmp/vt_assets --clobber 2>/dev/null; then
-              echo "⚠️  Pas d'assets téléchargeables — skip."
+              echo "Pas d'assets - skip."
               SKIPPED=$((SKIPPED + 1))
               continue
             fi
-
             ASSETS=$(ls -1 /tmp/vt_assets 2>/dev/null)
             if [ -z "$ASSETS" ]; then
-              echo "⚠️  Aucun fichier — skip."
+              echo "Aucun fichier - skip."
               SKIPPED=$((SKIPPED + 1))
               continue
             fi
-
-            # Tableau markdown des rapports
             VT_TABLE=""
             VT_TABLE="${VT_TABLE}| Fichier | Taille | Rapport VirusTotal |"
             VT_TABLE="${VT_TABLE}"$'\n'"| :--- | :--- | :--- |"
-
             for file in /tmp/vt_assets/*; do
               [ -f "$file" ] || continue
               FILENAME=$(basename "$file")
               FILESIZE=$(du -h "$file" | cut -f1)
-              echo "  → $FILENAME ($FILESIZE)"
-
+              echo "  -> $FILENAME ($FILESIZE)"
               HASH=$(sha256sum "$file" | cut -d' ' -f1)
-              echo "    SHA-256 : $HASH"
-
-              # Vérifier si déjà connu de VT
-              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-                -H "x-apikey: $VT_API_KEY" \
-                "https://www.virustotal.com/api/v3/files/$HASH")
-
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/$HASH")
               if [ "$HTTP_STATUS" = "200" ]; then
-                echo "    ✅ Déjà analysé par VirusTotal."
+                echo "    Deja analyse par VirusTotal."
               else
-                echo "    ⬆️  Upload vers VirusTotal..."
-                UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" \
-                  "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
-
+                echo "    Upload vers VirusTotal..."
+                UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
                 if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
-                  echo "    ❌ Impossible d'obtenir l'URL d'upload."
+                  echo "    Impossible d'obtenir l'URL."
                   ERRORS=$((ERRORS + 1))
                   continue
                 fi
-
-                UPLOAD_RESPONSE=$(curl -s -X POST "$UPLOAD_URL" \
-                  -H "x-apikey: $VT_API_KEY" \
-                  -F "file=@$file")
-
+                UPLOAD_RESPONSE=$(curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$file")
                 if echo "$UPLOAD_RESPONSE" | grep -q '"error"'; then
-                  echo "    ❌ Erreur upload : $(echo "$UPLOAD_RESPONSE" | jq -r '.error.message // "inconnue"')"
+                  echo "    Erreur upload."
                   ERRORS=$((ERRORS + 1))
                   continue
                 fi
-
-                echo "    ⏳ Upload OK — attente de l'analyse (30s)..."
+                echo "    Upload OK - attente 30s..."
                 sleep 30
               fi
-
-              # Ajouter la ligne au tableau
               VT_URL="https://www.virustotal.com/gui/file/${HASH}"
-              VT_TABLE="${VT_TABLE}"$'\n'"| ${FILENAME} | ${FILESIZE} | [🔍 Voir le rapport](${VT_URL}) |"
+              VT_TABLE="${VT_TABLE}"$'\n'"| ${FILENAME} | ${FILESIZE} | [Voir le rapport](${VT_URL}) |"
             done
-
-            # Mettre à jour le body de la release
             NEW_BODY="${BODY}
 
 ---
 
-### 🛡️ Analyse VirusTotal
+### Analyse VirusTotal
 
 ${VT_TABLE}"
-
             echo "$NEW_BODY" > /tmp/new_body.md
-
             if gh release edit "$tag" --notes-file /tmp/new_body.md; then
-              echo "  ✅ Body mis à jour pour $tag"
+              echo "  Body mis a jour pour $tag"
               SCANNED=$((SCANNED + 1))
             else
-              echo "  ❌ Échec mise à jour body pour $tag"
+              echo "  Echec mise a jour body pour $tag"
               ERRORS=$((ERRORS + 1))
             fi
           done
-
           echo ""
           echo "============================================================"
-          echo " RÉSUMÉ DU SCAN"
+          echo " RESUME DU SCAN"
           echo "============================================================"
-          echo " Releases scannées  : $SCANNED"
-          echo " Releases ignorées  : $SKIPPED (déjà scannées ou sans assets)"
-          echo " Erreurs            : $ERRORS"
+          echo " Scannees  : $SCANNED"
+          echo " Ignorees  : $SKIPPED"
+          echo " Erreurs   : $ERRORS"
           echo "============================================================"
-
-          # Échouer si au moins une erreur critique
           if [ "$ERRORS" -gt 0 ]; then
-            echo "⚠️ $ERRORS erreur(s) — voir logs ci-dessus."
             exit 1
           fi
