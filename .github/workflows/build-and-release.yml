@@ -2,11 +2,11 @@ name: Build & Release
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       force_build:
-        description: 'Forcer la compilation'
+        description: "Forcer la compilation"
         type: boolean
         default: false
 
