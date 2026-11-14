@@ -1,14 +1,16 @@
 name: Build and Release All Platforms
 
 on:
+  push:
+    branches: [ main ]
   create:
     tags:
-      - "v-*"
-      - "v*.*.*"
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       test_only:
-        description: "🧪 Mode Test (Compile sans publier la Release)"
+        description: '🧪 Mode Test (Compile sans publier)'
         type: boolean
         default: false
 
@@ -42,16 +44,16 @@ jobs:
           }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-
+          
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-
+          
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-
+          
           # Déplacer TOUS les fichiers du sous-dossier vers dist/
           Get-ChildItem -Path dist -Recurse -File | Move-Item -Destination dist -Force
-
+          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -73,14 +75,15 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      - name: Calculate Unique Version
+      # LOGIQUE DE TAG FIXE POUR ÉVITER LE SPAM
+      - name: Calculate Version
         id: version
         shell: pwsh
         run: |
           if ("${{ github.ref_type }}" -eq "tag") {
             echo "tag_name=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
           } else {
-            echo "tag_name=manual-v${{ steps.upstream.outputs.tag }}.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+            echo "tag_name=latest-build" >> $env:GITHUB_OUTPUT
           }
 
       - name: Upload Windows Artifact
@@ -103,7 +106,6 @@ jobs:
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-linux-${{ matrix.arch }}-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C dist
-          # Déplacer TOUS les fichiers du sous-dossier vers dist/
           find dist -mindepth 2 -type f -exec mv -t dist/ {} +
           chmod +x dist/birdnet-go
       - name: Install nfpm
@@ -137,7 +139,6 @@ jobs:
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-darwin-arm64-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C payload/usr/local/bin
-          # Déplacer TOUS les fichiers du sous-dossier vers le dossier final
           find payload/usr/local/bin -mindepth 2 -type f -exec mv -t payload/usr/local/bin/ {} +
           chmod +x payload/usr/local/bin/birdnet-go
       - name: Build .pkg
@@ -160,6 +161,45 @@ jobs:
           path: all-files
           merge-multiple: true
 
+      # CACHE VIRUSTOTAL POUR ÉVITER LE SCAN RÉPÉTITIF
+      - name: Cache VirusTotal Result
+        id: cache-vt
+        uses: actions/cache@v4
+        with:
+          path: vt-cache
+          key: vt-${{ hashFiles('BirdNET-Go-Tray.ps1', 'BirdNET-Go-Installer.iss', 'nfpm.yaml') }}
+
+      - name: Scan all files with VirusTotal
+        if: steps.cache-vt.outputs.cache-hit != 'true'
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then echo "Pas de clé API, on saute le scan."; exit 0; fi
+          FILES=("all-files/BirdNET-Go-Windows.exe" "all-files/BirdNET-Go-Linux-x64.deb" "all-files/BirdNET-Go-RaspberryPi.deb" "all-files/BirdNET-Go-macOS.pkg")
+          
+          for FILE in "${FILES[@]}"; do
+            if [ ! -f "$FILE" ]; then continue; fi
+            FILE_NAME=$(basename "$FILE")
+            echo "🔍 Traitement de $FILE_NAME..."
+            
+            HASH=$(sha256sum "$FILE" | cut -d ' ' -f 1)
+            LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
+            
+            if [ "$HTTP_STATUS" -eq 404 ]; then
+              echo "  Fichier inconnu. Demande d'URL d'upload spéciale..."
+              UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
+              echo "  Upload en cours..."
+              curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$FILE" > /dev/null
+              sleep 30
+            else
+              echo "  Fichier déjà connu de VirusTotal."
+            fi
+            sleep 15
+          done
+          mkdir -p vt-cache
+          echo "done" > vt-cache/scanned.txt
+
       - name: Compute all SHA-256 hashes
         id: hashes
         run: |
@@ -167,11 +207,16 @@ jobs:
           LINUX_HASH=$(sha256sum all-files/BirdNET-Go-Linux-x64.deb | cut -d ' ' -f 1)
           PI_HASH=$(sha256sum all-files/BirdNET-Go-RaspberryPi.deb | cut -d ' ' -f 1)
           MAC_HASH=$(sha256sum all-files/BirdNET-Go-macOS.pkg | cut -d ' ' -f 1)
-
+          
           echo "WIN_HASH=$WIN_HASH" >> $GITHUB_ENV
           echo "LINUX_HASH=$LINUX_HASH" >> $GITHUB_ENV
           echo "PI_HASH=$PI_HASH" >> $GITHUB_ENV
           echo "MAC_HASH=$MAC_HASH" >> $GITHUB_ENV
+
+      - name: Delete old release if exists
+        run: gh release delete latest-build --yes || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
