@@ -31,3 +31,13 @@ $RECYCLE.BIN/
 node_modules/
 package-lock.json
 .npm/
+# Fichiers locaux de BirdNET-Go
+birdnet.db
+birdnet.db-shm
+birdnet.db-wal
+*.db
+*.db-shm
+*.db-wal
+vt-cache/
+dist/
+Output/
