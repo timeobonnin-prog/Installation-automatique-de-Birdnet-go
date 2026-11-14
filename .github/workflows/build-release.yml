@@ -141,7 +141,7 @@ jobs:
           }
 
       - name: Create GitHub Release (Draft)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
           name: "Version ${{ steps.version.outputs.tag_name }}"
@@ -202,7 +202,7 @@ jobs:
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
       - name: Upload .deb
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build-windows.outputs.tag_name }}
           files: "*.deb"
@@ -228,7 +228,7 @@ jobs:
         run: |
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version ${{ needs.build-windows.outputs.upstream_tag }} --install-location / BirdNET-Go-macOS.pkg
       - name: Upload .pkg
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build-windows.outputs.tag_name }}
           files: "*.pkg"
@@ -241,7 +241,7 @@ jobs:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
       - name: Publish Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build-windows.outputs.tag_name }}
           draft: false
