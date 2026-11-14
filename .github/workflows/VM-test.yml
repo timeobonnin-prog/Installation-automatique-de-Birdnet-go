@@ -2,9 +2,9 @@
 
 on:
   push:
-    branches: [main, master, principal]
+    branches: [ main, master, principal ]
   pull_request:
-    branches: [main, master, principal]
+    branches: [ main, master, principal ]
   workflow_dispatch:
 
 permissions:
@@ -133,56 +133,30 @@ jobs:
           fi
           kill $SERVER_PID 2>/dev/null || true
 
-  auto-reparation-ia:
-    needs:
-      [
-        test-release-windows,
-        test-release-linux,
-        test-release-raspberry,
-        test-release-macos,
-      ]
-    if: failure()
+  # --- NOUVEAU JOB : RÉSUMÉ DES TESTS ---
+  summary:
+    name: 📊 Résumé des Tests
+    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
+    if: always()
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      models: read
     steps:
-      - uses: actions/checkout@v4
-      - run: pip install requests
-      - name: Lancer l'IA (GitHub Models)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Créer le tableau de résumé
         run: |
-          python3 - <<'EOF'
-          import os, requests
-          token = os.environ.get("GITHUB_TOKEN")
-          if not token: exit(0)
-          with open(".github/workflows/VM-test.yml", "r", encoding="utf-8") as f: content = f.read()
-          prompt = f"Corrige ce fichier s'il y a une erreur et renvoie UNIQUEMENT le YAML corrigé :\n\n{content}"
-          url = "https://models.inference.ai.azure.com/chat/completions"
-          headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-          payload = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1}
-          try:
-              response = requests.post(url, headers=headers, json=payload)
-              response.raise_for_status()
-              corrected = response.json()["choices"][0]["message"]["content"].strip()
-              if corrected.startswith("```yaml"): corrected = corrected.split("\n", 1)[1]
-              elif corrected.startswith("```"): corrected = corrected.split("\n", 1)[1]
-              if corrected.endswith("```"): corrected = corrected.rsplit("\n", 1)[0]
-              with open(".github/workflows/VM-test.yml", "w", encoding="utf-8") as f: f.write(corrected)
-          except: pass
-          EOF
-      - name: Créer la Pull Request
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          BRANCH_NAME="ia-correction-$(date +%s)"
-          git checkout -b "$BRANCH_NAME"
-          git add .github/workflows/VM-test.yml
-          if git diff --staged --quiet; then exit 0; fi
-          git commit -m "🤖 [IA] Correction automatique du workflow"
-          git push origin "$BRANCH_NAME"
-          gh pr create --title "🛠️ Correction automatique par l'IA" --body "Correction auto." --base main --head "$BRANCH_NAME"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "### 📊 Résultats des Tests de Démarrage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Plateforme | Statut |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          
+          # On regarde le résultat de chaque job
+          WIN_STATUS="${{ needs.test-release-windows.result }}"
+          LINUX_STATUS="${{ needs.test-release-linux.result }}"
+          PI_STATUS="${{ needs.test-release-raspberry.result }}"
+          MAC_STATUS="${{ needs.test-release-macos.result }}"
+          
+          if [ "$WIN_STATUS" == "success" ]; then echo "| 🪟 Windows (.exe) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🪟 Windows (.exe) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
+          if [ "$LINUX_STATUS" == "success" ]; then echo "| 🐧 Linux x64 (.deb) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🐧 Linux x64 (.deb) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
+          if [ "$PI_STATUS" == "success" ]; then echo "| 🍓 Raspberry Pi (.deb) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🍓 Raspberry Pi (.deb) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
+          if [ "$MAC_STATUS" == "success" ]; then echo "| 🍎 macOS (.pkg) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🍎 macOS (.pkg) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "*Note : Si un test indique 'Avertissement', cela peut être un faux positif du simulateur QEMU ou une bibliothèque manquante.*" >> $GITHUB_STEP_SUMMARY
