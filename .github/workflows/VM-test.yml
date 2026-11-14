@@ -67,7 +67,7 @@ jobs:
   test-release-raspberry:
     name: Test du paquet Raspberry Pi (.deb)
     runs-on: ubuntu-latest
-    continue-on-error: true # Ignore les échecs de QEMU
+    continue-on-error: true
     steps:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
@@ -121,6 +121,10 @@ jobs:
     needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
     if: failure()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      models: read # Autorise l'accès aux modèles IA de GitHub
     steps:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
@@ -128,17 +132,18 @@ jobs:
       - name: Installer Python et les dépendances
         run: pip install requests
 
-      - name: Lancer le script de correction par l'IA
+      - name: Lancer le script de correction par l'IA (GitHub Models)
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'EOF'
           import os
           import requests
+          import json
 
-          api_key = os.environ.get("GEMINI_API_KEY")
-          if not api_key:
-              print("⚠️ Aucune clé GEMINI_API_KEY trouvée.")
+          token = os.environ.get("GITHUB_TOKEN")
+          if not token:
+              print("⚠️ Aucun token trouvé.")
               exit(0)
 
           with open(".github/workflows/VM-test.yml", "r", encoding="utf-8") as f:
@@ -146,27 +151,39 @@ jobs:
 
           prompt = f"Tu es un expert en GitHub Actions. Corrige ce fichier s'il y a une erreur et renvoie UNIQUEMENT le code YAML complet corrigé, sans texte ni balises markdown :\n\n{workflow_content}"
 
-          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-          headers = {"Content-Type": "application/json"}
-          payload = {"contents": [{"parts": [{"text": prompt}]}]}
+          # API officielle GitHub Models
+          url = "https://models.inference.ai.azure.com/chat/completions"
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Content-Type": "application/json"
+          }
+          payload = {
+              "model": "gpt-4o-mini",
+              "messages": [{"role": "user", "content": prompt}],
+              "temperature": 0.1
+          }
 
-          response = requests.post(url, headers=headers, json=payload)
-          if response.status_code == 200:
+          try:
+              response = requests.post(url, headers=headers, json=payload)
+              response.raise_for_status()
+              
               data = response.json()
-              corrected_code = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+              corrected_code = data["choices"][0]["message"]["content"].strip()
+              
+              # Nettoyage des balises markdown
               if corrected_code.startswith("```yaml"):
                   corrected_code = corrected_code.split("\n", 1)[1]
               elif corrected_code.startswith("```"):
                   corrected_code = corrected_code.split("\n", 1)[1]
-                  
               if corrected_code.endswith("```"):
                   corrected_code = corrected_code.rsplit("\n", 1)[0]
 
               with open(".github/workflows/VM-test.yml", "w", encoding="utf-8") as f:
                   f.write(corrected_code)
-              print("✅ Workflow corrigé par Gemini.")
-          else:
-              print(f"Erreur API : {response.text}")
+              print("✅ Workflow corrigé avec succès par GitHub Models.")
+              
+          except requests.exceptions.RequestException as e:
+              print(f"Erreur API : {e}")
           EOF
 
       - name: Créer la branche et la Pull Request de correction
@@ -178,15 +195,16 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           
           git add .github/workflows/VM-test.yml
+          
           if git diff --staged --quiet; then
             echo "Aucun changement détecté par l'IA."
             exit 0
           fi
           
-          git commit -m "🤖 [IA] Correction automatique du workflow suite à un échec"
+          git commit -m "🤖 [IA] Correction automatique du workflow (GitHub Models)"
           
           git push origin "$BRANCH_NAME"
           
-          gh pr create --title "🛠️ Correction automatique du workflow par l'IA" --body "L'IA a détecté une erreur dans le workflow et a généré une correction automatique dans cette Pull Request." --base main --head "$BRANCH_NAME"
+          gh pr create --title "🛠️ Correction automatique du workflow par l'IA" --body "L'IA a détecté une erreur et a généré une correction automatique." --base main --head "$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
