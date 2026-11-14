@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BirdNET-Go — Installateur automatique</title>
+<meta name="description" content="Installateurs automatisés pour BirdNET-Go sur Windows, Linux, Raspberry Pi et macOS.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0F172A; --bg-darker:#020617; --card:#1E293B; --card-hover:#263449;
+    --border:#334155; --text:#F8FAFC; --text-muted:#94A3B8; --text-dim:#64748B;
+    --accent:#38BDF8; --success:#10B981; --danger:#E11D48; --purple:#8B5CF6;
+    --gradient:linear-gradient(135deg,#38BDF8 0%,#8B5CF6 100%);
+    --shadow-lg:0 20px 60px rgba(0,0,0,.5);
+    --radius:16px; --radius-sm:8px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  code,pre,.mono{font-family:'JetBrains Mono','Fira Code',monospace}
+  a{color:var(--accent);text-decoration:none;transition:opacity .2s}
+  a:hover{opacity:.8}
+  .navbar{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 2rem;background:rgba(15,23,42,.7);backdrop-filter:blur(20px);border-bottom:1px solid rgba(51,65,85,.5)}
+  .nav-content{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:2rem}
+  .nav-logo{display:flex;align-items:center;gap:.75rem;font-weight:800;font-size:1.25rem;color:var(--text)}
+  .nav-logo svg{width:32px;height:32px}
+  .nav-links{display:flex;gap:2rem;list-style:none}
+  .nav-links a{color:var(--text-muted);font-size:.9rem;font-weight:500}
+  .nav-links a:hover{color:var(--text);opacity:1}
+  .nav-cta{background:var(--gradient);color:#fff!important;padding:.6rem 1.25rem;border-radius:var(--radius-sm);font-weight:600;font-size:.9rem;transition:transform .2s,box-shadow .2s}
+  .nav-cta:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(56,189,248,.3);opacity:1}
+  .hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:8rem 2rem 4rem;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;top:-20%;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(56,189,248,.15) 0%,transparent 70%);pointer-events:none;animation:pulse 8s ease-in-out infinite}
+  .hero::after{content:'';position:absolute;bottom:-20%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,rgba(139,92,246,.1) 0%,transparent 70%);pointer-events:none;animation:pulse 10s ease-in-out infinite reverse}
+  @keyframes pulse{0%,100%{transform:translateX(-50%) scale(1);opacity:.5}50%{transform:translateX(-50%) scale(1.1);opacity:.8}}
+  .hero-content{max-width:900px;text-align:center;position:relative;z-index:1}
+  .hero-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);border-radius:999px;font-size:.85rem;color:var(--accent);font-weight:500;margin-bottom:2rem;animation:fadeInUp .8s ease both}
+  .hero-badge .dot{width:8px;height:8px;background:var(--success);border-radius:50%;animation:blink 2s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  .hero h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:900;line-height:1.1;letter-spacing:-.03em;margin-bottom:1.5rem;animation:fadeInUp .8s ease .1s both}
+  .hero h1 .gradient{background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .hero p{font-size:clamp(1rem,2vw,1.25rem);color:var(--text-muted);max-width:640px;margin:0 auto 2.5rem;animation:fadeInUp .8s ease .2s both}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  section{padding:6rem 2rem;position:relative}
+  .container{max-width:1200px;margin:0 auto}
+  .section-header{text-align:center;margin-bottom:4rem}
+  .section-tag{display:inline-block;padding:.4rem .9rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:999px;font-size:.8rem;color:var(--accent);font-weight:600;margin-bottom:1rem;text-transform:uppercase;letter-spacing:.08em}
+  .section-title{font-size:clamp(2rem,4vw,3rem);font-weight:800;letter-spacing:-.02em;margin-bottom:1rem}
+  .section-subtitle{font-size:1.1rem;color:var(--text-muted);max-width:640px;margin:0 auto}
+  .version-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;max-width:700px;margin:0 auto}
+  .version-row{display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .version-field{flex:1;min-width:200px}
+  .version-field label{display:block;font-size:.85rem;font-weight:600;color:var(--text-muted);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em}
+  .version-field select,.version-field input{width:100%;padding:.75rem 1rem;background:var(--bg-darker);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.95rem}
+  .version-field select:focus,.version-field input:focus{outline:none;border-color:var(--accent)}
+  .version-actions{display:flex;gap:1rem;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.9rem 1.75rem;border-radius:var(--radius-sm);font-weight:600;font-size:.95rem;transition:all .2s;cursor:pointer;border:none;text-align:center}
+  .btn-primary{background:var(--gradient);color:#fff;flex:1}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(56,189,248,.4);opacity:1}
+  .btn-secondary{background:var(--card);color:var(--text);border:1px solid var(--border)}
+  .btn-secondary:hover{background:var(--card-hover);border-color:var(--accent);opacity:1}
+  .platforms-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem}
+  .platform-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem 1.5rem;text-align:center;transition:all .3s;display:block}
+  .platform-card:hover{border-color:var(--accent);transform:translateY(-4px);box-shadow:var(--shadow-lg);opacity:1}
+  .platform-icon{font-size:3rem;margin-bottom:1rem;display:block}
+  .platform-name{font-size:1.15rem;font-weight:700;margin-bottom:.25rem;color:var(--text)}
+  .platform-format{font-size:.85rem;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:1.5rem}
+  .platform-link{display:inline-flex;align-items:center;gap:.4rem;font-size:.9rem;font-weight:600;color:var(--accent)}
+  .contact-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;max-width:900px;margin:0 auto}
+  .contact-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;text-align:center;transition:border-color .2s}
+  .contact-card:hover{border-color:var(--accent)}
+  .contact-icon{width:56px;height:56px;border-radius:50%;background:rgba(56,189,248,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;color:var(--accent)}
+  .contact-title{font-size:1.1rem;font-weight:700;margin-bottom:.5rem}
+  .contact-desc{font-size:.95rem;color:var(--text-muted);margin-bottom:1rem}
+  .contact-link{font-family:'JetBrains Mono',monospace;font-size:.9rem;color:var(--accent)}
+  footer{background:var(--bg-darker);border-top:1px solid var(--border);padding:3rem 2rem 2rem}
+  .footer-content{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:2rem;margin-bottom:2rem}
+  .footer-brand h3{font-size:1.1rem;margin-bottom:.5rem}
+  .footer-brand p{font-size:.9rem;color:var(--text-muted);max-width:280px}
+  .footer-col h4{font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin-bottom:1rem;font-weight:700}
+  .footer-col ul{list-style:none;display:flex;flex-direction:column;gap:.6rem}
+  .footer-col a{color:var(--text-muted);font-size:.9rem}
+  .footer-bottom{max-width:1200px;margin:0 auto;padding-top:2rem;border-top:1px solid var(--border);text-align:center;color:var(--text-dim);font-size:.85rem}
+  @media(max-width:768px){.nav-links{display:none}.version-row{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-content">
+    <a href="#" class="nav-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      BirdNET-Go
+    </a>
+    <ul class="nav-links">
+      <li><a href="#download">Télécharger</a></li>
+      <li><a href="#platforms">Plateformes</a></li>
+      <li><a href="#contact">Contact</a></li>
+      <li><a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go" target="_blank">GitHub</a></li>
+    </ul>
+    <a href="#download" class="nav-cta">Télécharger</a>
+  </div>
+</nav>
+
+<section class="hero" id="download">
+  <div class="hero-content">
+    <div class="hero-badge"><span class="dot"></span><span>Installateur communautaire · Multi-plateformes</span></div>
+    <h1>Installez <span class="gradient">BirdNET-Go</span><br>en un clic</h1>
+    <p>Choisissez la version de BirdNET-Go (stable ou nightly) et téléchargez l'installateur correspondant pour votre plateforme.</p>
+    <div class="version-panel">
+      <div class="version-row">
+        <div class="version-field">
+          <label for="versionSelect">Version de BirdNET-Go</label>
+          <select id="versionSelect">
+            {{VERSION_OPTIONS}}
+          </select>
+        </div>
+        <div class="version-field">
+          <label for="customVersion">Ou saisir un tag précis</label>
+          <input type="text" id="customVersion" placeholder="ex: 20261031">
+        </div>
+      </div>
+      <div class="version-actions">
+        <button class="btn btn-primary" onclick="telecharger('windows')">Télécharger pour Windows</button>
+        <a class="btn btn-secondary" href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases" target="_blank">Voir toutes les releases</a>
+      </div>
+      <p style="font-size:.8rem;color:var(--text-dim);margin-top:1rem;text-align:center;">Les liens pointent vers les releases de l'installateur communautaire sur GitHub.</p>
+    </div>
+  </div>
+</section>
+
+<section id="platforms">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Plateformes</span>
+      <h2 class="section-title">Choisissez votre système</h2>
+      <p class="section-subtitle">Un installateur dédié pour chaque plateforme, basé sur la version sélectionnée ci-dessus.</p>
+    </div>
+    <div class="platforms-grid">
+      <a href="#" class="platform-card" data-platform="windows"><span class="platform-icon">🪟</span><div class="platform-name">Windows</div><div class="platform-format">.exe · x64</div><span class="platform-link">Télécharger →</span></a>
+      <a href="#" class="platform-card" data-platform="linux"><span class="platform-icon">🐧</span><div class="platform-name">Linux x64</div><div class="platform-format">.deb · amd64</div><span class="platform-link">Télécharger →</span></a>
+      <a href="#" class="platform-card" data-platform="raspberry"><span class="platform-icon">🍓</span><div class="platform-name">Raspberry Pi</div><div class="platform-format">.deb · arm64</div><span class="platform-link">Télécharger →</span></a>
+      <a href="#" class="platform-card" data-platform="macos"><span class="platform-icon">🍎</span><div class="platform-name">macOS</div><div class="platform-format">.pkg · arm64</div><span class="platform-link">Télécharger →</span></a>
+    </div>
+  </div>
+</section>
+
+<section id="contact" style="background:var(--bg-darker);">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Contact</span>
+      <h2 class="section-title">Une question ? Un bug ?</h2>
+      <p class="section-subtitle">Projet open source, contributions bienvenues.</p>
+    </div>
+    <div class="contact-grid">
+      <div class="contact-card">
+        <div class="contact-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+        <div class="contact-title">Email</div>
+        <div class="contact-desc">Questions privées ou signalements de sécurité.</div>
+        <a href="mailto:timeobonnin@outlook.fr" class="contact-link">timeobonnin@outlook.fr</a>
+      </div>
+      <div class="contact-card">
+        <div class="contact-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg></div>
+        <div class="contact-title">GitHub Issues</div>
+        <div class="contact-desc">Ouvrez une issue pour un bug ou une suggestion.</div>
+        <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/issues" target="_blank" class="contact-link">Ouvrir une issue</a>
+      </div>
+      <div class="contact-card">
+        <div class="contact-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+        <div class="contact-title">Dépôt du projet</div>
+        <div class="contact-desc">Code source, workflows et documentation.</div>
+        <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go" target="_blank" class="contact-link">Voir le dépôt</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-content">
+    <div class="footer-brand"><h3>BirdNET-Go Installer</h3><p>Installateur communautaire non officiel. Projet open source sous licence MIT.</p></div>
+    <div class="footer-col"><h4>Liens</h4><ul>
+      <li><a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go" target="_blank">Dépôt GitHub</a></li>
+      <li><a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases" target="_blank">Toutes les releases</a></li>
+      <li><a href="https://github.com/tphakala/birdnet-go" target="_blank">Projet officiel BirdNET-Go</a></li>
+    </ul></div>
+    <div class="footer-col"><h4>Légal</h4><ul>
+      <li><a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/blob/main/LICENSE" target="_blank">Licence MIT</a></li>
+      <li><a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/blob/main/SECURITY.md" target="_blank">Politique de sécurité</a></li>
+    </ul></div>
+  </div>
+  <div class="footer-bottom">© 2026 timeobonnin-prog · Non affilié officiellement au projet BirdNET-Go.</div>
+</footer>
+
+<script>
+  const REPO = 'timeobonnin-prog/Installation-automatique-de-Birdnet-go';
+
+  function getVersion() {
+    const custom = document.getElementById('customVersion').value.trim();
+    if (custom) return custom;
+    return document.getElementById('versionSelect').value;
+  }
+
+  function assetUrl(platform, version) {
+    // Pour "latest", on redirige vers la page des releases
+    if (!version || version === 'latest') {
+      return `https://github.com/${REPO}/releases/latest`;
+    }
+    // Noms d'assets standard de birdnet-go
+    const map = {
+      windows: `birdnet-go-windows-amd64-${version}.tar.gz`,
+      linux: `birdnet-go-linux-amd64-${version}.tar.gz`,
+      raspberry: `birdnet-go-linux-arm64-${version}.tar.gz`,
+      macos: `birdnet-go-darwin-arm64-${version}.tar.gz`
+    };
+    return `https://github.com/${REPO}/releases/download/${version}/${map[platform]}`;
+  }
+
+  function telecharger(platform) {
+    const version = getVersion();
+    window.open(assetUrl(platform, version), '_blank');
+  }
+
+  document.querySelectorAll('.platform-card').forEach(card => {
+    card.addEventListener('click', e => {
+      e.preventDefault();
+      telecharger(card.dataset.platform);
+    });
+  });
+</script>
+
+</body>
+</html>
