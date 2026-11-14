@@ -1,155 +1,243 @@
-# 1. Trouver le dossier de l'application de manière infaillible (corrige l'erreur Path Null)
+﻿# --- 1. Cacher la console et activer le DPI natif ---
+Add-Type -Name Window -Namespace Console -MemberDefinition '
+[DllImport("Kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
+[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+'
+$consolePtr = [Console.Window]::GetConsoleWindow()
+[Console.Window]::ShowWindow($consolePtr, 0) 
+[Console.Window]::SetProcessDPIAware() 
+
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
+
 $InstallDir = [System.AppDomain]::CurrentDomain.BaseDirectory
-if ([string]::IsNullOrWhiteSpace($InstallDir)) {
-    $InstallDir = Split-Path -Parent ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
-}
+if ([string]::IsNullOrWhiteSpace($InstallDir)) { $InstallDir = Split-Path -Parent ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) }
 $InstallDir = $InstallDir.TrimEnd('\')
 $ExePath = Join-Path $InstallDir "birdnet-go.exe"
-$IconPath = Join-Path $InstallDir "icon.ico"
 
-# 2. Charger les bibliothèques Windows
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+$xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BirdNET-Go" Height="600" Width="850" 
+        WindowStartupLocation="CenterScreen" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        TextOptions.TextFormattingMode="Display" 
+        TextOptions.TextRenderingMode="ClearType"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" CornerRadius="8" Background="{TemplateBinding Background}" BorderThickness="1" BorderBrush="#334155">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-# 3. Création de l'interface (Fond sombre, boutons colorés)
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "BirdNET-Go - Control Center"
-$form.Size = New-Object System.Drawing.Size(420, 300)
-$form.StartPosition = "CenterScreen"
-$form.FormBorderStyle = 'FixedSingle'
-$form.MaximizeBox = $false
-$form.BackColor = [System.Drawing.Color]::FromArgb(25, 25, 28)
-$form.ForeColor = [System.Drawing.Color]::White
+        <Style x:Key="WindowBtn" TargetType="Button">
+            <Setter Property="Width" Value="45"/>
+            <Setter Property="Height" Value="35"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#94A3B8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1E293B"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
-if (Test-Path $IconPath) { $form.Icon = New-Object System.Drawing.Icon($IconPath) }
+    <Border CornerRadius="12" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1" Margin="10">
+        <Border.Effect>
+            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-# Statut (En haut)
-$lblStatus = New-Object System.Windows.Forms.Label
-$lblStatus.Location = New-Object System.Drawing.Point(20, 20)
-$lblStatus.Size = New-Object System.Drawing.Size(360, 40)
-$lblStatus.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
-$lblStatus.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-$form.Controls.Add($lblStatus)
+            <Grid Grid.Row="0" Background="Transparent" Name="TitleBar">
+                <TextBlock Text="BirdNET-Go // Control Center" Foreground="#64748B" FontSize="12" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource WindowBtn}" Content="—" Name="BtnMinimize"/>
+                    <Button Style="{StaticResource WindowBtn}" Content="✕" Name="BtnClose"/>
+                </StackPanel>
+            </Grid>
 
-# Bouton Ouvrir Navigateur (Bleu)
-$btnOpen = New-Object System.Windows.Forms.Button
-$btnOpen.Location = New-Object System.Drawing.Point(20, 70)
-$btnOpen.Size = New-Object System.Drawing.Size(360, 45)
-$btnOpen.Text = "🌐 Ouvrir l'interface Web (localhost:8080)"
-$btnOpen.Font = New-Object System.Drawing.Font("Segoe UI", 11)
-$btnOpen.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
-$btnOpen.ForeColor = [System.Drawing.Color]::White
-$btnOpen.FlatStyle = 'Flat'
-$btnOpen.FlatAppearance.BorderSize = 0
-$btnOpen.Cursor = [System.Windows.Forms.Cursors]::Hand
-$btnOpen.Add_Click({ Start-Process "http://localhost:8080" })
-$form.Controls.Add($btnOpen)
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="240"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-# Bouton Démarrer/Arrêter (Change de couleur)
-$btnToggle = New-Object System.Windows.Forms.Button
-$btnToggle.Location = New-Object System.Drawing.Point(20, 130)
-$btnToggle.Size = New-Object System.Drawing.Size(360, 45)
-$btnToggle.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-$btnToggle.FlatStyle = 'Flat'
-$btnToggle.FlatAppearance.BorderSize = 0
-$btnToggle.Cursor = [System.Windows.Forms.Cursors]::Hand
-$form.Controls.Add($btnToggle)
+                <Border Grid.Column="0" Background="#020617" CornerRadius="0,0,0,12">
+                    <StackPanel Margin="20,30,20,0">
+                        <TextBlock Text="BirdNET-Go" Foreground="#38BDF8" FontSize="22" FontWeight="Bold" Margin="0,0,0,40"/>
+                        
+                        <TextBlock Text="MENU" Foreground="#475569" FontSize="10" FontWeight="Bold" Margin="10,0,0,10"/>
+                        <Border Background="#1E293B" CornerRadius="8" Padding="15,10" Margin="0,0,0,5">
+                            <TextBlock Text="Dashboard" Foreground="White" FontSize="14" FontWeight="Bold"/>
+                        </Border>
 
-# Texte d'information (En bas)
-$lblInfo = New-Object System.Windows.Forms.Label
-$lblInfo.Location = New-Object System.Drawing.Point(20, 200)
-$lblInfo.Size = New-Object System.Drawing.Size(360, 40)
-$lblInfo.ForeColor = [System.Drawing.Color]::Gray
-$lblInfo.Text = "Le serveur tourne en arrière-plan.`nFermez cette fenêtre pour la réduire dans la barre des tâches."
-$lblInfo.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-$form.Controls.Add($lblInfo)
+                        <TextBlock Text="LIENS" Foreground="#475569" FontSize="10" FontWeight="Bold" Margin="10,20,0,10"/>
+                        
+                        <Border Background="Transparent" CornerRadius="8" Padding="15,10" Margin="0,0,0,5" Cursor="Hand" Name="LinkGitHub">
+                            <StackPanel Orientation="Horizontal">
+                                <Viewbox Width="16" Height="16" Margin="0,0,10,0">
+                                    <Path Fill="#94A3B8" Data="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                                </Viewbox>
+                                <TextBlock Text="Dépôt GitHub" Foreground="#94A3B8" FontSize="14" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
 
-# --- FONCTIONS DE GESTION ---
-function Update-Status {
+                        <Border Background="Transparent" CornerRadius="8" Padding="15,10" Cursor="Hand" Name="LinkReleases">
+                            <StackPanel Orientation="Horizontal">
+                                <Viewbox Width="16" Height="16" Margin="0,0,10,0">
+                                    <Path Fill="#94A3B8" Data="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                                </Viewbox>
+                                <TextBlock Text="Dernières Versions" Foreground="#94A3B8" FontSize="14" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Column="1" Margin="40">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Dashboard" Foreground="#F8FAFC" FontSize="32" FontWeight="Bold"/>
+
+                    <StackPanel Grid.Row="1" Margin="0,30,0,0">
+                        <Border Background="#1E293B" CornerRadius="8" Padding="25" Margin="0,0,0,20" BorderThickness="1" BorderBrush="#334155">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Ellipse Grid.Column="0" Width="12" Height="12" Fill="#EF4444" Name="StatusDot" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="ÉTAT DU SYSTÈME" Foreground="#94A3B8" FontSize="11" FontWeight="Bold" Margin="0,0,0,5"/>
+                                    <TextBlock Text="HORS LIGNE" Foreground="#EF4444" FontSize="20" FontWeight="Bold" Name="TxtStatus"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Button Name="BtnOpen" Content="OUVRIR L'INTERFACE WEB" Background="#0284C7"/>
+                        <Button Name="BtnToggle" Content="DÉMARRER LE SERVEUR" Background="#10B981"/>
+                        <Button Name="BtnUpdate" Content="VÉRIFIER LES MISES À JOUR" Background="#334155"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
+"@
+
+$reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
+$window = [Windows.Markup.XamlReader]::Load($reader)
+
+$TitleBar = $window.FindName("TitleBar")
+$StatusDot = $window.FindName("StatusDot")
+$TxtStatus = $window.FindName("TxtStatus")
+$BtnToggle = $window.FindName("BtnToggle")
+$BtnOpen = $window.FindName("BtnOpen")
+$BtnUpdate = $window.FindName("BtnUpdate")
+$BtnClose = $window.FindName("BtnClose")
+$BtnMinimize = $window.FindName("BtnMinimize")
+$LinkGitHub = $window.FindName("LinkGitHub")
+$LinkReleases = $window.FindName("LinkReleases")
+
+$TitleBar.Add_MouseLeftButtonDown({ $window.DragMove() })
+$BtnClose.Add_Click({ $window.Hide() })
+$BtnMinimize.Add_Click({ $window.WindowState = 'Minimized' })
+
+$LinkGitHub.Add_MouseLeftButtonUp({ Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go" })
+$LinkReleases.Add_MouseLeftButtonUp({ Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" })
+$BtnOpen.Add_Click({ Start-Process "http://localhost:8080" })
+
+function Update-UI {
     $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
     
     if ($isRunning) {
-        $lblStatus.Text = "🟢 Serveur : EN LIGNE"
-        $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(80, 250, 123)
-        $btnToggle.Text = "⏹️ Arrêter le serveur"
-        $btnToggle.BackColor = [System.Drawing.Color]::FromArgb(255, 85, 85)
-        $btnToggle.ForeColor = [System.Drawing.Color]::White
-        $btnOpen.Enabled = $true
-        $trayIcon.Text = "BirdNET-Go (En ligne)"
+        $TxtStatus.Text = "EN LIGNE"
+        $TxtStatus.Foreground = "#10B981"
+        $StatusDot.Fill = "#10B981"
+        $BtnToggle.Content = "ARRÊTER LE SERVEUR"
+        $BtnToggle.Background = "#E11D48"
+        $BtnOpen.IsEnabled = $true
+        $BtnOpen.Opacity = 1
     } else {
-        $lblStatus.Text = "🔴 Serveur : HORS LIGNE"
-        $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(255, 85, 85)
-        $btnToggle.Text = "▶️ Démarrer le serveur"
-        $btnToggle.BackColor = [System.Drawing.Color]::FromArgb(80, 250, 123)
-        $btnToggle.ForeColor = [System.Drawing.Color]::Black
-        $btnOpen.Enabled = $false
-        $trayIcon.Text = "BirdNET-Go (Hors ligne)"
+        $TxtStatus.Text = "HORS LIGNE"
+        $TxtStatus.Foreground = "#EF4444"
+        $StatusDot.Fill = "#EF4444"
+        $BtnToggle.Content = "DÉMARRER LE SERVEUR"
+        $BtnToggle.Background = "#10B981"
+        $BtnOpen.IsEnabled = $false
+        $BtnOpen.Opacity = 0.5
     }
 }
 
-$btnToggle.Add_Click({
+$BtnToggle.Add_Click({
     $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
     if ($isRunning) {
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
     } else {
-        try {
-            # Démarrage invisible du serveur
+        if (Test-Path $ExePath) {
             Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
             Start-Sleep -Seconds 2
-        } catch {
-            [System.Windows.Forms.MessageBox]::Show("Erreur au démarrage : `n$_", "Erreur", 0, 16)
         }
     }
-    Update-Status
+    Update-UI
 })
 
-# --- SYSTEM TRAY (ICÔNE DANS LA BARRE DES TÂCHES) ---
-$trayIcon = New-Object System.Windows.Forms.NotifyIcon
-if (Test-Path $IconPath) { $trayIcon.Icon = New-Object System.Drawing.Icon($IconPath) }
-else { $trayIcon.Icon = [System.Drawing.SystemIcons]::Application }
-$trayIcon.Visible = $true
-
-$trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
-$trayMenuOpen = $trayMenu.Items.Add("🌐 Ouvrir l'interface")
-$trayMenuOpen.Add_Click({ Start-Process "http://localhost:8080" })
-
-$trayMenuShow = $trayMenu.Items.Add("⚙️ Afficher le panneau de contrôle")
-$trayMenuShow.Add_Click({ $form.Show(); $form.WindowState = 'Normal'; $form.Activate() })
-
-$trayMenuExit = $trayMenu.Items.Add("❌ Quitter")
-$trayMenuExit.Add_Click({
-    Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
-    $trayIcon.Visible = $false
-    [System.Windows.Forms.Application]::Exit()
+$BtnUpdate.Add_Click({
+    $BtnUpdate.Content = "RECHERCHE EN COURS..."
+    $BtnUpdate.IsEnabled = $false
+    Start-Sleep -Milliseconds 1500
+    $BtnUpdate.Content = "À JOUR"
+    Start-Sleep -Seconds 2
+    $BtnUpdate.Content = "VÉRIFIER LES MISES À JOUR"
+    $BtnUpdate.IsEnabled = $true
 })
 
-$trayIcon.ContextMenuStrip = $trayMenu
-$trayIcon.Add_DoubleClick({ $form.Show(); $form.WindowState = 'Normal'; $form.Activate() })
-
-# --- COMPORTEMENT DE LA FENÊTRE ---
-# Empêcher la fermeture du programme quand on clique sur la croix (on cache juste la fenêtre)
-$form.Add_FormClosing({
-    param($sender, $e)
-    if ($e.CloseReason -eq 'UserClosing') {
-        $e.Cancel = $true
-        $form.Hide()
-        $trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "L'application continue de tourner dans la barre des tâches.", [System.Windows.Forms.ToolTipIcon]::Info)
-    }
-})
-
-# --- TIMER (Vérifie l'état toutes les 2 secondes) ---
-$timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 2000
-$timer.Add_Tick({ Update-Status })
+$timer = New-Object System.Windows.Threading.DispatcherTimer
+$timer.Interval = [TimeSpan]::FromSeconds(2)
+$timer.Add_Tick({ Update-UI })
 $timer.Start()
 
-# --- DÉMARRAGE INITIAL ---
-# Si le serveur ne tourne pas au lancement, on le démarre
-if (-not (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
-    Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
-    Start-Sleep -Seconds 2
-}
-Update-Status
-
-# Lancement de l'application
-[void]$form.ShowDialog()
+Update-UI
+$window.ShowDialog() | Out-Null

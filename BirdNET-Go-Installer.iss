@@ -1,4 +1,4 @@
-[Setup]
+﻿[Setup]
 AppName=BirdNET-Go (Community Installer)
 AppVersion=1.0.0
 AppPublisher=timeobonnin-prog
@@ -26,13 +26,11 @@ Name: "firewall"; Description: "{cm:FirewallTask}"; GroupDescription: "{cm:Addit
 Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
-; C'est le nouveau .exe graphique généré par le workflow
 Source: "dist\BirdNET-Go-Control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-; Le raccourci lance directement l'application graphique (plus de fenêtre noire)
 Name: "{autodesktop}\BirdNET-Go"; Filename: "{app}\BirdNET-Go-Control.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\Lancer BirdNET-Go"; Filename: "{app}\BirdNET-Go-Control.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\Désinstaller BirdNET-Go"; Filename: "{uninstallexe}"
