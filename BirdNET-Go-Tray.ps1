@@ -5,7 +5,7 @@ $InstallDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ExePath = Join-Path $InstallDir "birdnet-go.exe"
 $IconPath = Join-Path $InstallDir "icon.ico"
 
-# Création de la fenêtre
+# Création de la fenêtre principale
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "BirdNET-Go Control Panel"
 $form.Size = New-Object System.Drawing.Size(400, 280)
