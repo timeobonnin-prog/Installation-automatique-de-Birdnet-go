@@ -2,16 +2,16 @@ name: Build and Release All Platforms
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'BirdNET-Go-Installer.iss'
-      - 'nfpm.yaml'
-      - 'start_birdnet.bat'
-      - '.github/workflows/build-release.yml'
+      - "BirdNET-Go-Installer.iss"
+      - "nfpm.yaml"
+      - "start_birdnet.bat"
+      - ".github/workflows/build-release.yml"
   create:
     tags:
-      - 'v-*'
-      - 'v*.*.*'
+      - "v-*"
+      - "v*.*.*"
   workflow_dispatch:
 
 permissions:
@@ -43,16 +43,16 @@ jobs:
           $headers = @{ "User-Agent" = "PowerShell" }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-          
+
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-          
+
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-          
+
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
-          
+
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -117,7 +117,7 @@ jobs:
       - name: Rename .deb
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
-      
+
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -174,7 +174,7 @@ jobs:
 
           # Liste des fichiers à scanner
           FILES=("all-files/BirdNET-Go-Windows.exe" "all-files/BirdNET-Go-Linux-x64.deb" "all-files/BirdNET-Go-RaspberryPi.deb" "all-files/BirdNET-Go-macOS.pkg")
-          
+
           for FILE in "${FILES[@]}"; do
             if [ ! -f "$FILE" ]; then continue; fi
             FILE_NAME=$(basename "$FILE")
@@ -211,7 +211,7 @@ jobs:
           LINUX_HASH=$(sha256sum all-files/BirdNET-Go-Linux-x64.deb | cut -d ' ' -f 1)
           PI_HASH=$(sha256sum all-files/BirdNET-Go-RaspberryPi.deb | cut -d ' ' -f 1)
           MAC_HASH=$(sha256sum all-files/BirdNET-Go-macOS.pkg | cut -d ' ' -f 1)
-          
+
           echo "WIN_HASH=$WIN_HASH" >> $GITHUB_ENV
           echo "LINUX_HASH=$LINUX_HASH" >> $GITHUB_ENV
           echo "PI_HASH=$PI_HASH" >> $GITHUB_ENV
