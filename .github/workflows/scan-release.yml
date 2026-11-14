@@ -2,7 +2,7 @@ name: Scan Latest Release with VirusTotal
 
 on:
   schedule:
-    - cron: '0 12 * * *'
+    - cron: "0 12 * * *"
   workflow_run:
     workflows:
       - "Update BirdNET-Go Version"
@@ -41,10 +41,10 @@ jobs:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
           if [ -z "$VT_API_KEY" ]; then echo "Pas de clé API."; exit 0; fi
-          
+
           FILES=("assets/BirdNET-Go-Windows.exe" "assets/BirdNET-Go-Linux-x64.deb" "assets/BirdNET-Go-RaspberryPi.deb" "assets/BirdNET-Go-macOS.pkg")
           declare -A HASHES
-          
+
           for FILE in "${FILES[@]}"; do
             if [ ! -f "$FILE" ]; then continue; fi
             FILE_NAME=$(basename "$FILE")
@@ -65,7 +65,7 @@ jobs:
             fi
             sleep 15
           done
-          
+
           echo "WIN_HASH=${HASHES[BirdNET-Go-Windows.exe]}" >> $GITHUB_OUTPUT
           echo "LINUX_HASH=${HASHES[BirdNET-Go-Linux-x64.deb]}" >> $GITHUB_OUTPUT
           echo "PI_HASH=${HASHES[BirdNET-Go-RaspberryPi.deb]}" >> $GITHUB_OUTPUT
