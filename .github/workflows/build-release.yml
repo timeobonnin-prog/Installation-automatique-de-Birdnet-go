@@ -3,12 +3,12 @@ name: Build and Release All Platforms
 on:
   create:
     tags:
-      - "v-*"
-      - "v*.*.*"
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       test_only:
-        description: "🧪 Mode Test (Compile sans publier la Release)"
+        description: '🧪 Mode Test (Compile sans publier la Release)'
         type: boolean
         default: false
 
@@ -42,14 +42,16 @@ jobs:
           }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-
+          
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-
+          
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
+          
+          # On déplace TOUS les fichiers du sous-dossier vers dist/ (si sous-dossier il y a)
           Get-ChildItem -Path dist -Recurse -File | Move-Item -Destination dist -Force
-
+          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -71,7 +73,6 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
-      # NUMÉROTATION CLASSIQUE COMME AVANT
       - name: Calculate Version
         id: version
         shell: pwsh
@@ -102,8 +103,8 @@ jobs:
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-linux-${{ matrix.arch }}-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C dist
-          find dist -type f -exec mv -t dist/ {} +
-          chmod +x dist/birdnet-go
+          # ON SUPPRIME LA LIGNE QUI CAUSAIT L'ERREUR find/mv
+          chmod +x dist/birdnet-go || true
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
       - name: Build .deb
@@ -135,8 +136,8 @@ jobs:
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-darwin-arm64-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C payload/usr/local/bin
-          cp -r payload/usr/local/bin/*/* payload/usr/local/bin/ || true
-          chmod +x payload/usr/local/bin/birdnet-go
+          # ON SUPPRIME LA LIGNE QUI CAUSAIT L'ERREUR find/mv
+          chmod +x payload/usr/local/bin/birdnet-go || true
       - name: Build .pkg
         run: |
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version ${{ needs.build-windows.outputs.upstream_tag }} --install-location / BirdNET-Go-macOS.pkg
