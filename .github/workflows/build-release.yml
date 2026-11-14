@@ -2,27 +2,25 @@ name: Build and Release All Platforms
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "start_birdnet.bat"
-      - ".github/workflows/build-release.yml"
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'start_birdnet.bat'
+      - '.github/workflows/build-release.yml'
   create:
     tags:
-      - "v-*"
-      - "v*.*.*"
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  # ==========================================
-  # JOB 1 : WINDOWS (.exe)
-  # ==========================================
   build-windows:
     runs-on: windows-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     outputs:
       tag_name: ${{ steps.version.outputs.tag_name }}
       upstream_tag: ${{ steps.upstream.outputs.tag }}
@@ -44,29 +42,28 @@ jobs:
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
           echo "url=$($release.html_url)" >> $env:GITHUB_OUTPUT
-
+          
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-
+          
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-
+          
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
-
+          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
       - name: Copy FFmpeg and FFprobe to dist
         shell: pwsh
         run: |
-          # On récupère les chemins de ffmpeg et ffprobe installés par Chocolatey
           $ffmpegPath = (Get-Command ffmpeg).Source
           $ffprobePath = (Get-Command ffprobe).Source
-
+          
           Write-Host "Copie de FFmpeg..."
           Copy-Item -Path $ffmpegPath -Destination "dist\ffmpeg.exe" -Force
-
+          
           Write-Host "Copie de FFprobe..."
           Copy-Item -Path $ffprobePath -Destination "dist\ffprobe.exe" -Force
 
@@ -174,12 +171,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ==========================================
-  # JOB 2 : LINUX & RASPBERRY PI (.deb)
-  # ==========================================
   build-linux:
     needs: build-windows
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     strategy:
       matrix:
         arch: [amd64, arm64]
@@ -214,12 +209,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ==========================================
-  # JOB 3 : MACOS (.pkg)
-  # ==========================================
   build-macos:
     needs: build-windows
     runs-on: macos-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -242,12 +235,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ==========================================
-  # JOB 4 : PUBLIER LA RELEASE
-  # ==========================================
   publish-release:
     needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
