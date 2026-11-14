@@ -116,7 +116,7 @@ jobs:
     if: needs.check-update.outputs.should_build == 'true'
     timeout-minutes: 30
     strategy:
-      fail-fast: false  # <-- Évite que l'échec d'un OS annule les autres
+      fail-fast: false # <-- Évite que l'échec d'un OS annule les autres
       matrix:
         include:
           - os: ubuntu-latest
@@ -128,7 +128,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download Binary
         run: |
           mkdir -p dist
