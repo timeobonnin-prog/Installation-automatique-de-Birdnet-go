@@ -2,9 +2,9 @@ name: Test des Binaires et Auto-Correction par IA
 
 on:
   push:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   pull_request:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
           } catch {
             Set-Content -Path "dist\birdnet-go.exe" -Value "Fichier de secours temporaire"
           }
-          
+
           if (!(Test-Path "dist\ffmpeg.exe")) { New-Item -ItemType File -Path "dist\ffmpeg.exe" | Out-Null }
           if (!(Test-Path "dist\ffprobe.exe")) { New-Item -ItemType File -Path "dist\ffprobe.exe" | Out-Null }
           if (!(Test-Path "dist\VERSION.txt")) { Set-Content -Path "dist\VERSION.txt" -Value "test" }
@@ -117,7 +117,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   auto-reparation-ia:
-    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
+    needs:
+      [
+        test-release-windows,
+        test-release-linux,
+        test-release-raspberry,
+        test-release-macos,
+      ]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
@@ -186,21 +192,21 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           BRANCH_NAME="ia-correction-$(date +%s)"
           git checkout -b "$BRANCH_NAME"
-          
+
           git add .github/workflows/VM-test.yml
-          
+
           if git diff --staged --quiet; then
             echo "Aucun changement détecté par l'IA."
             exit 0
           fi
-          
+
           git commit -m "🤖 [IA] Correction automatique du workflow (GitHub Models)"
-          
+
           git push origin "$BRANCH_NAME"
-          
+
           gh pr create --title "🛠️ Correction automatique du workflow par l'IA" --body "L'IA a détecté une erreur et a généré une correction automatique." --base main --head "$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

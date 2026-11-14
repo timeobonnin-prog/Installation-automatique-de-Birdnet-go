@@ -2,9 +2,9 @@ name: Lint Scripts
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'install-birdnet.sh'
+      - "install-birdnet.sh"
   workflow_dispatch:
 
 jobs:
@@ -15,6 +15,6 @@ jobs:
       - name: Run ShellCheck on main script
         uses: ludeeus/action-shellcheck@master
         with:
-          scandir: './'
-          ignore_paths: '.github'
+          scandir: "./"
+          ignore_paths: ".github"
           severity: error # On ne bloque que sur les vraies erreurs, pas les simples avertissements

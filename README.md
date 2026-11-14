@@ -26,7 +26,8 @@ Chaque mise à jour est détectée automatiquement, compilée, testée, scannée
 **Note :** Cet installateur est "hors-ligne". Il contient déjà le binaire et les modèles d'IA. Il ne télécharge rien.
 
 ### ⚠️ Avertissement Windows SmartScreen
-Cet exécutable n'étant pas encore signé numériquement, Windows peut afficher un écran bleu : *"Windows a protégé votre PC"*. Cliquez sur **"Informations complémentaires"** puis **"Exécuter quand même"**.
+
+Cet exécutable n'étant pas encore signé numériquement, Windows peut afficher un écran bleu : _"Windows a protégé votre PC"_. Cliquez sur **"Informations complémentaires"** puis **"Exécuter quand même"**.
 
 ---
 
@@ -73,8 +74,10 @@ Free code signing provided by [SignPath.io](https://signpath.io/), certificate b
 ## 🆘 Besoin d'aide ?
 
 Vous avez rencontré un problème lors de l'installation ?
+
 1. Vérifiez que vous avez bien lu les instructions ci-dessus.
 2. Si le problème persiste, [ouvrez une Issue](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/issues/new/choose) en précisant votre système d'exploitation et le message d'erreur.
 
 ---
-*Projet open source sous licence MIT. Non affilié officiellement au projet BirdNET-Go.*
+
+_Projet open source sous licence MIT. Non affilié officiellement au projet BirdNET-Go._

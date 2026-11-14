@@ -2,10 +2,10 @@ name: Test Linux Installer
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'install-birdnet.sh'
-      - '.github/workflows/test-linux-install.yml'
+      - "install-birdnet.sh"
+      - ".github/workflows/test-linux-install.yml"
   workflow_dispatch:
 
 permissions:

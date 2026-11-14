@@ -2,7 +2,7 @@ name: Auto-Format Code and Fix Spaces
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Prettier and Shell-format
         run: |
@@ -41,9 +41,9 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "🤖 Auto-format: Correction des espaces et du code"
-          commit_options: '--no-verify'
-          file_pattern: '.'
+          commit_options: "--no-verify"
+          file_pattern: "."
           # AJOUT DE LA CLÉ ICI AUSSI :
-          push_options: '--force'
+          push_options: "--force"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}

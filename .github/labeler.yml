@@ -1,12 +1,12 @@
 # Configuration des règles d'étiquetage automatique
 "Windows 🪟":
   - changed-files:
-    - any-glob-to-any-file: ['BirdNET-Go-Installer.iss', 'start_birdnet.bat']
+      - any-glob-to-any-file: ["BirdNET-Go-Installer.iss", "start_birdnet.bat"]
 
 "Linux 🐧":
   - changed-files:
-    - any-glob-to-any-file: ['nfpm.yaml', 'scripts/**', 'install-birdnet.sh']
+      - any-glob-to-any-file: ["nfpm.yaml", "scripts/**", "install-birdnet.sh"]
 
 "IA 🤖":
   - changed-files:
-    - any-glob-to-any-file: ['.github/workflows/VM-test.yml']
+      - any-glob-to-any-file: [".github/workflows/VM-test.yml"]
