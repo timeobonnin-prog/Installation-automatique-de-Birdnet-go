@@ -31,7 +31,6 @@ Source: "dist\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-; Raccourcis qui lancent PowerShell en mode invisible
 Name: "{autodesktop}\BirdNET-Go"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\BirdNET-Go-Tray.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\Lancer BirdNET-Go"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\BirdNET-Go-Tray.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\Désinstaller BirdNET-Go"; Filename: "{uninstallexe}"
@@ -43,7 +42,8 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; Value
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""BirdNET-Go Server"" dir=in action=allow protocol=TCP localport=8080"; Flags: runhidden; Tasks: firewall
 
 [UninstallRun]
-Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""BirdNET-Go Server""; Flags: runhidden
+; CORRECTION ICI : Le guillemet fermant a été ajouté à la fin
+Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""BirdNET-Go Server"""; Flags: runhidden
 
 [Code]
 var
@@ -97,3 +97,9 @@ begin
     MsgBox(MsgText, mbInformation, MB_OK);
   end;
 end;
+
+[CustomMessages]
+french.FirewallTask=Autoriser BirdNET-Go dans le Pare-feu Windows (Port 8080)
+french.AdditionalIcons=Options supplémentaires :
+english.FirewallTask=Allow BirdNET-Go in Windows Firewall (Port 8080)
+english.AdditionalIcons=Additional options:
