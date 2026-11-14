@@ -1,4 +1,4 @@
-﻿name: "birdnet-go"
+name: "birdnet-go"
 arch: "${ARCH}"
 platform: "linux"
 version: "${VERSION}"
@@ -8,6 +8,8 @@ replaces:
   - birdnet-go
 provides:
   - birdnet-go
+depends:
+  - ffmpeg
 maintainer: "Timéo Bonnin <timeobonnin@outlook.fr>"
 description: |
   Automated installation for BirdNET-Go.
@@ -19,6 +21,6 @@ contents:
   - src: ./dist/birdnet-go
     dst: /usr/local/bin/birdnet-go
   - src: ./dist/libtensorflowlite_c.so
-    dst: /usr/local/bin/libtensorflowlite_c.so
+    dst: /usr/local/lib/libtensorflowlite_c.so
 scripts:
   postinstall: ./scripts/postinstall.sh
