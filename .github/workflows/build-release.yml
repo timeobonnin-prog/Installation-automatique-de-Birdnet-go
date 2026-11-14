@@ -2,16 +2,16 @@ name: Build and Release All Platforms
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'BirdNET-Go-Installer.iss'
-      - 'nfpm.yaml'
-      - 'start_birdnet.bat'
-      - '.github/workflows/build-release.yml'
+      - "BirdNET-Go-Installer.iss"
+      - "nfpm.yaml"
+      - "start_birdnet.bat"
+      - ".github/workflows/build-release.yml"
   create:
     tags:
-      - 'v-*'
-      - 'v*.*.*'
+      - "v-*"
+      - "v*.*.*"
   workflow_dispatch:
 
 permissions:
@@ -44,16 +44,16 @@ jobs:
           $headers = @{ "User-Agent" = "PowerShell" }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-          
+
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-          
+
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-          
+
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
-          
+
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -187,7 +187,7 @@ jobs:
       - name: Rename .deb
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
-      
+
       - name: Compute SHA-256 (Linux)
         id: hash-linux
         run: |
@@ -212,9 +212,9 @@ jobs:
           FILE_NAME="${{ steps.hash-linux.outputs.file }}"
           HASH="${{ steps.hash-linux.outputs.hash }}"
           LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
-          
+
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
-          
+
           if [ "$HTTP_STATUS" -eq 404 ]; then
             echo "Fichier inconnu, demande d'URL d'upload spéciale..."
             UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
@@ -281,9 +281,9 @@ jobs:
           FILE_NAME="${{ steps.hash-mac.outputs.file }}"
           HASH="${{ steps.hash-mac.outputs.hash }}"
           LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
-          
+
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
-          
+
           if [ "$HTTP_STATUS" -eq 404 ]; then
             echo "Fichier inconnu, demande d'URL d'upload spéciale..."
             UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
