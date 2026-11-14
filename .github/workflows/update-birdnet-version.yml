@@ -29,10 +29,10 @@ jobs:
           # 1. Vérifier si la version de BirdNET-Go a changé
           CURRENT_VERSION=$(cat VERSION.txt)
           UPSTREAM_VERSION="${{ steps.upstream.outputs.tag }}"
-          
+
           # 2. Vérifier s'il y a de nouveaux commits (tes modifications) depuis le dernier tag
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          
+
           if [ -z "$LATEST_TAG" ]; then
             NEW_COMMITS="true"
           else
@@ -62,14 +62,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Commit le fichier VERSION.txt s'il a changé
           git add VERSION.txt
           if ! git diff --cached --quiet; then
             git commit -m "chore: update BirdNET-Go version to ${{ steps.upstream.outputs.tag }} [skip ci]"
             git push
           fi
-          
+
           # Créer et pousser le nouveau tag pour déclencher le build
           # Exemple: v20261031.100
           NEW_TAG="v${{ steps.upstream.outputs.tag }}.${{ github.run_number }}"
