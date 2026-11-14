@@ -2,7 +2,7 @@ name: Sync Upstream + Update HTML
 
 on:
   schedule:
-    - cron: "0 */12 * * *"
+    - cron: "55 15 * * *"
   workflow_dispatch:
 
 permissions:
@@ -26,69 +26,31 @@ jobs:
           LOCAL: ${{ github.repository }}
         run: |
           set -e
-
           STABLE=$(gh api "repos/$UPSTREAM/releases/latest" --jq '.tag_name')
-          echo "Stable : $STABLE"
-
-          # 1 seule nightly au lieu de 2
-          NIGHTLIES=$(gh api "repos/$UPSTREAM/releases?per_page=30" \
-            --jq '[.[] | select(.prerelease == true)][0:1][].tag_name' || true)
-          echo "Nightlies : $NIGHTLIES"
-
+          NIGHTLIES=$(gh api "repos/$UPSTREAM/releases?per_page=30" --jq '[.[] | select(.prerelease == true)][0:1][].tag_name' || true)
           KEEP="$STABLE"
           for n in $NIGHTLIES; do KEEP="$KEEP $n"; done
-          echo "À conserver : $KEEP"
 
-          LOCAL_TAGS=$(gh api "repos/$LOCAL/releases?per_page=100" \
-            --jq '.[].tag_name' | grep -E '^[0-9]+$' || echo "")
-
+          # Supprime les vieilles releases officielles (sauf celles qu'on garde)
+          LOCAL_TAGS=$(gh api "repos/$LOCAL/releases?per_page=100" --jq '.[].tag_name' | grep -vE '^(v|manual-|nightly-v)' || echo "")
           for tag in $LOCAL_TAGS; do
             if ! echo "$KEEP" | tr ' ' '\n' | grep -qx "$tag"; then
-              echo "Suppression : $tag"
+              echo "Suppression upstream : $tag"
               gh release delete "$tag" --repo "$LOCAL" --yes --cleanup-tag || true
             fi
           done
 
+          # Crée les releases manquantes
           for tag in $KEEP; do
             IS_PRE="false"
-            if echo "$NIGHTLIES" | tr ' ' '\n' | grep -qx "$tag"; then
-              IS_PRE="true"
-            fi
-
-            if gh release view "$tag" --repo "$LOCAL" >/dev/null 2>&1; then
-              EXIST=$(gh release view "$tag" --repo "$LOCAL" \
-                --json assets --jq '.assets | length')
-              if [ "$EXIST" -gt 0 ]; then
-                echo "Skip $tag (assets déjà présents)"
-                continue
-              fi
-              echo "Mise à jour de $tag (assets manquants)"
-            else
-              echo "Création de $tag (prerelease=$IS_PRE)"
+            if echo "$NIGHTLIES" | tr ' ' '\n' | grep -qx "$tag"; then IS_PRE="true"; fi
+            if ! gh release view "$tag" --repo "$LOCAL" >/dev/null 2>&1; then
               if [ "$IS_PRE" = "true" ]; then
-                gh release create "$tag" --repo "$LOCAL" \
-                  --title "Nightly $tag" \
-                  --notes "Miroir nightly de [birdnet-go $tag](https://github.com/$UPSTREAM/releases/tag/$tag)" \
-                  --prerelease --latest=false
+                gh release create "$tag" --repo "$LOCAL" --title "Nightly $tag" --notes "Miroir nightly" --prerelease --latest=false
               else
-                gh release create "$tag" --repo "$LOCAL" \
-                  --title "Stable $tag" \
-                  --notes "Miroir stable de [birdnet-go $tag](https://github.com/$UPSTREAM/releases/tag/$tag)" \
-                  --latest=false
+                gh release create "$tag" --repo "$LOCAL" --title "Stable $tag" --notes "Miroir stable" --latest=false
               fi
             fi
-
-            TMPDIR=$(mktemp -d)
-            gh release download "$tag" --repo "$UPSTREAM" --dir "$TMPDIR" \
-              --pattern "*windows*" --clobber || true
-            if [ -n "$(ls -A $TMPDIR 2>/dev/null)" ]; then
-              for f in "$TMPDIR"/*; do
-                [ -f "$f" ] || continue
-                echo "    Upload $(basename "$f")"
-                gh release upload "$tag" "$f" --repo "$LOCAL" --clobber || true
-              done
-            fi
-            rm -rf "$TMPDIR"
           done
 
   update-html:
@@ -104,10 +66,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api "repos/${{ github.repository }}/releases?per_page=100" \
-            --paginate > releases.json
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Generate index.html
@@ -118,17 +78,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add index.html
           if git diff --staged --quiet; then
-            echo "Aucun changement dans index.html"
+            echo "Aucun changement"
           else
             git commit -m "chore: update index.html [skip ci]"
             git push || true
           fi
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: "."
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
