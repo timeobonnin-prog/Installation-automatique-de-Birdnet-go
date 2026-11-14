@@ -87,6 +87,32 @@ jobs:
           Install-Module ps2exe -Scope CurrentUser -Force
           Invoke-ps2exe -InputFile "BirdNET-Go-Tray.ps1" -OutputFile "dist\BirdNET-Go-Control.exe" -noConsole -iconFile "icon.ico"
 
+      - name: Ensure DLLs are present in dist
+        shell: pwsh
+        run: |
+          $requiredDlls = @('onnxruntime.dll', 'tensorflowlite_c.dll')
+          $missing = @()
+          foreach ($dll in $requiredDlls) {
+            if (-not (Test-Path "dist\$dll")) { $missing += $dll }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Host "DLL manquantes : $($missing -join ', ')" -ForegroundColor Yellow
+            if ($missing -contains 'tensorflowlite_c.dll') {
+              $u = 'https://github.com/tphakala/tflite_c/releases/download/v2.17.1/tensorflowlite_c-windows-amd64.zip'
+              Invoke-WebRequest -Uri $u -OutFile "$env:TEMP\tflite.zip"
+              Expand-Archive -Path "$env:TEMP\tflite.zip" -DestinationPath "$env:TEMP\tflite" -Force
+              Get-ChildItem -Path "$env:TEMP\tflite" -Filter 'tensorflowlite_c.dll' -Recurse | Copy-Item -Destination "dist\tensorflowlite_c.dll" -Force
+            }
+            if ($missing -contains 'onnxruntime.dll') {
+              $u = 'https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip'
+              Invoke-WebRequest -Uri $u -OutFile "$env:TEMP\ort.zip"
+              Expand-Archive -Path "$env:TEMP\ort.zip" -DestinationPath "$env:TEMP\ort" -Force
+              Get-ChildItem -Path "$env:TEMP\ort" -Filter 'onnxruntime.dll' -Recurse | Copy-Item -Destination "dist\onnxruntime.dll" -Force
+            }
+          } else {
+            Write-Host 'OK toutes les DLL requises sont presentes.' -ForegroundColor Green
+          }
+          Get-ChildItem -Path 'dist' -Filter '*.dll' | Select-Object Name, Length
       - name: Compile installer
         run: & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
