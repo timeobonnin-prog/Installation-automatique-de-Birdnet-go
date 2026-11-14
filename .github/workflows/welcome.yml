@@ -1,0 +1,21 @@
+name: Welcome New Contributors
+
+on:
+  pull_request_target:
+    types: [opened]
+  issues:
+    types: [opened]
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            👋 Merci d'avoir ouvert ta première Issue ! 
+            Un mainteneur va te répondre dès que possible. En attendant, vérifie bien que tu as inclus ton système d'exploitation et le message d'erreur.
+          pr-message: |
+            🎉 Merci pour ta première Pull Request ! 
+            Les tests automatiques vont se lancer. Si tout est vert, je la relirai très vite. Merci de contribuer au projet !
