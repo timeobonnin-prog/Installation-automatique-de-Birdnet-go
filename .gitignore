@@ -21,18 +21,18 @@ $RECYCLE.BIN/
 # --- Fichiers systèmes macOS ---
 .DS_Store
 
-# --- Éditeurs de code (VS Code, Visual Studio, JetBrains) ---
+# --- Éditeurs de code ---
 .vscode/
 .idea/
 *.suo
 *.user
 
-# Dépendances Node.js (générées par le workflow)
+# --- Dépendances Node.js ---
 node_modules/
 package-lock.json
 .npm/
-<<<<<<< HEAD
-# Fichiers locaux de BirdNET-Go
+
+# --- Fichiers locaux de BirdNET-Go ---
 birdnet.db
 birdnet.db-shm
 birdnet.db-wal
@@ -41,9 +41,6 @@ birdnet.db-wal
 *.db-wal
 vt-cache/
 dist/
-Output/
-=======
-Installation-automatique-de-Birdnet-go/
->>>>>>> 8ec5105 (fix: retrait sous-depot imbrique + gitignore)
-# Ignore le sous-dépôt fantôme
+
+# --- Sous-dépôt fantôme ---
 Installation-automatique-de-Birdnet-go/
