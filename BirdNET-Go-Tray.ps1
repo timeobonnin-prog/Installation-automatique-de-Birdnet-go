@@ -253,7 +253,7 @@ $trayIcon.ContextMenuStrip = $trayMenu
 $trayIcon.Add_DoubleClick({ $window.Show(); $window.WindowState = 'Normal'; $window.Activate() })
 
 # Empêcher la fermeture réelle (Alt+F4 ou autre)
-$window.Add_FormClosing({
+$window.Add_Closing({
     param($sender, $e)
     if ($e.CloseReason -eq 'UserClosing') {
         $e.Cancel = $true
