@@ -1,17 +1,18 @@
-name: AI Auto-Fixer (Répare les workflows)
+﻿name: AI Auto-Fixer (Répare les workflows)
 
 on:
   workflow_run:
-    workflows:
+    workflows: 
       - "Test des Binaires et Auto-Correction par IA"
+      - "Build and Release All Platforms"
       - "Auto-Format Code and Fix Spaces"
-      - "Super-Linter (Vérification de syntaxe)"
     types:
       - completed
 
 permissions:
   contents: write
   pull-requests: write
+  actions: read
   models: read
 
 jobs:
@@ -20,86 +21,71 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le code du dépôt
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_branch }}
           token: ${{ secrets.GH_PAT }}
 
-      - name: Installer Python
+      - name: Récupérer les logs de l'erreur
+        id: logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run view ${{ github.event.workflow_run.id }} --log-failed > error.log || true
+          FILE=$(grep -oE '[a-zA-Z0-9_\-\.]+\.(iss|ps1|sh|yml|yaml)' error.log | head -n 1 || echo "")
+          if [ -z "$FILE" ]; then
+            echo "⚠️ Aucun fichier identifié dans les logs."
+            echo "file=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "✅ Fichier en cause détecté : $FILE"
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+
+      - name: Installer Python et les dépendances
+        if: steps.logs.outputs.file != ''
         run: pip install requests
 
-      - name: Lancer l'IA de correction
+      - name: Corriger le fichier avec l'IA (GitHub Models)
+        if: steps.logs.outputs.file != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_FILE: ${{ steps.logs.outputs.file }}
         run: |
           python3 - <<'EOF'
           import os
           import requests
-
           token = os.environ.get("GITHUB_TOKEN")
-
-          # On cible le fichier qui a échoué (VM-test.yml ou format-and-fix.yml)
-          file_to_fix = ".github/workflows/VM-test.yml"
-
-          with open(file_to_fix, "r", encoding="utf-8") as f:
-              content = f.read()
-
-          prompt = f"""
-          Tu es un expert en GitHub Actions. Ce workflow a échoué lors de son exécution.
-          Voici le code actuel :
-          {content}
-
-          L'erreur principale rencontrée est souvent liée au manque de permissions ou à une mauvaise syntaxe.
-          Corrige les erreurs et renvoie UNIQUEMENT le code YAML complet corrigé, sans texte ni balises markdown.
-          """
-
+          file_path = os.environ.get("TARGET_FILE")
+          if not token or not file_path: exit(0)
+          try:
+              with open(file_path, "r", encoding="utf-8") as f: file_content = f.read()
+          except FileNotFoundError: exit(0)
+          with open("error.log", "r", encoding="utf-8") as f: error_logs = f.read()[:3000]
+          prompt = f"Corrige les erreurs dans ce fichier {file_path} en te basant sur ces logs:\n{error_logs}\n\nContenu:\n{file_content}\n\nRenvoie UNIQUEMENT le code corrigé."
           url = "https://models.inference.ai.azure.com/chat/completions"
-          headers = {
-              "Authorization": f"Bearer {token}",
-              "Content-Type": "application/json"
-          }
-          payload = {
-              "model": "gpt-4o-mini",
-              "messages": [{"role": "user", "content": prompt}],
-              "temperature": 0.1
-          }
-
-          response = requests.post(url, headers=headers, json=payload)
-          if response.status_code == 200:
-              corrected_code = response.json()["choices"][0]["message"]["content"].strip()
-              
-              if corrected_code.startswith("```yaml"):
-                  corrected_code = corrected_code.split("\n", 1)[1]
-              elif corrected_code.startswith("```"):
-                  corrected_code = corrected_code.split("\n", 1)[1]
-              if corrected_code.endswith("```"):
-                  corrected_code = corrected_code.rsplit("\n", 1)[0]
-
-              with open(file_to_fix, "w", encoding="utf-8") as f:
-                  f.write(corrected_code)
-              print("✅ Fichier corrigé par l'IA.")
-          else:
-              print(f"Erreur API : {response.text}")
+          headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+          payload = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1}
+          try:
+              response = requests.post(url, headers=headers, json=payload)
+              response.raise_for_status()
+              corrected = response.json()["choices"][0]["message"]["content"].strip()
+              if corrected.startswith("```"): corrected = corrected.split("\n", 1)[1]
+              if corrected.endswith("```"): corrected = corrected.rsplit("\n", 1)[0]
+              with open(file_path, "w", encoding="utf-8") as f: f.write(corrected)
+          except: pass
           EOF
 
-      - name: Créer la Pull Request
+      - name: Créer la branche et la Pull Request de correction
+        if: steps.logs.outputs.file != ''
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          BRANCH_NAME="ai-fix-$(date +%s)"
+          BRANCH_NAME="ia-fix-$(date +%s)"
           git checkout -b "$BRANCH_NAME"
-
-          git add .github/workflows/
-
-          if git diff --staged --quiet; then
-            echo "Aucun changement détecté."
-            exit 0
-          fi
-
-          git commit -m "🤖 [IA] Correction automatique du workflow en échec"
+          git add "${{ steps.logs.outputs.file }}"
+          if git diff --staged --quiet; then exit 0; fi
+          git commit -m "🤖 [IA] Correction automatique de ${{ steps.logs.outputs.file }}"
           git push origin "$BRANCH_NAME"
-
-          gh pr create --title "🛠️ Correction automatique par l'IA" --body "L'IA a détecté une erreur dans le workflow et a généré cette correction." --base main --head "$BRANCH_NAME"
+          gh pr create --title "🛠️ Correction automatique par l'IA" --body "Correction du fichier ${{ steps.logs.outputs.file }}." --base main --head "$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
