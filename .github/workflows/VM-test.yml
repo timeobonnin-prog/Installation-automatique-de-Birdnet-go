@@ -18,7 +18,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Télécharger ou créer un binaire de secours
         shell: pwsh
@@ -51,7 +51,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Télécharger et tester le .deb Linux
         run: |
@@ -68,7 +68,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Télécharger le paquet Raspberry Pi
         run: |
@@ -104,7 +104,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Télécharger et vérifier le paquet macOS
         run: |
@@ -132,7 +132,7 @@ jobs:
       models: read
     steps:
       - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Installer Python et les dépendances
         run: pip install requests
