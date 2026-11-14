@@ -1,4 +1,4 @@
-﻿name: Build and Release All Platforms
+name: Build and Release All Platforms
 
 on:
   create:
@@ -48,6 +48,7 @@ jobs:
 
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
+          find dist -name "libtensorflowlite_c.so" -exec cp {} dist/ \; || true
 
 
 
@@ -102,6 +103,7 @@ jobs:
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-linux-${{ matrix.arch }}-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C dist
+          find dist -name "libtensorflowlite_c.so" -exec cp {} dist/ \; || true
 
           chmod +x dist/birdnet-go
       - name: Install nfpm

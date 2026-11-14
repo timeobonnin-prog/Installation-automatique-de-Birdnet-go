@@ -1,12 +1,12 @@
-﻿#!/bin/sh
+#!/bin/sh
 set -e
 
 # Création de l'utilisateur système
 if ! id -u birdnet >/dev/null 2>&1; then
-  useradd -r -s /bin/false birdnet
+    useradd -r -s /bin/false birdnet
 fi
 
-# CORRECTION ICI : Création des dossiers AVANT de changer les droits
+# Création des dossiers AVANT de changer les droits
 mkdir -p /var/lib/birdnet-go
 mkdir -p /etc/birdnet-go
 
@@ -14,7 +14,7 @@ mkdir -p /etc/birdnet-go
 chown -R birdnet:birdnet /var/lib/birdnet-go /etc/birdnet-go
 
 # Création du service systemd
-cat <<EOF >/etc/systemd/system/birdnet-go.service
+cat <<EOF > /etc/systemd/system/birdnet-go.service
 [Unit]
 Description=BirdNET-Go Service
 After=network.target sound.target
