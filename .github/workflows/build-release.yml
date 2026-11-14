@@ -49,8 +49,7 @@ jobs:
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
           
-          $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
-          Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
+          
           
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
@@ -103,7 +102,7 @@ jobs:
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-linux-${{ matrix.arch }}-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C dist
-          find dist -name "birdnet-go" -type f -exec mv {} dist/ \;
+          
           chmod +x dist/birdnet-go
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
