@@ -1,19 +1,30 @@
 name: Build & Release
 
 on:
+  # 1. Déclenchement automatique : tous les jours à 6h00 UTC
   schedule:
     - cron: "0 6 * * *"
+      
+  # 2. Déclenchement manuel
   workflow_dispatch:
     inputs:
       force_build:
-        description: "Forcer la compilation"
+        description: "Forcer la compilation même si la version est à jour"
         type: boolean
         default: false
 
 permissions:
   contents: write
 
+# Empêche l'annulation des runs en cours (évite l'erreur "Canceling...")
+concurrency:
+  group: build-and-release
+  cancel-in-progress: false
+
 jobs:
+  # ============================================================
+  # JOB 1 : VÉRIFICATION DE LA VERSION
+  # ============================================================
   check-update:
     runs-on: ubuntu-latest
     outputs:
@@ -42,6 +53,9 @@ jobs:
             echo "No build needed"
           fi
 
+  # ============================================================
+  # JOB 2 : COMPILATION WINDOWS
+  # ============================================================
   build-windows:
     needs: check-update
     if: needs.check-update.outputs.should_build == 'true'
@@ -105,6 +119,9 @@ jobs:
           name: windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
+  # ============================================================
+  # JOB 3 : COMPILATION LINUX / MAC
+  # ============================================================
   build-linux-mac:
     needs: [check-update, build-windows]
     if: needs.check-update.outputs.should_build == 'true'
@@ -155,6 +172,9 @@ jobs:
             *.deb
             *.pkg
 
+  # ============================================================
+  # JOB 4 : CRÉATION DE LA RELEASE (Dépend des 3 builds)
+  # ============================================================
   publish-release:
     needs: [check-update, build-windows, build-linux-mac]
     if: needs.check-update.outputs.should_build == 'true'
@@ -198,6 +218,9 @@ jobs:
           git commit -m "chore: bump to ${{ needs.check-update.outputs.upstream_tag }} [skip ci]" || true
           git push || true
 
+  # ============================================================
+  # JOB 5 : SCAN VIRUSTOTAL (Tourne TOUJOURS, même si le build échoue)
+  # ============================================================
   scan-all-releases:
     needs: [publish-release]
     if: always()
