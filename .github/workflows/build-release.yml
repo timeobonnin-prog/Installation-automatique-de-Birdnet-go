@@ -2,16 +2,16 @@ name: Build and Release All Platforms
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "start_birdnet.bat"
-      - ".github/workflows/build-release.yml"
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'BirdNET-Go-Tray.ps1'
+      - '.github/workflows/build-release.yml'
   create:
     tags:
-      - "v-*"
-      - "v*.*.*"
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -43,16 +43,16 @@ jobs:
           $headers = @{ "User-Agent" = "PowerShell" }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-
+          
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-
+          
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-
+          
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
-
+          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -63,6 +63,15 @@ jobs:
           $ffprobePath = (Get-Command ffprobe).Source
           Copy-Item -Path $ffmpegPath -Destination "dist\ffmpeg.exe" -Force
           Copy-Item -Path $ffprobePath -Destination "dist\ffprobe.exe" -Force
+
+      - name: Compile GUI to EXE
+        shell: pwsh
+        run: |
+          Write-Host "Installation de ps2exe..."
+          Install-Module ps2exe -Scope CurrentUser -Force
+          
+          Write-Host "Compilation de BirdNET-Go-Tray.ps1 vers dist\BirdNET-Go-Control.exe..."
+          Invoke-ps2exe -InputFile "BirdNET-Go-Tray.ps1" -OutputFile "dist\BirdNET-Go-Control.exe" -noConsole -iconFile "icon.ico"
 
       - name: Compile installer
         run: |
@@ -117,7 +126,7 @@ jobs:
       - name: Rename .deb
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
-
+      
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -153,7 +162,7 @@ jobs:
           path: "*.pkg"
 
   # ==========================================
-  # JOB 4 : SCAN VIRUSTOTAL & PUBLIER
+  # JOB 4 : PUBLIER LA RELEASE
   # ==========================================
   publish-release:
     needs: [build-windows, build-linux, build-macos]
@@ -171,38 +180,22 @@ jobs:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
           if [ -z "$VT_API_KEY" ]; then echo "Pas de clé API, on saute le scan."; exit 0; fi
-
-          # Liste des fichiers à scanner
           FILES=("all-files/BirdNET-Go-Windows.exe" "all-files/BirdNET-Go-Linux-x64.deb" "all-files/BirdNET-Go-RaspberryPi.deb" "all-files/BirdNET-Go-macOS.pkg")
-
+          
           for FILE in "${FILES[@]}"; do
             if [ ! -f "$FILE" ]; then continue; fi
             FILE_NAME=$(basename "$FILE")
-            echo "🔍 Traitement de $FILE_NAME..."
-            
             HASH=$(sha256sum "$FILE" | cut -d ' ' -f 1)
             LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
-            
-            # Vérifier si le fichier existe déjà
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
             
             if [ "$HTTP_STATUS" -eq 404 ]; then
-              echo "  Fichier inconnu. Demande d'URL d'upload spéciale..."
               UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
-              
-              echo "  Upload en cours..."
               curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$FILE" > /dev/null
-              
-              echo "  Attente de l'analyse (30s)..."
               sleep 30
-            else
-              echo "  Fichier déjà connu de VirusTotal."
             fi
-            
-            # Attendre un peu entre chaque fichier pour respecter la limite de l'API (4 requêtes/min)
             sleep 15
           done
-          echo "✅ Tous les fichiers ont été traités."
 
       - name: Compute all SHA-256 hashes
         id: hashes
@@ -211,7 +204,7 @@ jobs:
           LINUX_HASH=$(sha256sum all-files/BirdNET-Go-Linux-x64.deb | cut -d ' ' -f 1)
           PI_HASH=$(sha256sum all-files/BirdNET-Go-RaspberryPi.deb | cut -d ' ' -f 1)
           MAC_HASH=$(sha256sum all-files/BirdNET-Go-macOS.pkg | cut -d ' ' -f 1)
-
+          
           echo "WIN_HASH=$WIN_HASH" >> $GITHUB_ENV
           echo "LINUX_HASH=$LINUX_HASH" >> $GITHUB_ENV
           echo "PI_HASH=$PI_HASH" >> $GITHUB_ENV
