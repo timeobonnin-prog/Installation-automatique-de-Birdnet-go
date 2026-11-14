@@ -18,7 +18,6 @@ Si vous découvrez une faille de sécurité dans cet installateur ou dans les sc
 Veuillez contacter le mainteneur du projet directement :
 
 - Par e-mail : timeobonnin@outlook.fr
-- Ou via un message privé sur le Discord de BirdNET-Go.
 
 Nous nous engageons à examiner chaque signalement et à publier un correctif dans les plus brefs délais.
 Merci de contribuer à la sécurité de ce projet !
