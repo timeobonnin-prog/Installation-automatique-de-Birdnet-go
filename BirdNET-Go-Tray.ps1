@@ -209,11 +209,16 @@ $LinkReleases = $window.FindName("LinkReleases")
 })
 [void]$BtnOpen.Add_Click({ Start-Process "http://localhost:8080" })
 
-# --- 7. LOGIQUE DE MISE À JOUR ---
+# --- 7. LOGIQUE DE MISE À JOUR (Avec affichage des étapes) ---
 function Update-BirdNETGo {
+    $BtnUpdate.IsEnabled = $false
+    
+    # Petit raccourci pour forcer l'interface à se rafraîchir immédiatement
+    function Refresh-UI { $window.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render) }
+
     try {
-        $BtnUpdate.Content   = "RECHERCHE..."
-        $BtnUpdate.IsEnabled = $false
+        $BtnUpdate.Content = "RECHERCHE..."
+        Refresh-UI
 
         $apiUrl  = "https://api.github.com/repos/tphakala/birdnet-go/releases/latest"
         $headers = @{ "User-Agent" = "PowerShell" }
@@ -230,7 +235,10 @@ function Update-BirdNETGo {
             return
         }
 
-        # Télécharger l'archive
+        # Télécharger
+        $BtnUpdate.Content = "TÉLÉCHARGEMENT..."
+        Refresh-UI
+
         $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
         if (-not $asset) { throw "Aucun asset Windows amd64 trouvé dans la release" }
 
@@ -238,28 +246,38 @@ function Update-BirdNETGo {
         Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip
 
         # Extraire
+        $BtnUpdate.Content = "EXTRACTION..."
+        Refresh-UI
+
         $tempDir = Join-Path $env:TEMP "birdnet-update-extract"
         if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
         New-Item -ItemType Directory -Path $tempDir | Out-Null
         tar -xzf $tempZip -C $tempDir
 
-        # Trouver le nouvel exe
         $newExe = Get-ChildItem -Path $tempDir -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
         if (-not $newExe) { throw "birdnet-go.exe non trouvé dans l'archive" }
 
         # Arrêter le serveur
+        $BtnUpdate.Content = "ARRÊT DU SERVEUR..."
+        Refresh-UI
+
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 2
 
-        # Remplacer l'exe + version
+        # Remplacer les fichiers
+        $BtnUpdate.Content = "INSTALLATION..."
+        Refresh-UI
+
         Copy-Item -Path $newExe.FullName -Destination $ExePath -Force
         Set-Content -Path $VersionFile -Value $latestTag
 
-        # Nettoyer
         Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
         Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
         # Redémarrer
+        $BtnUpdate.Content = "REDÉMARRAGE..."
+        Refresh-UI
+
         Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
         Start-Sleep -Seconds 2
         Update-UI
@@ -317,7 +335,7 @@ function Update-UI {
     Update-UI
 })
 
-# --- 9. SYSTEM TRAY ---
+# --- 9. SYSTEM TRAY (L'icône reste active en arrière-plan) ---
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
 $IconPath = Join-Path $InstallDir "icon.ico"
 if (Test-Path $IconPath) {
@@ -356,6 +374,7 @@ $trayIcon.ContextMenuStrip = $trayMenu
     $window.Activate() | Out-Null
 })
 
+# Empêcher la fermeture réelle
 [void]$window.Add_Closing({
     param($sender, $e)
     if ($e.CloseReason -eq 'UserClosing') {
@@ -365,9 +384,9 @@ $trayIcon.ContextMenuStrip = $trayMenu
     }
 })
 
-# --- 10. TIMER ---
+# --- 10. TIMER (Toutes les 0.5 secondes) ---
 $timer = New-Object System.Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromSeconds(2)
+$timer.Interval = [TimeSpan]::FromMilliseconds(500)
 [void]$timer.Add_Tick({ Update-UI })
 $timer.Start()
 
@@ -381,6 +400,6 @@ if (-not (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
 Update-UI
 
 # Notification de démarrage
-[void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "Le panneau de contrôle est prêt.", [System.Windows.Forms.ToolTipIcon]::Info)
+[void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "Le panneau de contrôle est prêt.`nLe serveur est en cours d'exécution en arrière-plan.", [System.Windows.Forms.ToolTipIcon]::Info)
 
 $window.ShowDialog() | Out-Null
