@@ -3,12 +3,12 @@ name: Build and Release All Platforms
 on:
   create:
     tags:
-      - 'v-*'
-      - 'v*.*.*'
+      - "v-*"
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       test_only:
-        description: '🧪 Mode Test (Compile sans publier la Release)'
+        description: "🧪 Mode Test (Compile sans publier la Release)"
         type: boolean
         default: false
 
@@ -42,16 +42,16 @@ jobs:
           }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-          
+
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-          
+
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-          
+
           # Déplacer TOUS les fichiers du sous-dossier vers dist/
           Get-ChildItem -Path dist -Recurse -File | Move-Item -Destination dist -Force
-          
+
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -167,7 +167,7 @@ jobs:
           LINUX_HASH=$(sha256sum all-files/BirdNET-Go-Linux-x64.deb | cut -d ' ' -f 1)
           PI_HASH=$(sha256sum all-files/BirdNET-Go-RaspberryPi.deb | cut -d ' ' -f 1)
           MAC_HASH=$(sha256sum all-files/BirdNET-Go-macOS.pkg | cut -d ' ' -f 1)
-          
+
           echo "WIN_HASH=$WIN_HASH" >> $GITHUB_ENV
           echo "LINUX_HASH=$LINUX_HASH" >> $GITHUB_ENV
           echo "PI_HASH=$PI_HASH" >> $GITHUB_ENV
