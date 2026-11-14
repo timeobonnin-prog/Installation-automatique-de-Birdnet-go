@@ -1,7 +1,6 @@
 name: Build & Release
 
 on:
-  # Tous les jours à 16h55 (Paris)
   schedule:
     - cron: "55 15 * * *"
   workflow_dispatch:
@@ -14,18 +13,17 @@ on:
         description: "Forcer la compilation (Nightly)"
         type: boolean
         default: false
-  # Déclenchement uniquement si on modifie ces fichiers
   push:
     paths:
-      - "BirdNET-Go-Tray.ps1"
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "icon.ico"
-      - "logo.png"
-      - "start_birdnet.bat"
-      - "install-birdnet.sh"
-      - "scripts/**"
-      - ".github/workflows/build-and-release.yml"
+      - 'BirdNET-Go-Tray.ps1'
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'icon.ico'
+      - 'logo.png'
+      - 'start_birdnet.bat'
+      - 'install-birdnet.sh'
+      - 'scripts/**'
+      - '.github/workflows/build-and-release.yml'
 
 permissions:
   contents: write
@@ -53,7 +51,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Vérifier la Stable
           STABLE=$(gh api repos/tphakala/birdnet-go/releases/latest --jq '.tag_name')
           echo "stable=$STABLE" >> $GITHUB_OUTPUT
           HAS_STABLE=$(gh release list --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
@@ -62,8 +59,7 @@ jobs:
           else
             echo "build_stable=false" >> $GITHUB_OUTPUT
           fi
-
-          # 2. Vérifier la Nightly
+          
           NIGHTLY=$(gh api repos/tphakala/birdnet-go/releases --jq '[.[] | select(.prerelease == true)][0].tag_name')
           CLEAN_NIGHTLY="${NIGHTLY#nightly-}"
           echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
@@ -233,7 +229,7 @@ jobs:
             *.pkg
 
   # ============================================================
-  # JOB 3B : COMPILATION LINUX / MAC NIGHTLY
+  # JOB 3B : COMPILATION LINUX / MAC NIGHTLY (CORRIGÉ)
   # ============================================================
   build-linux-mac-nightly:
     needs: check-version
@@ -256,8 +252,18 @@ jobs:
         run: |
           TAG="nightly-${{ needs.check-version.outputs.nightly_tag }}"
           mkdir -p dist
-          URL="https://github.com/tphakala/birdnet-go/releases/download/$TAG/birdnet-go-${{ matrix.platform }}-$TAG.tar.gz"
-          curl -fsSL -o birdnet.tar.gz "$URL"
+          # Essayer avec la date, puis sans la date
+          URL_WITH_DATE="https://github.com/tphakala/birdnet-go/releases/download/$TAG/birdnet-go-${{ matrix.platform }}-${{ needs.check-version.outputs.nightly_tag }}.tar.gz"
+          URL_NO_DATE="https://github.com/tphakala/birdnet-go/releases/download/$TAG/birdnet-go-${{ matrix.platform }}.tar.gz"
+          
+          if curl -fsSL -o birdnet.tar.gz "$URL_WITH_DATE"; then
+            echo "Téléchargé avec la date : $URL_WITH_DATE"
+          elif curl -fsSL -o birdnet.tar.gz "$URL_NO_DATE"; then
+            echo "Téléchargé sans la date : $URL_NO_DATE"
+          else
+            echo "ERREUR : Impossible de télécharger l'archive nightly."
+            exit 1
+          fi
           tar -xzf birdnet.tar.gz -C dist
       - name: Install nfpm (Linux only)
         if: matrix.os == 'ubuntu-latest'
@@ -292,14 +298,7 @@ jobs:
   # JOB 4 : PUBLICATION DES RELEASES
   # ============================================================
   publish-release:
-    needs:
-      [
-        check-version,
-        build-windows-stable,
-        build-windows-nightly,
-        build-linux-mac-stable,
-        build-linux-mac-nightly,
-      ]
+    needs: [check-version, build-windows-stable, build-windows-nightly, build-linux-mac-stable, build-linux-mac-nightly]
     if: |
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true') &&
       always()
@@ -307,7 +306,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
