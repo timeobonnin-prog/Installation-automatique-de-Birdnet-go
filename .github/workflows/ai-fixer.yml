@@ -2,7 +2,7 @@ name: AI Auto-Fixer (Répare les workflows)
 
 on:
   workflow_run:
-    workflows: 
+    workflows:
       - "Test des Binaires et Auto-Correction par IA"
       - "Auto-Format Code and Fix Spaces"
       - "Super-Linter (Vérification de syntaxe)"
@@ -37,10 +37,10 @@ jobs:
           import requests
 
           token = os.environ.get("GITHUB_TOKEN")
-          
+
           # On cible le fichier qui a échoué (VM-test.yml ou format-and-fix.yml)
           file_to_fix = ".github/workflows/VM-test.yml"
-          
+
           with open(file_to_fix, "r", encoding="utf-8") as f:
               content = f.read()
 
@@ -48,7 +48,7 @@ jobs:
           Tu es un expert en GitHub Actions. Ce workflow a échoué lors de son exécution.
           Voici le code actuel :
           {content}
-          
+
           L'erreur principale rencontrée est souvent liée au manque de permissions ou à une mauvaise syntaxe.
           Corrige les erreurs et renvoie UNIQUEMENT le code YAML complet corrigé, sans texte ni balises markdown.
           """
@@ -86,20 +86,20 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           BRANCH_NAME="ai-fix-$(date +%s)"
           git checkout -b "$BRANCH_NAME"
-          
+
           git add .github/workflows/
-          
+
           if git diff --staged --quiet; then
             echo "Aucun changement détecté."
             exit 0
           fi
-          
+
           git commit -m "🤖 [IA] Correction automatique du workflow en échec"
           git push origin "$BRANCH_NAME"
-          
+
           gh pr create --title "🛠️ Correction automatique par l'IA" --body "L'IA a détecté une erreur dans le workflow et a généré cette correction." --base main --head "$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
