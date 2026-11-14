@@ -1,4 +1,4 @@
-﻿name: AI Auto-Fixer (Répare les workflows)
+name: AI Auto-Fixer (Répare les workflows)
 
 on:
   workflow_run:
@@ -20,10 +20,10 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Récupérer le code du dépôt
+      - name: Récupérer le code du dépôt (toujours sur main)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: main
           token: ${{ secrets.GH_PAT }}
 
       - name: Récupérer les logs de l'erreur
@@ -54,17 +54,22 @@ jobs:
           python3 - <<'EOF'
           import os
           import requests
+
           token = os.environ.get("GITHUB_TOKEN")
           file_path = os.environ.get("TARGET_FILE")
           if not token or not file_path: exit(0)
+
           try:
               with open(file_path, "r", encoding="utf-8") as f: file_content = f.read()
           except FileNotFoundError: exit(0)
+
           with open("error.log", "r", encoding="utf-8") as f: error_logs = f.read()[:3000]
+
           prompt = f"Corrige les erreurs dans ce fichier {file_path} en te basant sur ces logs:\n{error_logs}\n\nContenu:\n{file_content}\n\nRenvoie UNIQUEMENT le code corrigé."
           url = "https://models.inference.ai.azure.com/chat/completions"
           headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
           payload = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1}
+
           try:
               response = requests.post(url, headers=headers, json=payload)
               response.raise_for_status()
