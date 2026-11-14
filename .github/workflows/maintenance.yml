@@ -48,9 +48,22 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const releases = await github.paginate(github.rest.repos.listReleases, { owner: context.repo.owner, repo: context.repo.repo });
+            
+            // 1. Tuer toutes les releases "manifest" (le bug)
+            for (const r of releases) {
+              if (r.tag_name.toLowerCase().includes('manifest')) {
+                try {
+                  await github.rest.repos.deleteRelease({ owner: context.repo.owner, repo: context.repo.repo, release_id: r.id });
+                  await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${r.tag_name}` });
+                  console.log(`Supprimé (manifest) : ${r.tag_name}`);
+                } catch (e) { console.log(`Erreur : ${e.message}`); }
+              }
+            }
+
+            // 2. Nettoyer les anciennes versions (v..., manual-v..., nightly-v...)
             const byVersion = {};
             for (const r of releases) {
-              // On cible toutes tes releases (v..., manual-v..., nightly-v...)
+              if (r.tag_name.toLowerCase().includes('manifest')) continue;
               const m = r.tag_name.match(/^(?:manual-|nightly-)?v?(\d+)\.(\d+)$/);
               if (m) {
                 const v = m[1];
@@ -60,7 +73,6 @@ jobs:
             }
             for (const v in byVersion) {
               const group = byVersion[v].sort((a, b) => b.build - a.build);
-              // On garde l'index 0 (le plus récent), on supprime les autres
               for (let i = 1; i < group.length; i++) {
                 try {
                   await github.rest.repos.deleteRelease({ owner: context.repo.owner, repo: context.repo.repo, release_id: group[i].r.id });
