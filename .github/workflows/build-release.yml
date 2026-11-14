@@ -2,22 +2,25 @@ name: Build and Release All Platforms
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "start_birdnet.bat"
-      - ".github/workflows/build-release.yml"
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'start_birdnet.bat'
+      - '.github/workflows/build-release.yml'
   create:
     tags:
-      - "v-*"
-      - "v*.*.*"
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # ==========================================
+  # JOB 1 : WINDOWS (.exe)
+  # ==========================================
   build-windows:
     runs-on: windows-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
@@ -41,17 +44,16 @@ jobs:
           $headers = @{ "User-Agent" = "PowerShell" }
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
-          echo "url=$($release.html_url)" >> $env:GITHUB_OUTPUT
-
+          
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-
+          
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-
+          
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
-
+          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -63,15 +65,7 @@ jobs:
           Copy-Item -Path $ffmpegPath -Destination "dist\ffmpeg.exe" -Force
           Copy-Item -Path $ffprobePath -Destination "dist\ffprobe.exe" -Force
 
-      - name: Cache Windows Installer
-        id: cache-exe
-        uses: actions/cache@v4
-        with:
-          path: Output/BirdNET-Go-Windows.exe
-          key: exe-${{ hashFiles('install-birdnet.ps1', 'BirdNET-Go-Installer.iss', 'start_birdnet.bat') }}
-
       - name: Compile installer
-        if: steps.cache-exe.outputs.cache-hit != 'true'
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
@@ -82,12 +76,12 @@ jobs:
           $h = (Get-FileHash -Algorithm SHA256 'Output\BirdNET-Go-Windows.exe').Hash.ToLower()
           echo "sha256=$h" >> $env:GITHUB_OUTPUT
 
-      - name: Cache VirusTotal Result
+      - name: Cache VirusTotal Result (Windows)
         id: cache-vt
         uses: actions/cache@v4
         with:
           path: vt-cache
-          key: vt-${{ steps.hash.outputs.sha256 }}
+          key: vt-win-${{ steps.hash.outputs.sha256 }}
 
       - name: Scan with VirusTotal (Windows)
         if: steps.cache-vt.outputs.cache-hit != 'true'
@@ -97,42 +91,27 @@ jobs:
         run: |
           try {
             if (-not $env:VT_API_KEY) { exit 0 }
-            
             $file = Get-Item 'Output\BirdNET-Go-Windows.exe'
             $hash = "${{ steps.hash.outputs.sha256 }}"
             $headers = @{ 'x-apikey' = $env:VT_API_KEY }
             $lookup = "https://www.virustotal.com/api/v3/files/$hash"
-            
             $response = Invoke-WebRequest -Uri $lookup -Headers $headers -Method Get -UseBasicParsing -SkipHttpErrorCheck
-
-            if ($response.StatusCode -eq 200) {
-              Write-Host "Fichier déjà connu de VirusTotal."
-            } elseif ($response.StatusCode -eq 404) {
-              Write-Host "Fichier inconnu, demande d'upload speciale..."
+            if ($response.StatusCode -eq 404) {
               $uploadUrlReq = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/upload_url" -Headers $headers -Method Get
               $targetUrl = $uploadUrlReq.data
-              
-              Write-Host "Upload en cours..."
               $curlOutput = & curl.exe -s -X POST $targetUrl -H "x-apikey: $($env:VT_API_KEY)" -F "file=@$($file.FullName)"
-              
               $uploadData = $curlOutput | ConvertFrom-Json
-              if ($uploadData.error) { throw "Erreur API: $($uploadData.error.message)" }
-              
               $analysisId = $uploadData.data.id
-              
               for ($i=0; $i -lt 30; $i++) {
                 Start-Sleep -Seconds 10
                 $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers
                 if ($analysis.data.attributes.status -eq 'completed') { break }
               }
             }
-            
             New-Item -ItemType Directory -Path vt-cache -Force | Out-Null
             $stats = (Invoke-RestMethod -Uri $lookup -Headers $headers).data.attributes.last_analysis_stats
             $stats | ConvertTo-Json | Set-Content "vt-cache\$hash.json"
-          } catch {
-            Write-Warning "Quota ou erreur VirusTotal. On continue sans scan."
-          }
+          } catch { Write-Warning "Erreur VT Windows." }
 
       - name: Calculate Unique Version
         id: version
@@ -175,6 +154,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ==========================================
+  # JOB 2 : LINUX & RASPBERRY PI (.deb)
+  # ==========================================
   build-linux:
     needs: build-windows
     runs-on: ubuntu-latest
@@ -184,7 +166,6 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
-
       - name: Download Binary
         run: |
           mkdir -p dist
@@ -193,10 +174,8 @@ jobs:
           tar -xzf birdnet.tar.gz -C dist
           find dist -name "birdnet-go" -type f -exec mv {} dist/ \;
           chmod +x dist/birdnet-go
-
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-
       - name: Build .deb
         env:
           ARCH: ${{ matrix.arch }}
@@ -205,12 +184,50 @@ jobs:
           sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
-
       - name: Rename .deb
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
+      
+      - name: Compute SHA-256 (Linux)
+        id: hash-linux
+        run: |
+          FILE_NAME=$(ls *.deb)
+          HASH=$(sha256sum "$FILE_NAME" | cut -d ' ' -f 1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "file=$FILE_NAME" >> $GITHUB_OUTPUT
 
-      - name: Upload .deb
+      - name: Cache VirusTotal Result (Linux)
+        id: cache-vt-linux
+        uses: actions/cache@v4
+        with:
+          path: vt-cache-linux
+          key: vt-linux-${{ matrix.arch }}-${{ steps.hash-linux.outputs.hash }}
+
+      - name: Scan with VirusTotal (Linux)
+        if: steps.cache-vt-linux.outputs.cache-hit != 'true'
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then exit 0; fi
+          FILE_NAME="${{ steps.hash-linux.outputs.file }}"
+          HASH="${{ steps.hash-linux.outputs.hash }}"
+          LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
+          
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
+          
+          if [ "$HTTP_STATUS" -eq 404 ]; then
+            echo "Fichier inconnu, demande d'URL d'upload spéciale..."
+            UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
+            echo "Upload en cours..."
+            curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$FILE_NAME" > /dev/null
+            sleep 20
+          else
+            echo "Fichier déjà connu de VirusTotal."
+          fi
+          mkdir -p vt-cache-linux
+          echo "Scanned" > vt-cache-linux/dummy.txt
+
+      - name: Upload .deb to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build-windows.outputs.tag_name }}
@@ -218,6 +235,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ==========================================
+  # JOB 3 : MACOS (.pkg)
+  # ==========================================
   build-macos:
     needs: build-windows
     runs-on: macos-latest
@@ -225,7 +245,6 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
       - name: Download Binary
         run: |
           mkdir -p payload/usr/local/bin
@@ -234,12 +253,50 @@ jobs:
           tar -xzf birdnet.tar.gz -C payload/usr/local/bin
           find payload/usr/local/bin -name "birdnet-go" -type f -exec mv {} payload/usr/local/bin/ \;
           chmod +x payload/usr/local/bin/birdnet-go
-
       - name: Build .pkg
         run: |
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version ${{ needs.build-windows.outputs.upstream_tag }} --install-location / BirdNET-Go-macOS.pkg
 
-      - name: Upload .pkg
+      - name: Compute SHA-256 (Mac)
+        id: hash-mac
+        run: |
+          FILE_NAME="BirdNET-Go-macOS.pkg"
+          HASH=$(shasum -a 256 "$FILE_NAME" | cut -d ' ' -f 1)
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "file=$FILE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Cache VirusTotal Result (Mac)
+        id: cache-vt-mac
+        uses: actions/cache@v4
+        with:
+          path: vt-cache-mac
+          key: vt-mac-${{ steps.hash-mac.outputs.hash }}
+
+      - name: Scan with VirusTotal (Mac)
+        if: steps.cache-vt-mac.outputs.cache-hit != 'true'
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then exit 0; fi
+          FILE_NAME="${{ steps.hash-mac.outputs.file }}"
+          HASH="${{ steps.hash-mac.outputs.hash }}"
+          LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
+          
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
+          
+          if [ "$HTTP_STATUS" -eq 404 ]; then
+            echo "Fichier inconnu, demande d'URL d'upload spéciale..."
+            UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
+            echo "Upload en cours..."
+            curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$FILE_NAME" > /dev/null
+            sleep 20
+          else
+            echo "Fichier déjà connu de VirusTotal."
+          fi
+          mkdir -p vt-cache-mac
+          echo "Scanned" > vt-cache-mac/dummy.txt
+
+      - name: Upload .pkg to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build-windows.outputs.tag_name }}
@@ -247,8 +304,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ==========================================
+  # JOB 4 : PUBLIER LA RELEASE
+  # ==========================================
   publish-release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
