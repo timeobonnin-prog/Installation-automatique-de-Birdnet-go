@@ -1,6 +1,7 @@
 name: Build & Release
 
 on:
+  # Tous les jours à 16h55 (Heure de Paris : 15h55 UTC)
   schedule:
     - cron: "55 15 * * *"
   workflow_dispatch:
@@ -15,15 +16,15 @@ on:
         default: false
   push:
     paths:
-      - "BirdNET-Go-Tray.ps1"
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "icon.ico"
-      - "logo.png"
-      - "start_birdnet.bat"
-      - "install-birdnet.sh"
-      - "scripts/**"
-      - ".github/workflows/build-and-release.yml"
+      - 'BirdNET-Go-Tray.ps1'
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'icon.ico'
+      - 'logo.png'
+      - 'start_birdnet.bat'
+      - 'install-birdnet.sh'
+      - 'scripts/**'
+      - '.github/workflows/build-and-release.yml'
 
 permissions:
   contents: write
@@ -33,6 +34,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ============================================================
+  # JOB 1 : VÉRIFICATION DES VERSIONS
+  # ============================================================
   check-version:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -52,16 +56,16 @@ jobs:
           STABLE=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
           echo "stable=$STABLE" >> $GITHUB_OUTPUT
           HAS_STABLE=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
-
+          
           if [ -z "$HAS_STABLE" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
             echo "build_stable=true" >> $GITHUB_OUTPUT
           else
             echo "build_stable=false" >> $GITHUB_OUTPUT
           fi
-
+          
           # 2. Vérifier la Nightly (STRICTEMENT 8 chiffres, ignore manifest)
           NIGHTLY_RAW=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --pre-releases --limit 50 --json tagName -q '.[].tagName' | grep -E '^nightly-[0-9]{8}$' | head -n 1 || true)
-
+          
           if [ -n "$NIGHTLY_RAW" ]; then
             CLEAN_NIGHTLY="${NIGHTLY_RAW#nightly-}"
             echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
@@ -77,6 +81,9 @@ jobs:
             echo "build_nightly=false" >> $GITHUB_OUTPUT
           fi
 
+  # ============================================================
+  # JOB 2A : COMPILATION WINDOWS STABLE
+  # ============================================================
   build-windows-stable:
     needs: check-version
     if: needs.check-version.outputs.build_stable == 'true'
@@ -112,9 +119,11 @@ jobs:
           Copy-Item -Path (Get-Command ffmpeg).Source -Destination "dist\ffmpeg.exe" -Force
           Copy-Item -Path (Get-Command ffprobe).Source -Destination "dist\ffprobe.exe" -Force
       - name: Compile GUI to EXE
-        shell: pwsh
+        shell: powershell
         run: |
-          Install-Module ps2exe -Scope CurrentUser -Force
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name ps2exe -Scope CurrentUser -Force
           Invoke-ps2exe -InputFile "BirdNET-Go-Tray.ps1" -OutputFile "dist\BirdNET-Go-Control.exe" -noConsole -iconFile "icon.ico"
       - name: Compile installer
         shell: pwsh
@@ -126,6 +135,9 @@ jobs:
           name: stable-windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
+  # ============================================================
+  # JOB 2B : COMPILATION WINDOWS NIGHTLY
+  # ============================================================
   build-windows-nightly:
     needs: check-version
     if: needs.check-version.outputs.build_nightly == 'true'
@@ -161,9 +173,11 @@ jobs:
           Copy-Item -Path (Get-Command ffmpeg).Source -Destination "dist\ffmpeg.exe" -Force
           Copy-Item -Path (Get-Command ffprobe).Source -Destination "dist\ffprobe.exe" -Force
       - name: Compile GUI to EXE
-        shell: pwsh
+        shell: powershell
         run: |
-          Install-Module ps2exe -Scope CurrentUser -Force
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name ps2exe -Scope CurrentUser -Force
           Invoke-ps2exe -InputFile "BirdNET-Go-Tray.ps1" -OutputFile "dist\BirdNET-Go-Control.exe" -noConsole -iconFile "icon.ico"
       - name: Compile installer
         shell: pwsh
@@ -175,6 +189,9 @@ jobs:
           name: nightly-windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
+  # ============================================================
+  # JOB 3A : COMPILATION LINUX / MAC STABLE
+  # ============================================================
   build-linux-mac-stable:
     needs: check-version
     if: needs.check-version.outputs.build_stable == 'true'
@@ -234,6 +251,9 @@ jobs:
             *.deb
             *.pkg
 
+  # ============================================================
+  # JOB 3B : COMPILATION LINUX / MAC NIGHTLY
+  # ============================================================
   build-linux-mac-nightly:
     needs: check-version
     if: needs.check-version.outputs.build_nightly == 'true'
@@ -293,15 +313,11 @@ jobs:
             *.deb
             *.pkg
 
+  # ============================================================
+  # JOB 4 : PUBLICATION DES RELEASES
+  # ============================================================
   publish-release:
-    needs:
-      [
-        check-version,
-        build-windows-stable,
-        build-windows-nightly,
-        build-linux-mac-stable,
-        build-linux-mac-nightly,
-      ]
+    needs: [check-version, build-windows-stable, build-windows-nightly, build-linux-mac-stable, build-linux-mac-nightly]
     if: |
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true') &&
       always()
@@ -309,7 +325,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
