@@ -2,7 +2,7 @@ name: Sync BirdNET-Go Releases (Stable + Nightly)
 
 on:
   schedule:
-    - cron: '0 */12 * * *'   # Toutes les 12 heures
+    - cron: "0 */12 * * *" # Toutes les 12 heures
   workflow_dispatch:
 
 permissions:
