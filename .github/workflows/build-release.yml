@@ -2,16 +2,16 @@ name: Build and Release All Platforms
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "start_birdnet.bat"
-      - ".github/workflows/build-release.yml"
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'start_birdnet.bat'
+      - '.github/workflows/build-release.yml'
   create:
     tags:
-      - "v-*"
-      - "v*.*.*"
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -42,16 +42,16 @@ jobs:
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
           echo "url=$($release.html_url)" >> $env:GITHUB_OUTPUT
-
+          
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-
+          
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-
+          
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
-
+          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -176,7 +176,7 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Binary
         run: |
           mkdir -p dist
@@ -185,10 +185,10 @@ jobs:
           tar -xzf birdnet.tar.gz -C dist
           find dist -name "birdnet-go" -type f -exec mv {} dist/ \;
           chmod +x dist/birdnet-go
-
+          
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-
+        
       - name: Build .deb
         env:
           ARCH: ${{ matrix.arch }}
@@ -197,32 +197,10 @@ jobs:
           sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
-
+          
       - name: Rename .deb
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
-
-      - name: Scan with VirusTotal (Linux/Mac)
-        env:
-          VT_API_KEY: ${{ secrets.VT_API_KEY }}
-        run: |
-          if [ -z "$VT_API_KEY" ]; then exit 0; fi
-
-          FILE_NAME=$(ls *.deb)
-          HASH=$(sha256sum "$FILE_NAME" | cut -d ' ' -f 1)
-          LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
-
-          # On vérifie si le fichier est connu
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
-
-          if [ "$HTTP_STATUS" -eq 404 ]; then
-            echo "Fichier inconnu, upload en cours..."
-            UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
-            curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$FILE_NAME" > /dev/null
-            sleep 20 # Pause pour laisser le temps à VT d'analyser
-          else
-            echo "Fichier déjà connu de VirusTotal."
-          fi
 
       - name: Upload .deb
         uses: softprops/action-gh-release@v2
@@ -239,7 +217,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Binary
         run: |
           mkdir -p payload/usr/local/bin
@@ -248,31 +226,10 @@ jobs:
           tar -xzf birdnet.tar.gz -C payload/usr/local/bin
           find payload/usr/local/bin -name "birdnet-go" -type f -exec mv {} payload/usr/local/bin/ \;
           chmod +x payload/usr/local/bin/birdnet-go
-
+          
       - name: Build .pkg
         run: |
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version ${{ needs.build-windows.outputs.upstream_tag }} --install-location / BirdNET-Go-macOS.pkg
-
-      - name: Scan with VirusTotal (Mac)
-        env:
-          VT_API_KEY: ${{ secrets.VT_API_KEY }}
-        run: |
-          if [ -z "$VT_API_KEY" ]; then exit 0; fi
-
-          FILE_NAME="BirdNET-Go-macOS.pkg"
-          HASH=$(shasum -a 256 "$FILE_NAME" | cut -d ' ' -f 1)
-          LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
-
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
-
-          if [ "$HTTP_STATUS" -eq 404 ]; then
-            echo "Fichier inconnu, upload en cours..."
-            UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
-            curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$FILE_NAME" > /dev/null
-            sleep 20
-          else
-            echo "Fichier déjà connu de VirusTotal."
-          fi
 
       - name: Upload .pkg
         uses: softprops/action-gh-release@v2
