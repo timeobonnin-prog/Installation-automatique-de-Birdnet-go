@@ -2,9 +2,9 @@ name: Super-Linter (Vérification de syntaxe)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
@@ -27,14 +27,14 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
           # On active uniquement les langages qu'on veut tester
           VALIDATE_YAML: true
           VALIDATE_BASH: true
           VALIDATE_POWERSHELL: true
-          
+
           # On exclut les dossiers inutiles ET les fichiers Markdown (.md)
           FILTER_REGEX_EXCLUDE: ".*dist/.*|.*Output/.*|.*node_modules/.*|.*\\.md"
-          
+
           # Si erreur de style, ne pas bloquer le pipeline
           DISABLE_ERRORS: true
