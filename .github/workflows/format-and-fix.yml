@@ -33,7 +33,6 @@ jobs:
 
       - name: Run Shell-format (Bash)
         run: |
-          # Formate tous les fichiers .sh pour un code propre
           find . -name "*.sh" -exec shfmt -w -i 2 -ci {} \; || true
 
       - name: Auto-commit fixes
@@ -41,4 +40,5 @@ jobs:
         with:
           commit_message: "🤖 Auto-format: Correction des espaces et du code"
           commit_options: '--no-verify'
-          file_pattern: '**/*.md **/*.yml **/*.yaml **/*.sh'
+          # CORRECTION ICI : On utilise "." pour éviter l'erreur si une extension n'existe pas
+          file_pattern: '.'
