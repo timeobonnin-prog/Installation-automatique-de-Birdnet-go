@@ -48,7 +48,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const releases = await github.paginate(github.rest.repos.listReleases, { owner: context.repo.owner, repo: context.repo.repo });
-            
+
             // 1. Tuer toutes les releases "manifest" (le bug)
             for (const r of releases) {
               if (r.tag_name.toLowerCase().includes('manifest')) {
