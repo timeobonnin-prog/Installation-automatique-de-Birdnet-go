@@ -1,0 +1,61 @@
+name: Cleanup Old Tags
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *' # Tous les jours à 4h du matin
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old tags keeping only the latest per version
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tags = await github.paginate(github.rest.repos.listTags, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const tagsByVersion = {};
+
+            // 1. Grouper les tags par version (ex: 20261031)
+            for (const tag of tags) {
+              const match = tag.name.match(/^v?(\d+)\.(\d+)$/);
+              if (match) {
+                const version = match[1];
+                const buildNum = parseInt(match[2], 10);
+                
+                if (!tagsByVersion[version]) {
+                  tagsByVersion[version] = [];
+                }
+                tagsByVersion[version].push({ name: tag.name, buildNum });
+              }
+            }
+
+            // 2. Trier et supprimer les anciens tags
+            for (const version in tagsByVersion) {
+              const group = tagsByVersion[version];
+              group.sort((a, b) => b.buildNum - a.buildNum);
+
+              console.log(`Version ${version} : Gardé = ${group[0].name}`);
+
+              for (let i = 1; i < group.length; i++) {
+                const tagToDelete = group[i].name;
+                console.log(` -> Suppression du tag : ${tagToDelete}`);
+                try {
+                  await github.rest.git.deleteRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: `tags/${tagToDelete}`
+                  });
+                } catch (e) {
+                  console.log(`⚠️ Impossible de supprimer ${tagToDelete}`);
+                }
+              }
+            }
