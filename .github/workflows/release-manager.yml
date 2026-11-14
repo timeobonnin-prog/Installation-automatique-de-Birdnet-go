@@ -71,7 +71,7 @@ jobs:
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
           if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
-          tar -xzf "birdnet.tar.gz" -C "dist" --strip-components=1
+          tar -xzf "birdnet.tar.gz" -C "dist"
           
           $required = @("birdnet-go.exe", "onnxruntime.dll", "tensorflowlite_c.dll")
           $missing = @()
