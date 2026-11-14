@@ -2,9 +2,9 @@ name: Super-Linter (Vérification de syntaxe)
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -27,8 +27,9 @@ jobs:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # On désactive le Markdown car Prettier gère déjà le README
+          VALIDATE_MARKDOWN: false
           VALIDATE_YAML: true
-          VALIDATE_MARKDOWN: true
           VALIDATE_BASH: true
           VALIDATE_POWERSHELL: true
           FILTER_REGEX_EXCLUDE: ".*dist/.*|.*Output/.*|.*node_modules/.*"
