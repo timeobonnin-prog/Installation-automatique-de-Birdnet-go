@@ -18,6 +18,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ============================================================
+  # JOB 1 : VÉRIFICATION
+  # ============================================================
   check-update:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -45,6 +48,9 @@ jobs:
             echo "No build needed"
           fi
 
+  # ============================================================
+  # JOB 2 : COMPILATION WINDOWS
+  # ============================================================
   build-windows:
     needs: check-update
     if: needs.check-update.outputs.should_build == 'true'
@@ -102,27 +108,40 @@ jobs:
           name: windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
+  # ============================================================
+  # JOB 3 : COMPILATION LINUX ET MAC (En parallèle, sur les bons serveurs)
+  # ============================================================
   build-linux-mac:
     needs: check-update
     if: needs.check-update.outputs.should_build == 'true'
-    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
+      fail-fast: false  # <-- Évite que l'échec d'un OS annule les autres
       matrix:
-        platform: [linux-amd64, linux-arm64, darwin-arm64]
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+          - os: ubuntu-latest
+            platform: linux-arm64
+          - os: macos-latest
+            platform: darwin-arm64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      
       - name: Download Binary
         run: |
           mkdir -p dist
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.check-update.outputs.upstream_tag }}/birdnet-go-${{ matrix.platform }}-${{ needs.check-update.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C dist
+
       - name: Install nfpm (Linux only)
-        if: contains(matrix.platform, 'linux')
+        if: matrix.os == 'ubuntu-latest'
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
       - name: Build .deb (Linux)
-        if: contains(matrix.platform, 'linux')
+        if: matrix.os == 'ubuntu-latest'
         env:
           ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
           VERSION: ${{ needs.check-update.outputs.upstream_tag }}
@@ -131,8 +150,9 @@ jobs:
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
           if [ "$ARCH" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
-      - name: Build .pkg (Mac)
-        if: contains(matrix.platform, 'darwin')
+
+      - name: Build .pkg (Mac only)
+        if: matrix.os == 'macos-latest'
         run: |
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
@@ -140,6 +160,7 @@ jobs:
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo \
             --version ${{ needs.check-update.outputs.upstream_tag }} \
             --install-location / BirdNET-Go-macOS.pkg
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -148,6 +169,9 @@ jobs:
             *.deb
             *.pkg
 
+  # ============================================================
+  # JOB 4 : PUBLICATION DE LA RELEASE
+  # ============================================================
   publish-release:
     needs: [check-update, build-windows, build-linux-mac]
     if: needs.check-update.outputs.should_build == 'true'
