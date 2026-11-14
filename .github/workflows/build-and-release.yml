@@ -1,0 +1,318 @@
+name: Build & Release
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Forcer la compilation'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  check-update:
+    runs-on: ubuntu-latest
+    outputs:
+      upstream_tag: ${{ steps.upstream.outputs.tag }}
+      should_build: ${{ steps.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest upstream version
+        id: upstream
+        run: |
+          TAG=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/tphakala/birdnet-go/releases/latest | jq -r .tag_name)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Check if build is needed
+        id: check
+        run: |
+          CURRENT=$(cat VERSION.txt 2>/dev/null || echo "none")
+          UPSTREAM="${{ steps.upstream.outputs.tag }}"
+          if [ "$CURRENT" != "$UPSTREAM" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
+            echo "build=true" >> $GITHUB_OUTPUT
+            echo "Build needed: $UPSTREAM"
+          else
+            echo "build=false" >> $GITHUB_OUTPUT
+            echo "No build needed"
+          fi
+
+  build-windows:
+    needs: check-update
+    if: needs.check-update.outputs.should_build == 'true'
+    runs-on: windows-latest
+    outputs:
+      tag_name: ${{ steps.version.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Inno Setup and FFmpeg
+        run: |
+          choco install innosetup --no-progress -y
+          choco install ffmpeg --no-progress -y
+
+      - name: Fetch BirdNET-Go
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/latest" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
+          $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
+          if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          tar -xzf "birdnet.tar.gz" -C "dist"
+          $required = @("birdnet-go.exe", "onnxruntime.dll", "tensorflowlite_c.dll")
+          foreach ($f in $required) {
+            if (-not (Test-Path "dist\$f")) { Write-Error "Manquant: $f"; exit 1 }
+          }
+          Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
+          Remove-Item "birdnet.tar.gz" -Force
+
+      - name: Copy FFmpeg
+        shell: pwsh
+        run: |
+          Copy-Item -Path (Get-Command ffmpeg).Source -Destination "dist\ffmpeg.exe" -Force
+          Copy-Item -Path (Get-Command ffprobe).Source -Destination "dist\ffprobe.exe" -Force
+
+      - name: Compile GUI to EXE
+        shell: pwsh
+        run: |
+          Install-Module ps2exe -Scope CurrentUser -Force
+          Invoke-ps2exe -InputFile "BirdNET-Go-Tray.ps1" -OutputFile "dist\BirdNET-Go-Control.exe" -noConsole -iconFile "icon.ico"
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+
+      - name: Calculate Version
+        id: version
+        shell: pwsh
+        run: |
+          $runNumber = "{0:D3}" -f ${{ github.run_number }}
+          $upstreamTag = "${{ needs.check-update.outputs.upstream_tag }}"
+          echo "tag_name=v$upstreamTag.$runNumber" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: Output/BirdNET-Go-Windows.exe
+
+  build-linux-mac:
+    needs: [check-update, build-windows]
+    if: needs.check-update.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux-amd64, linux-arm64, darwin-arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Binary
+        run: |
+          mkdir -p dist
+          URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.check-update.outputs.upstream_tag }}/birdnet-go-${{ matrix.platform }}-${{ needs.check-update.outputs.upstream_tag }}.tar.gz"
+          curl -fsSL -o birdnet.tar.gz "$URL"
+          tar -xzf birdnet.tar.gz -C dist
+
+      - name: Install nfpm (Linux only)
+        if: contains(matrix.platform, 'linux')
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - name: Build .deb (Linux)
+        if: contains(matrix.platform, 'linux')
+        env:
+          ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
+          VERSION: ${{ needs.check-update.outputs.upstream_tag }}
+        run: |
+          sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
+          sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
+          ~/go/bin/nfpm package -p deb -f nfpm.yaml
+          if [ "$ARCH" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
+
+      - name: Build .pkg (Mac)
+        if: contains(matrix.platform, 'darwin')
+        run: |
+          mkdir -p payload/usr/local/bin
+          cp -r dist/* payload/usr/local/bin/
+          chmod +x payload/usr/local/bin/birdnet-go
+          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo \
+            --version ${{ needs.check-update.outputs.upstream_tag }} \
+            --install-location / BirdNET-Go-macOS.pkg
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-pkg
+          path: |
+            *.deb
+            *.pkg
+
+  publish-release:
+    needs: [check-update, build-windows, build-linux-mac]
+    if: needs.check-update.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-files
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-windows.outputs.tag_name }}
+          name: "Version ${{ needs.build-windows.outputs.tag_name }}"
+          files: all-files/*
+          make_latest: true
+          body: |
+            ### BirdNET-Go (Multi-Plateformes)
+
+            | Plateforme | Telechargement |
+            | :--- | :--- |
+            | Windows | [Telecharger (.exe)](https://github.com/${{ github.repository }}/releases/latest/download/BirdNET-Go-Windows.exe) |
+            | Linux | [Telecharger (.deb)](https://github.com/${{ github.repository }}/releases/latest/download/BirdNET-Go-Linux-x64.deb) |
+            | Raspberry Pi | [Telecharger (.deb)](https://github.com/${{ github.repository }}/releases/latest/download/BirdNET-Go-RaspberryPi.deb) |
+            | macOS | [Telecharger (.pkg)](https://github.com/${{ github.repository }}/releases/latest/download/BirdNET-Go-macOS.pkg) |
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update VERSION.txt
+        run: echo "${{ needs.check-update.outputs.upstream_tag }}" > VERSION.txt
+
+      - name: Commit Version Bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION.txt
+          git commit -m "chore: bump to ${{ needs.check-update.outputs.upstream_tag }} [skip ci]" || true
+          git push || true
+
+  scan-all-releases:
+    needs: [publish-release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan unscanned releases with VirusTotal
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then
+            echo "VT_API_KEY non configuree - scan ignore."
+            exit 0
+          fi
+          mkdir -p /tmp/vt_assets
+          RELEASES=$(gh release list --limit 100 --json tagName,isDraft -q '.[] | select(.isDraft == false) | .tagName')
+          if [ -z "$RELEASES" ]; then
+            echo "Aucune release a scanner."
+            exit 0
+          fi
+
+          SCANNED=0
+          SKIPPED=0
+          ERRORS=0
+
+          for tag in $RELEASES; do
+            echo "============================================================"
+            echo "Release : $tag"
+            echo "============================================================"
+
+            BODY=$(gh release view "$tag" --json body -q '.body // ""')
+            if echo "$BODY" | grep -qi "virustotal.com"; then
+              echo "Deja scanne - skip."
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            fi
+
+            rm -rf /tmp/vt_assets/*
+            if ! gh release download "$tag" --dir /tmp/vt_assets --clobber 2>/dev/null; then
+              echo "Pas d'assets - skip."
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            fi
+
+            ASSETS=$(ls -1 /tmp/vt_assets 2>/dev/null)
+            if [ -z "$ASSETS" ]; then
+              echo "Aucun fichier - skip."
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            fi
+
+            # Tableau Markdown sans syntaxe bash complexe
+            echo "| Fichier | Taille | Rapport VirusTotal |" > /tmp/vt_table.md
+            echo "| :--- | :--- | :--- |" >> /tmp/vt_table.md
+
+            for file in /tmp/vt_assets/*; do
+              [ -f "$file" ] || continue
+              FILENAME=$(basename "$file")
+              FILESIZE=$(du -h "$file" | cut -f1)
+              echo "  -> $FILENAME ($FILESIZE)"
+              HASH=$(sha256sum "$file" | cut -d' ' -f1)
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/$HASH")
+
+              if [ "$HTTP_STATUS" = "200" ]; then
+                echo "    Deja analyse par VirusTotal."
+              else
+                echo "    Upload vers VirusTotal..."
+                UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
+                if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
+                  echo "    Impossible d'obtenir l'URL."
+                  ERRORS=$((ERRORS + 1))
+                  continue
+                fi
+                UPLOAD_RESPONSE=$(curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$file")
+                if echo "$UPLOAD_RESPONSE" | grep -q '"error"'; then
+                  echo "    Erreur upload."
+                  ERRORS=$((ERRORS + 1))
+                  continue
+                fi
+                echo "    Upload OK - attente 30s..."
+                sleep 30
+              fi
+
+              VT_URL="https://www.virustotal.com/gui/file/${HASH}"
+              echo "| ${FILENAME} | ${FILESIZE} | [Voir le rapport](${VT_URL}) |" >> /tmp/vt_table.md
+            done
+
+            echo "$BODY" > /tmp/new_body.md
+            echo "" >> /tmp/new_body.md
+            echo "---" >> /tmp/new_body.md
+            echo "" >> /tmp/new_body.md
+            echo "### Analyse VirusTotal" >> /tmp/new_body.md
+            echo "" >> /tmp/new_body.md
+            cat /tmp/vt_table.md >> /tmp/new_body.md
+
+            if gh release edit "$tag" --notes-file /tmp/new_body.md; then
+              echo "  Body mis a jour pour $tag"
+              SCANNED=$((SCANNED + 1))
+            else
+              echo "  Echec mise a jour body pour $tag"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          echo ""
+          echo "============================================================"
+          echo " RESUME DU SCAN"
+          echo "============================================================"
+          echo " Scannees  : $SCANNED"
+          echo " Ignorees  : $SKIPPED"
+          echo " Erreurs   : $ERRORS"
+          echo "============================================================"
+
+          if [ "$ERRORS" -gt 0 ]; then
+            exit 1
+          fi
