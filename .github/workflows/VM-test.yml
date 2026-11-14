@@ -2,9 +2,9 @@
 
 on:
   push:
-    branches: [main, master, principal]
+    branches: [ main, master, principal ]
   pull_request:
-    branches: [main, master, principal]
+    branches: [ main, master, principal ]
   workflow_dispatch:
 
 permissions:
@@ -17,55 +17,33 @@ jobs:
     runs-on: windows-latest
     continue-on-error: true
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Télécharger ou créer un binaire de secours
+      - uses: actions/checkout@v4
+      - name: Télécharger le binaire
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "dist"
-          try {
-            gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "dist"
-            if (Test-Path "dist\BirdNET-Go-Windows.exe") {
-              Copy-Item "dist\BirdNET-Go-Windows.exe" "dist\birdnet-go.exe" -Force
-            }
-          } catch {
-            Set-Content -Path "dist\birdnet-go.exe" -Value "Fichier de secours temporaire"
-          }
-
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Windows.exe" --dir "dist"
+          if (Test-Path "dist\BirdNET-Go-Windows.exe") { Copy-Item "dist\BirdNET-Go-Windows.exe" "dist\birdnet-go.exe" -Force }
           if (!(Test-Path "dist\ffmpeg.exe")) { New-Item -ItemType File -Path "dist\ffmpeg.exe" | Out-Null }
           if (!(Test-Path "dist\ffprobe.exe")) { New-Item -ItemType File -Path "dist\ffprobe.exe" | Out-Null }
-          if (!(Test-Path "dist\VERSION.txt")) { Set-Content -Path "dist\VERSION.txt" -Value "test" }
           if (!(Test-Path "dist\BirdNET-Go-Control.exe")) { New-Item -ItemType File -Path "dist\BirdNET-Go-Control.exe" | Out-Null }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compiler avec Inno Setup
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        with:
-          path: BirdNET-Go-Installer.iss
-          options: /O+
-
-      - name: Tester le démarrage du serveur (Windows)
+      - name: Tester le démarrage du serveur
         shell: pwsh
         run: |
-          if ((Get-Item "dist\birdnet-go.exe").Length -gt 1MB) {
-            Write-Host "Lancement du serveur BirdNET-Go..."
-            $process = Start-Process -FilePath "dist\birdnet-go.exe" -ArgumentList "serve" -WorkingDirectory "dist" -PassThru -NoNewWindow
-            Start-Sleep -Seconds 5
-            
-            try {
-              $response = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 5
-              if ($response.StatusCode -eq 200) {
-                Write-Host "✅ Succès : Le serveur BirdNET-Go répond sur le port 8080 !"
-              }
-            } catch {
-              Write-Warning "⚠️ Le serveur n'a pas répondu (peut-être un faux binaire)."
-            } finally {
-              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            }
-          } else {
-            Write-Warning "⚠️ Binaire de secours (faux fichier), test de démarrage ignoré."
+          Write-Host "🚀 Lancement du serveur BirdNET-Go..."
+          $process = Start-Process -FilePath "dist\birdnet-go.exe" -ArgumentList "serve" -WorkingDirectory "dist" -PassThru -NoNewWindow
+          Start-Sleep -Seconds 5
+          Write-Host "🔍 Test de connexion à localhost:8080..."
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 5
+            Write-Host "✅ SUCCESS: Server is ONLINE on localhost:8080 ! (Code: $($response.StatusCode))"
+          } catch {
+            Write-Host "❌ INFO: Server is OFFLINE (Code: 000)."
+          } finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
           }
 
   test-release-linux:
@@ -73,114 +51,90 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Télécharger et installer le .deb Linux
+      - uses: actions/checkout@v4
+      - name: Installer le .deb
         run: |
-          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb" || echo "Téléchargement ignoré"
-          if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
-            sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
-          fi
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-Linux-x64.deb"
+          sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Tester le démarrage du serveur (Linux)
+      - name: Tester le démarrage
         run: |
-          if [ -f "/usr/local/bin/birdnet-go" ] || [ -f "/opt/birdnet-go/birdnet-go" ]; then
-            BIN_PATH=$(which birdnet-go 2>/dev/null || echo "/opt/birdnet-go/birdnet-go")
-            $BIN_PATH serve &
-            SERVER_PID=$!
-            sleep 5
-            
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-            if [ "$HTTP_CODE" == "200" ]; then
-              echo "✅ Succès : Le serveur répond sur le port 8080 !"
-            else
-              echo "⚠️ Le serveur n'a pas répondu (Code: $HTTP_CODE)."
-            fi
-            kill $SERVER_PID 2>/dev/null || true
+          echo "🚀 Lancement du serveur..."
+          if [ -f "/usr/local/bin/birdnet-go" ]; then BIN_PATH="/usr/local/bin/birdnet-go"; else BIN_PATH="/opt/birdnet-go/birdnet-go"; fi
+          $BIN_PATH serve &
+          SERVER_PID=$!
+          sleep 5
+          echo "🔍 Test de connexion à localhost:8080..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+          if [ "$HTTP_CODE" == "200" ]; then
+            echo "✅ SUCCESS: Server is ONLINE on localhost:8080 !"
+          else
+            echo "❌ INFO: Server is OFFLINE (Code: $HTTP_CODE)."
           fi
+          kill $SERVER_PID 2>/dev/null || true
 
   test-release-raspberry:
     name: Test du paquet Raspberry Pi (.deb)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Télécharger le paquet Raspberry Pi
-        run: |
-          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-RaspberryPi.deb" || echo "Téléchargement ignoré"
+      - uses: actions/checkout@v4
+      - name: Télécharger le paquet
+        run: gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-RaspberryPi.deb"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Tester l'installation et le démarrage dans QEMU
+      - name: Tester dans QEMU
         uses: pguyot/arm-runner-action@v2.6.5
-        continue-on-error: true
         with:
           base_image: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-11-19/2024-11-19-raspios-bookworm-arm64-lite.img.xz
           cpu: cortex-a72
           copy_artifact_path: BirdNET-Go-RaspberryPi.deb
           copy_artifact_dest: /tmp/
           commands: |
-            if [ -f "/tmp/BirdNET-Go-RaspberryPi.deb" ]; then
-              sudo dpkg -i --force-all /tmp/BirdNET-Go-RaspberryPi.deb || true
-              if [ -f "/usr/local/bin/birdnet-go" ]; then
-                /usr/local/bin/birdnet-go serve &
-                SERVER_PID=$!
-                sleep 5
-                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-                if [ "$HTTP_CODE" == "200" ]; then
-                  echo "✅ Succès : Le serveur répond sur le port 8080 !"
-                else
-                  echo "⚠️ Le serveur n'a pas répondu (Code: $HTTP_CODE)."
-                fi
-                kill $SERVER_PID 2>/dev/null || true
-              fi
+            sudo dpkg -i --force-all /tmp/BirdNET-Go-RaspberryPi.deb || true
+            echo "🚀 Lancement du serveur..."
+            /usr/local/bin/birdnet-go serve &
+            SERVER_PID=$!
+            sleep 5
+            echo "🔍 Test de connexion à localhost:8080..."
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+            if [ "$HTTP_CODE" == "200" ]; then
+              echo "✅ SUCCESS: Server is ONLINE on localhost:8080 !"
+            else
+              echo "❌ INFO: Server is OFFLINE (Code: $HTTP_CODE)."
             fi
+            kill $SERVER_PID 2>/dev/null || true
 
   test-release-macos:
     name: Test du paquet macOS (.pkg)
     runs-on: macos-latest
     continue-on-error: true
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Télécharger et installer le paquet macOS
+      - uses: actions/checkout@v4
+      - name: Installer le .pkg
         run: |
-          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-macOS.pkg" || echo "Téléchargement ignoré"
-          if [ -f "BirdNET-Go-macOS.pkg" ]; then
-            sudo installer -pkg BirdNET-Go-macOS.pkg -target /
-          fi
+          gh release download --repo timeobonnin-prog/Installation-automatique-de-Birdnet-go --pattern "BirdNET-Go-macOS.pkg"
+          sudo installer -pkg BirdNET-Go-macOS.pkg -target /
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Tester le démarrage du serveur (macOS)
+      - name: Tester le démarrage
         run: |
-          if [ -f "/usr/local/bin/birdnet-go" ]; then
-            /usr/local/bin/birdnet-go serve &
-            SERVER_PID=$!
-            sleep 5
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-            if [ "$HTTP_CODE" == "200" ]; then
-              echo "✅ Succès : Le serveur répond sur le port 8080 !"
-            else
-              echo "⚠️ Le serveur n'a pas répondu (Code: $HTTP_CODE)."
-            fi
-            kill $SERVER_PID 2>/dev/null || true
+          echo "🚀 Lancement du serveur..."
+          /usr/local/bin/birdnet-go serve &
+          SERVER_PID=$!
+          sleep 5
+          echo "🔍 Test de connexion à localhost:8080..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+          if [ "$HTTP_CODE" == "200" ]; then
+            echo "✅ SUCCESS: Server is ONLINE on localhost:8080 !"
+          else
+            echo "❌ INFO: Server is OFFLINE (Code: $HTTP_CODE)."
           fi
+          kill $SERVER_PID 2>/dev/null || true
 
   auto-reparation-ia:
-    needs:
-      [
-        test-release-windows,
-        test-release-linux,
-        test-release-raspberry,
-        test-release-macos,
-      ]
+    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
@@ -188,41 +142,32 @@ jobs:
       pull-requests: write
       models: read
     steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Installer Python et les dépendances
-        run: pip install requests
-
-      - name: Lancer le script de correction par l'IA (GitHub Models)
+      - uses: actions/checkout@v4
+      - run: pip install requests
+      - name: Lancer l'IA (GitHub Models)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'EOF'
-          import os
-          import requests
+          import os, requests
           token = os.environ.get("GITHUB_TOKEN")
           if not token: exit(0)
-          with open(".github/workflows/VM-test.yml", "r", encoding="utf-8") as f:
-              workflow_content = f.read()
-          prompt = f"Tu es un expert en GitHub Actions. Corrige ce fichier s'il y a une erreur et renvoie UNIQUEMENT le code YAML complet corrigé, sans texte ni balises markdown :\n\n{workflow_content}"
+          with open(".github/workflows/VM-test.yml", "r", encoding="utf-8") as f: content = f.read()
+          prompt = f"Corrige ce fichier s'il y a une erreur et renvoie UNIQUEMENT le YAML corrigé :\n\n{content}"
           url = "https://models.inference.ai.azure.com/chat/completions"
           headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
           payload = {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1}
           try:
               response = requests.post(url, headers=headers, json=payload)
               response.raise_for_status()
-              corrected_code = response.json()["choices"][0]["message"]["content"].strip()
-              if corrected_code.startswith("```yaml"): corrected_code = corrected_code.split("\n", 1)[1]
-              elif corrected_code.startswith("```"): corrected_code = corrected_code.split("\n", 1)[1]
-              if corrected_code.endswith("```"): corrected_code = corrected_code.rsplit("\n", 1)[0]
-              with open(".github/workflows/VM-test.yml", "w", encoding="utf-8") as f:
-                  f.write(corrected_code)
-          except requests.exceptions.RequestException:
-              pass
+              corrected = response.json()["choices"][0]["message"]["content"].strip()
+              if corrected.startswith("```yaml"): corrected = corrected.split("\n", 1)[1]
+              elif corrected.startswith("```"): corrected = corrected.split("\n", 1)[1]
+              if corrected.endswith("```"): corrected = corrected.rsplit("\n", 1)[0]
+              with open(".github/workflows/VM-test.yml", "w", encoding="utf-8") as f: f.write(corrected)
+          except: pass
           EOF
-
-      - name: Créer la branche et la Pull Request de correction
+      - name: Créer la Pull Request
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -230,8 +175,8 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           git add .github/workflows/VM-test.yml
           if git diff --staged --quiet; then exit 0; fi
-          git commit -m "🤖 [IA] Correction automatique du workflow (GitHub Models)"
+          git commit -m "🤖 [IA] Correction automatique du workflow"
           git push origin "$BRANCH_NAME"
-          gh pr create --title "🛠️ Correction automatique du workflow par l'IA" --body "Correction automatique." --base main --head "$BRANCH_NAME"
+          gh pr create --title "🛠️ Correction automatique par l'IA" --body "Correction auto." --base main --head "$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
