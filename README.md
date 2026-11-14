@@ -81,6 +81,3 @@ Vous avez rencontré un problème lors de l'installation ?
 ---
 
 _Projet open source sous licence MIT. Non affilié officiellement au projet BirdNET-Go._
-
-
-
