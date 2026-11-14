@@ -1,0 +1,92 @@
+name: Sync BirdNET-Go Releases (Stable + Nightly)
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'   # Toutes les 12 heures
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync upstream releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM: tphakala/birdnet-go
+          LOCAL: ${{ github.repository }}
+        run: |
+          set -e
+
+          # --- 1. Récupérer la dernière stable upstream ---
+          STABLE=$(gh api "repos/$UPSTREAM/releases/latest" --jq '.tag_name')
+          echo "Dernière stable : $STABLE"
+
+          # --- 2. Récupérer les 2 dernières nightly (prereleases) ---
+          NIGHTLIES=$(gh api "repos/$UPSTREAM/releases?per_page=30" --jq '[.[] | select(.prerelease == true)][0:2][].tag_name' || true)
+          echo "Nightlies : $NIGHTLIES"
+
+          # --- 3. Garder seulement stable + nightlies ---
+          KEEP="$STABLE"
+          for n in $NIGHTLIES; do KEEP="$KEEP $n"; done
+          echo "À conserver : $KEEP"
+
+          # --- 4. Lister les releases locales ---
+          LOCAL_TAGS=$(gh api "repos/$LOCAL/releases?per_page=100" --jq '.[].tag_name' || echo "")
+
+          # --- 5. Supprimer les anciennes releases locales ---
+          for tag in $LOCAL_TAGS; do
+            if ! echo "$KEEP" | tr ' ' '\n' | grep -qx "$tag"; then
+              echo "Suppression de l'ancienne release : $tag"
+              gh release delete "$tag" --repo "$LOCAL" --yes --cleanup-tag || true
+            fi
+          done
+
+          # --- 6. Créer ou mettre à jour les releases à conserver ---
+          for tag in $KEEP; do
+            IS_PRERELEASE="false"
+            if echo "$NIGHTLIES" | tr ' ' '\n' | grep -qx "$tag"; then
+              IS_PRERELEASE="true"
+            fi
+
+            if gh release view "$tag" --repo "$LOCAL" >/dev/null 2>&1; then
+              echo "Release $tag existe déjà (prerelease=$IS_PRERELEASE)"
+              EXISTING=$(gh release view "$tag" --repo "$LOCAL" --json assets --jq '.assets | length')
+              if [ "$EXISTING" -gt 0 ]; then
+                echo "  → Assets déjà présents, on saute"
+                continue
+              fi
+            else
+              echo "Création de $tag (prerelease=$IS_PRERELEASE)"
+              if [ "$IS_PRERELEASE" = "true" ]; then
+                gh release create "$tag" --repo "$LOCAL" \
+                  --title "Nightly $tag" \
+                  --notes "Miroir nightly de [birdnet-go $tag](https://github.com/$UPSTREAM/releases/tag/$tag)" \
+                  --prerelease
+              else
+                gh release create "$tag" --repo "$LOCAL" \
+                  --title "Stable $tag" \
+                  --notes "Miroir stable de [birdnet-go $tag](https://github.com/$UPSTREAM/releases/tag/$tag)"
+              fi
+            fi
+
+            # --- 7. Télécharger et uploader les assets ---
+            TMPDIR=$(mktemp -d)
+            echo "Téléchargement des assets de $tag..."
+            gh release download "$tag" --repo "$UPSTREAM" --dir "$TMPDIR" \
+              --pattern "*.tar.gz" --pattern "*.zip" --clobber || true
+            if [ -n "$(ls -A $TMPDIR)" ]; then
+              for f in "$TMPDIR"/*; do
+                [ -f "$f" ] || continue
+                echo "  Upload $(basename "$f")"
+                gh release upload "$tag" "$f" --repo "$LOCAL" --clobber || true
+              done
+            else
+              echo "  Aucun asset trouvé pour $tag"
+            fi
+            rm -rf "$TMPDIR"
+          done
+
+          echo "Synchronisation terminée."
