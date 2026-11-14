@@ -26,10 +26,17 @@ jobs:
           LOCAL: ${{ github.repository }}
         run: |
           set -e
-          STABLE=$(gh api "repos/$UPSTREAM/releases/latest" --jq '.tag_name')
-          NIGHTLIES=$(gh api "repos/$UPSTREAM/releases?per_page=30" --jq '[.[] | select(.prerelease == true)][0:1][].tag_name' || true)
+          STABLE=$(gh release list --repo "$UPSTREAM" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+          
+          # On ignore "manifest" et on ne garde que les vraies nightlies avec une date
+          NIGHTLY_RAW=$(gh release list --repo "$UPSTREAM" --exclude-drafts --pre-releases --limit 50 --json tagName -q '.[].tagName' | grep -E '^nightly-[0-9]{8}$' | head -n 1 || true)
+          
           KEEP="$STABLE"
-          for n in $NIGHTLIES; do KEEP="$KEEP $n"; done
+          if [ -n "$NIGHTLY_RAW" ]; then
+            KEEP="$KEEP $NIGHTLY_RAW"
+          fi
+          
+          echo "À conserver : $KEEP"
 
           # Supprime les vieilles releases officielles (sauf celles qu'on garde)
           LOCAL_TAGS=$(gh api "repos/$LOCAL/releases?per_page=100" --jq '.[].tag_name' | grep -vE '^(v|manual-|nightly-v)' || echo "")
@@ -43,7 +50,7 @@ jobs:
           # Crée les releases manquantes
           for tag in $KEEP; do
             IS_PRE="false"
-            if echo "$NIGHTLIES" | tr ' ' '\n' | grep -qx "$tag"; then IS_PRE="true"; fi
+            if [ "$tag" = "$NIGHTLY_RAW" ]; then IS_PRE="true"; fi
             if ! gh release view "$tag" --repo "$LOCAL" >/dev/null 2>&1; then
               if [ "$IS_PRE" = "true" ]; then
                 gh release create "$tag" --repo "$LOCAL" --title "Nightly $tag" --notes "Miroir nightly" --prerelease --latest=false
