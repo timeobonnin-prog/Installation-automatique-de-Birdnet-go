@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Met à jour les actions GitHub automatiquement
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Met à jour les dépendances npm (si tu en as plus tard)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
