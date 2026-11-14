@@ -10,7 +10,6 @@ permissions:
   pages: write
   id-token: write
 
-# La clé est ici : on ne veut JAMAIS annuler un déploiement en cours
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -18,6 +17,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Sync releases
         env:
@@ -27,33 +27,18 @@ jobs:
         run: |
           set -e
 
-          echo "============================================================"
-          echo " 1. Récupération de la dernière stable upstream"
-          echo "============================================================"
           STABLE=$(gh api "repos/$UPSTREAM/releases/latest" --jq '.tag_name')
           echo "Stable : $STABLE"
 
-          echo ""
-          echo "============================================================"
-          echo " 2. Récupération des 2 dernières nightly"
-          echo "============================================================"
+          # 1 seule nightly au lieu de 2
           NIGHTLIES=$(gh api "repos/$UPSTREAM/releases?per_page=30" \
-            --jq '[.[] | select(.prerelease == true)][0:2][].tag_name' || true)
+            --jq '[.[] | select(.prerelease == true)][0:1][].tag_name' || true)
           echo "Nightlies : $NIGHTLIES"
 
-          echo ""
-          echo "============================================================"
-          echo " 3. Liste des releases à conserver"
-          echo "============================================================"
           KEEP="$STABLE"
           for n in $NIGHTLIES; do KEEP="$KEEP $n"; done
           echo "À conserver : $KEEP"
 
-          echo ""
-          echo "============================================================"
-          echo " 4. Suppression des anciennes releases upstream"
-          echo "    (uniquement les tags numériques purs, ex: 20261031)"
-          echo "============================================================"
           LOCAL_TAGS=$(gh api "repos/$LOCAL/releases?per_page=100" \
             --jq '.[].tag_name' | grep -E '^[0-9]+$' || echo "")
 
@@ -64,10 +49,6 @@ jobs:
             fi
           done
 
-          echo ""
-          echo "============================================================"
-          echo " 5. Création / mise à jour des releases à conserver"
-          echo "============================================================"
           for tag in $KEEP; do
             IS_PRE="false"
             if echo "$NIGHTLIES" | tr ' ' '\n' | grep -qx "$tag"; then
@@ -97,54 +78,40 @@ jobs:
               fi
             fi
 
-            echo "  → Téléchargement des assets Windows..."
             TMPDIR=$(mktemp -d)
             gh release download "$tag" --repo "$UPSTREAM" --dir "$TMPDIR" \
               --pattern "*windows*" --clobber || true
-
             if [ -n "$(ls -A $TMPDIR 2>/dev/null)" ]; then
               for f in "$TMPDIR"/*; do
                 [ -f "$f" ] || continue
                 echo "    Upload $(basename "$f")"
                 gh release upload "$tag" "$f" --repo "$LOCAL" --clobber || true
               done
-            else
-              echo "    ⚠️ Aucun asset Windows trouvé"
             fi
             rm -rf "$TMPDIR"
           done
 
-          echo ""
-          echo "============================================================"
-          echo " ✅ Synchronisation terminée"
-          echo "============================================================"
-
   update-html:
     needs: sync
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Fetch releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api "repos/${{ github.repository }}/releases?per_page=100" \
             --paginate > releases.json
-          echo "Releases récupérées :"
-          python3 -c "import json; [print(f'  - {r[\"tag_name\"]} ({\"nightly\" if r[\"prerelease\"] else \"stable\"})') for r in json.load(open('releases.json'))]"
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Generate index.html
         run: python3 generate_html.py
-
       - name: Commit index.html
         run: |
           git config user.name "github-actions[bot]"
@@ -156,16 +123,12 @@ jobs:
             git commit -m "chore: update index.html [skip ci]"
             git push || true
           fi
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: "."
-
-      # ✅ L'action est mise à jour vers v5
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
