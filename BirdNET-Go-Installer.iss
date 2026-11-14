@@ -23,7 +23,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "firewall"; Description: "{cm:FirewallTask}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion`r`nSource: "dist\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\BirdNET-Go-Control.exe"; DestDir: "{app}"; Flags: ignoreversion
