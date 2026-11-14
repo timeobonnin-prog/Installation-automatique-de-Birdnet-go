@@ -26,3 +26,8 @@ $RECYCLE.BIN/
 .idea/
 *.suo
 *.user
+
+# Dépendances Node.js (générées par le workflow)
+node_modules/
+package-lock.json
+.npm/
