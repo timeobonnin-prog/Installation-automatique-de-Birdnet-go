@@ -16,6 +16,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # AJOUT DE LA CLÉ ICI :
+          token: ${{ secrets.GH_PAT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,5 +42,8 @@ jobs:
         with:
           commit_message: "🤖 Auto-format: Correction des espaces et du code"
           commit_options: '--no-verify'
-          # CORRECTION ICI : On utilise "." pour éviter l'erreur si une extension n'existe pas
           file_pattern: '.'
+          # AJOUT DE LA CLÉ ICI AUSSI :
+          push_options: '--force'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
