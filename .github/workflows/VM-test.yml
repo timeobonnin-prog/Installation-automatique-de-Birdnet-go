@@ -2,9 +2,9 @@
 
 on:
   push:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   pull_request:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   workflow_dispatch:
 
 permissions:
@@ -87,27 +87,27 @@ jobs:
       - name: Vérifier la structure du paquet
         run: |
           echo "🔍 Vérification du paquet .deb pour Raspberry Pi (ARM64)..."
-          
+
           # On vérifie que le fichier existe
           if [ ! -f "BirdNET-Go-RaspberryPi.deb" ]; then
             echo "❌ INFO: Le fichier .deb est introuvable."
             exit 0
           fi
-          
+
           # On vérifie l'architecture avec dpkg-deb
           ARCH=$(dpkg-deb -f BirdNET-Go-RaspberryPi.deb Architecture)
           echo "Architecture détectée : $ARCH"
-          
+
           if [ "$ARCH" == "arm64" ]; then
             echo "✅ SUCCESS: Le paquet .deb est bien pour ARM64 (Raspberry Pi)."
           else
             echo "❌ INFO: Le paquet .deb est pour $ARCH (attendu : arm64)."
           fi
-          
+
           # On liste les fichiers contenus dans le paquet
           echo "📦 Contenu du paquet :"
           dpkg-deb -c BirdNET-Go-RaspberryPi.deb | grep -E 'birdnet-go|libtensorflowlite' || echo "❌ Binaire ou bibliothèque introuvable."
-          
+
           echo "✅ SUCCESS: Le paquet est valide et contient les fichiers nécessaires."
 
   test-release-macos:
@@ -139,7 +139,13 @@ jobs:
 
   summary:
     name: 📊 Résumé des Tests
-    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
+    needs:
+      [
+        test-release-windows,
+        test-release-linux,
+        test-release-raspberry,
+        test-release-macos,
+      ]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -149,12 +155,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Plateforme | Statut |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
-          
+
           WIN_STATUS="${{ needs.test-release-windows.result }}"
           LINUX_STATUS="${{ needs.test-release-linux.result }}"
           PI_STATUS="${{ needs.test-release-raspberry.result }}"
           MAC_STATUS="${{ needs.test-release-macos.result }}"
-          
+
           if [ "$WIN_STATUS" == "success" ]; then echo "| 🪟 Windows (.exe) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🪟 Windows (.exe) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
           if [ "$LINUX_STATUS" == "success" ]; then echo "| 🐧 Linux x64 (.deb) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🐧 Linux x64 (.deb) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
           if [ "$PI_STATUS" == "success" ]; then echo "| 🍓 Raspberry Pi (.deb) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🍓 Raspberry Pi (.deb) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
