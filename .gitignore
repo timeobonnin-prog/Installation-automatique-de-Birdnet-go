@@ -31,6 +31,7 @@ $RECYCLE.BIN/
 node_modules/
 package-lock.json
 .npm/
+<<<<<<< HEAD
 # Fichiers locaux de BirdNET-Go
 birdnet.db
 birdnet.db-shm
@@ -41,3 +42,8 @@ birdnet.db-wal
 vt-cache/
 dist/
 Output/
+=======
+Installation-automatique-de-Birdnet-go/
+>>>>>>> 8ec5105 (fix: retrait sous-depot imbrique + gitignore)
+# Ignore le sous-dépôt fantôme
+Installation-automatique-de-Birdnet-go/
