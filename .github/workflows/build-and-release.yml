@@ -16,15 +16,15 @@ on:
         default: false
   push:
     paths:
-      - "BirdNET-Go-Tray.ps1"
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "icon.ico"
-      - "logo.png"
-      - "start_birdnet.bat"
-      - "install-birdnet.sh"
-      - "scripts/**"
-      - ".github/workflows/build-and-release.yml"
+      - 'BirdNET-Go-Tray.ps1'
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'icon.ico'
+      - 'logo.png'
+      - 'start_birdnet.bat'
+      - 'install-birdnet.sh'
+      - 'scripts/**'
+      - '.github/workflows/build-and-release.yml'
 
 permissions:
   contents: write
@@ -61,16 +61,16 @@ jobs:
           STABLE=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
           echo "stable=$STABLE" >> $GITHUB_OUTPUT
           HAS_STABLE=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
-
+          
           if [ -z "$HAS_STABLE" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
             echo "build_stable=true" >> $GITHUB_OUTPUT
           else
             echo "build_stable=false" >> $GITHUB_OUTPUT
           fi
-
+          
           # 2. Vérifier la Nightly (en ignorant 'manifest')
           NIGHTLY_RAW=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --pre-releases --limit 50 --json tagName -q '.[].tagName' | grep -m 1 '^nightly-' || true)
-
+          
           if [ -n "$NIGHTLY_RAW" ]; then
             CLEAN_NIGHTLY="${NIGHTLY_RAW#nightly-}"
             echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
@@ -116,6 +116,8 @@ jobs:
           foreach ($f in $required) {
             if (-not (Test-Path "dist\$f")) { Write-Error "Manquant: $f"; exit 1 }
           }
+          # Création du fichier VERSION.txt pour Inno Setup
+          Set-Content -Path "dist\VERSION.txt" -Value $tag -Encoding UTF8
           Remove-Item "birdnet.tar.gz" -Force
       - name: Copy FFmpeg
         shell: pwsh
@@ -167,6 +169,8 @@ jobs:
           foreach ($f in $required) {
             if (-not (Test-Path "dist\$f")) { Write-Error "Manquant: $f"; exit 1 }
           }
+          # Création du fichier VERSION.txt pour Inno Setup
+          Set-Content -Path "dist\VERSION.txt" -Value $tag -Encoding UTF8
           Remove-Item "birdnet.tar.gz" -Force
       - name: Copy FFmpeg
         shell: pwsh
@@ -316,14 +320,7 @@ jobs:
   # JOB 4 : PUBLICATION DES RELEASES (AVEC TIMESTAMP)
   # ============================================================
   publish-release:
-    needs:
-      [
-        check-version,
-        build-windows-stable,
-        build-windows-nightly,
-        build-linux-mac-stable,
-        build-linux-mac-nightly,
-      ]
+    needs: [check-version, build-windows-stable, build-windows-nightly, build-linux-mac-stable, build-linux-mac-nightly]
     if: |
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true') &&
       always()
@@ -331,7 +328,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
