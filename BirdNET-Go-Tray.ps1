@@ -1,14 +1,11 @@
 # ============================================================
 #  BirdNET-Go-Tray.ps1  —  Panneau de contrôle + Tray + MAJ
-#  Version corrigée : single-instance, tray persistant,
-#  bouton de mise à jour, démarrage/arrêt serveur.
 # ============================================================
 
 # --- 1. VERROU SINGLE INSTANCE ---
 $mutex = New-Object System.Threading.Mutex($false, "Global\BirdNET-Go-Client")
 if (-not $mutex.WaitOne(0, $false)) {
-    Write-Host "Une instance de BirdNET-Go-Tray tourne déjà. Fermeture." -ForegroundColor Yellow
-    return
+    exit
 }
 
 # --- 2. Cacher la console et activer le DPI ---
@@ -194,27 +191,23 @@ $BtnMinimize  = $window.FindName("BtnMinimize")
 $LinkGitHub   = $window.FindName("LinkGitHub")
 $LinkReleases = $window.FindName("LinkReleases")
 
-$TitleBar.Add_MouseLeftButtonDown({ $window.DragMove() }) | Out-Null
-$BtnMinimize.Add_Click({ $window.WindowState = 'Minimized' }) | Out-Null
+[void]$TitleBar.Add_MouseLeftButtonDown({ $window.DragMove() })
+[void]$BtnMinimize.Add_Click({ $window.WindowState = 'Minimized' })
 
 # --- 5. FERMETURE (cacher + notification) ---
-$BtnClose.Add_Click({
+[void]$BtnClose.Add_Click({
     $window.Hide()
-    $trayIcon.ShowBalloonTip(
-        3000, "BirdNET-Go",
-        "L'application continue de tourner en arrière-plan.`nDouble-cliquez sur l'icône pour rouvrir cette fenêtre.",
-        [System.Windows.Forms.ToolTipIcon]::Info
-    )
-}) | Out-Null
+    [void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "L'application continue de tourner en arrière-plan.`nDouble-cliquez sur l'icône pour rouvrir cette fenêtre.", [System.Windows.Forms.ToolTipIcon]::Info)
+})
 
 # --- 6. LIENS ---
-$LinkGitHub.Add_MouseLeftButtonUp({
+[void]$LinkGitHub.Add_MouseLeftButtonUp({
     Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go"
-}) | Out-Null
-$LinkReleases.Add_MouseLeftButtonUp({
+})
+[void]$LinkReleases.Add_MouseLeftButtonUp({
     Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest"
-}) | Out-Null
-$BtnOpen.Add_Click({ Start-Process "http://localhost:8080" }) | Out-Null
+})
+[void]$BtnOpen.Add_Click({ Start-Process "http://localhost:8080" })
 
 # --- 7. LOGIQUE DE MISE À JOUR ---
 function Update-BirdNETGo {
@@ -276,7 +269,6 @@ function Update-BirdNETGo {
         $BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO"
     }
     catch {
-        Write-Host "Erreur MAJ : $_" -ForegroundColor Red
         $BtnUpdate.Content = "ERREUR"
         Start-Sleep -Seconds 2
         $BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO"
@@ -286,7 +278,7 @@ function Update-BirdNETGo {
     }
 }
 
-$BtnUpdate.Add_Click({ Update-BirdNETGo }) | Out-Null
+[void]$BtnUpdate.Add_Click({ Update-BirdNETGo })
 
 # --- 8. LOGIQUE DÉMARRAGE / ARRÊT ---
 function Update-UI {
@@ -311,7 +303,7 @@ function Update-UI {
     }
 }
 
-$BtnToggle.Add_Click({
+[void]$BtnToggle.Add_Click({
     $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
     if ($isRunning) {
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -323,7 +315,7 @@ $BtnToggle.Add_Click({
         }
     }
     Update-UI
-}) | Out-Null
+})
 
 # --- 9. SYSTEM TRAY ---
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
@@ -339,48 +331,44 @@ $trayIcon.Visible = $true
 
 $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
 
-$trayMenu.Items.Add("🌐 Ouvrir l'interface web").Add_Click({
+[void]$trayMenu.Items.Add("🌐 Ouvrir l'interface web").Add_Click({
     Start-Process "http://localhost:8080"
-}) | Out-Null
+})
 
-$trayMenu.Items.Add("⚙️ Afficher le panneau de contrôle").Add_Click({
+[void]$trayMenu.Items.Add("⚙️ Afficher le panneau de contrôle").Add_Click({
     $window.Show()
     $window.WindowState = 'Normal'
-    $window.Activate()
-}) | Out-Null
+    $window.Activate() | Out-Null
+})
 
-$trayMenu.Items.Add("❌ Quitter complètement").Add_Click({
+[void]$trayMenu.Items.Add("❌ Quitter complètement").Add_Click({
     Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
     $trayIcon.Visible = $false
     try { $mutex.ReleaseMutex() } catch { }
     [System.Windows.Forms.Application]::Exit()
-}) | Out-Null
+})
 
 $trayIcon.ContextMenuStrip = $trayMenu
-$trayIcon.Add_DoubleClick({
+
+[void]$trayIcon.Add_DoubleClick({
     $window.Show()
     $window.WindowState = 'Normal'
-    $window.Activate()
-}) | Out-Null
+    $window.Activate() | Out-Null
+})
 
-# Empêcher la fermeture réelle (Alt+F4 ou ✕)
-$window.Add_Closing({
+[void]$window.Add_Closing({
     param($sender, $e)
     if ($e.CloseReason -eq 'UserClosing') {
         $e.Cancel = $true
         $window.Hide()
-        $trayIcon.ShowBalloonTip(
-            3000, "BirdNET-Go",
-            "L'application est réduite dans la barre des tâches.",
-            [System.Windows.Forms.ToolTipIcon]::Info
-        )
+        [void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "L'application est réduite dans la barre des tâches.", [System.Windows.Forms.ToolTipIcon]::Info)
     }
-}) | Out-Null
+})
 
 # --- 10. TIMER ---
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(2)
-$timer.Add_Tick({ Update-UI }) | Out-Null
+[void]$timer.Add_Tick({ Update-UI })
 $timer.Start()
 
 # --- 11. DÉMARRAGE INITIAL ---
@@ -391,4 +379,8 @@ if (-not (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
     }
 }
 Update-UI
+
+# Notification de démarrage
+[void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "Le panneau de contrôle est prêt.", [System.Windows.Forms.ToolTipIcon]::Info)
+
 $window.ShowDialog() | Out-Null
