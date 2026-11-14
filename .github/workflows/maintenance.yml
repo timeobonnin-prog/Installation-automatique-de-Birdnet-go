@@ -2,14 +2,10 @@ name: Maintenance
 
 on:
   schedule:
-    - cron: "0 3 * * *"
-    - cron: "0 0 * * 0"
-    - cron: "30 1 * * *"
+    - cron: "55 15 * * *"
   workflow_dispatch:
   push:
     branches: [main]
-  pull_request_target:
-    types: [opened, synchronize]
 
 permissions:
   contents: write
@@ -29,59 +25,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install tools
-        run: |
+      - run: |
           npm install --no-save prettier
           sudo apt-get install -y shfmt
-      - name: Run formatters
-        run: |
+      - run: |
           npx prettier --write "**/*.{md,yml,yaml,json}" --ignore-path .gitignore || true
           find . -name "*.sh" -exec shfmt -w -i 2 -ci {} \; || true
-      - name: Auto-commit
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: auto-format [skip ci]"
           file_pattern: "*.md *.yml *.yaml *.sh *.bat *.iss"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-  cleanup-branches:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const branches = await github.paginate(github.rest.repos.listBranches, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            const prs = await github.paginate(github.rest.pulls.list, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-            });
-            const protectedNames = ['main', 'master', 'gh-pages'];
-            const prBranches = prs.map(p => p.head.ref);
-            let deleted = 0;
-            for (const b of branches) {
-              if (protectedNames.includes(b.name) || prBranches.includes(b.name)) {
-                continue;
-              }
-              try {
-                await github.rest.git.deleteRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: `heads/${b.name}`,
-                });
-                deleted++;
-              } catch (e) {
-                console.log(`Error ${b.name}: ${e.message}`);
-              }
-            }
-            console.log(`Total deleted: ${deleted}`);
 
   cleanup-releases:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -92,13 +47,12 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const releases = await github.paginate(github.rest.repos.listReleases, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner: context.repo.owner, repo: context.repo.repo });
             const byVersion = {};
             for (const r of releases) {
-              const m = r.tag_name.match(/^v?(\d+)\.(\d+)$/);
+              // On cible UNIQUEMENT les builds Stables (ex: v20261031.001) pour les nettoyer.
+              // On ignore complètement les "nightly-v..." et les "manual-v...".
+              const m = r.tag_name.match(/^v(\d+)\.(\d+)$/);
               if (m) {
                 const v = m[1];
                 if (!byVersion[v]) byVersion[v] = [];
@@ -107,57 +61,30 @@ jobs:
             }
             for (const v in byVersion) {
               const group = byVersion[v].sort((a, b) => b.build - a.build);
-              // On garde les 2 builds les plus recents, on supprime les autres
-              for (let i = 2; i < group.length; i++) {
+              // On garde l'index 0 (le plus récent), on supprime à partir de l'index 1
+              for (let i = 1; i < group.length; i++) {
                 try {
-                  await github.rest.repos.deleteRelease({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    release_id: group[i].r.id,
-                  });
-                  await github.rest.git.deleteRef({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    ref: `tags/${group[i].r.tag_name}`,
-                  });
-                  console.log(`Deleted: ${group[i].r.tag_name}`);
-                } catch (e) {
-                  console.log(`Error: ${e.message}`);
-                }
+                  await github.rest.repos.deleteRelease({ owner: context.repo.owner, repo: context.repo.repo, release_id: group[i].r.id });
+                  await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${group[i].r.tag_name}` });
+                  console.log(`Supprimé : ${group[i].r.tag_name}`);
+                } catch (e) { console.log(`Erreur : ${e.message}`); }
               }
             }
 
-  stale:
-    if: github.event_name == 'schedule'
+  cleanup-branches:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/github-script@v7
         with:
-          stale-issue-message: "Inactive depuis 30 jours. Fermeture dans 7 jours."
-          stale-pr-message: "Inactive depuis 30 jours. Fermeture dans 7 jours."
-          days-before-stale: 30
-          days-before-close: 7
-          exempt-issue-labels: "pinned,security,bug"
-          exempt-pr-labels: "pinned,security,bug"
-
-  welcome:
-    if: github.event_name == 'pull_request_target'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/first-interaction@v1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: "Merci pour ta premiere Issue !"
-          pr-message: "Merci pour ta premiere Pull Request !"
-
-  label-pr:
-    if: github.event_name == 'pull_request_target'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/labeler@v5
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          configuration-path: .github/labeler.yml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branches = await github.paginate(github.rest.repos.listBranches, { owner: context.repo.owner, repo: context.repo.repo });
+            const prs = await github.paginate(github.rest.pulls.list, { owner: context.repo.owner, repo: context.repo.repo, state: 'open' });
+            const prot = ['main', 'master', 'gh-pages'];
+            const prB = prs.map(p => p.head.ref);
+            for (const b of branches) {
+              if (prot.includes(b.name) || prB.includes(b.name)) continue;
+              try { await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `heads/${b.name}` }); } catch (e) {}
+            }
