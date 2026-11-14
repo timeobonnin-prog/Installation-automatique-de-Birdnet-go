@@ -1,4 +1,11 @@
-﻿# --- 1. Cacher la console et activer le DPI natif ---
+# --- 1. VERROU SINGLE INSTANCE (Empêche d'ouvrir plusieurs fenêtres) ---
+$mutex = New-Object System.Threading.Mutex($false, "Global\BirdNET-Go-Client")
+if (-not $mutex.WaitOne(0, $false)) {
+    # Le programme tourne déjà, on quitte silencieusement
+    exit
+}
+
+# --- 2. Cacher la console et activer le DPI natif ---
 Add-Type -Name Window -Namespace Console -MemberDefinition '
 [DllImport("Kernel32.dll")] public static extern IntPtr GetConsoleWindow();
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
@@ -11,12 +18,14 @@ $consolePtr = [Console.Window]::GetConsoleWindow()
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
+Add-Type -AssemblyName System.Windows.Forms
 
 $InstallDir = [System.AppDomain]::CurrentDomain.BaseDirectory
 if ([string]::IsNullOrWhiteSpace($InstallDir)) { $InstallDir = Split-Path -Parent ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) }
 $InstallDir = $InstallDir.TrimEnd('\')
 $ExePath = Join-Path $InstallDir "birdnet-go.exe"
 
+# --- 3. Interface XAML ---
 $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -43,9 +52,6 @@ $xaml = @"
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Opacity" Value="0.7"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -105,14 +111,11 @@ $xaml = @"
                 <Border Grid.Column="0" Background="#020617" CornerRadius="0,0,0,12">
                     <StackPanel Margin="20,30,20,0">
                         <TextBlock Text="BirdNET-Go" Foreground="#38BDF8" FontSize="22" FontWeight="Bold" Margin="0,0,0,40"/>
-                        
                         <TextBlock Text="MENU" Foreground="#475569" FontSize="10" FontWeight="Bold" Margin="10,0,0,10"/>
                         <Border Background="#1E293B" CornerRadius="8" Padding="15,10" Margin="0,0,0,5">
                             <TextBlock Text="Dashboard" Foreground="White" FontSize="14" FontWeight="Bold"/>
                         </Border>
-
                         <TextBlock Text="LIENS" Foreground="#475569" FontSize="10" FontWeight="Bold" Margin="10,20,0,10"/>
-                        
                         <Border Background="Transparent" CornerRadius="8" Padding="15,10" Margin="0,0,0,5" Cursor="Hand" Name="LinkGitHub">
                             <StackPanel Orientation="Horizontal">
                                 <Viewbox Width="16" Height="16" Margin="0,0,10,0">
@@ -121,7 +124,6 @@ $xaml = @"
                                 <TextBlock Text="Dépôt GitHub" Foreground="#94A3B8" FontSize="14" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Border>
-
                         <Border Background="Transparent" CornerRadius="8" Padding="15,10" Cursor="Hand" Name="LinkReleases">
                             <StackPanel Orientation="Horizontal">
                                 <Viewbox Width="16" Height="16" Margin="0,0,10,0">
@@ -158,7 +160,6 @@ $xaml = @"
 
                         <Button Name="BtnOpen" Content="OUVRIR L'INTERFACE WEB" Background="#0284C7"/>
                         <Button Name="BtnToggle" Content="DÉMARRER LE SERVEUR" Background="#10B981"/>
-                        <Button Name="BtnUpdate" Content="VÉRIFIER LES MISES À JOUR" Background="#334155"/>
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -175,15 +176,19 @@ $StatusDot = $window.FindName("StatusDot")
 $TxtStatus = $window.FindName("TxtStatus")
 $BtnToggle = $window.FindName("BtnToggle")
 $BtnOpen = $window.FindName("BtnOpen")
-$BtnUpdate = $window.FindName("BtnUpdate")
 $BtnClose = $window.FindName("BtnClose")
 $BtnMinimize = $window.FindName("BtnMinimize")
 $LinkGitHub = $window.FindName("LinkGitHub")
 $LinkReleases = $window.FindName("LinkReleases")
 
 $TitleBar.Add_MouseLeftButtonDown({ $window.DragMove() })
-$BtnClose.Add_Click({ $window.Hide() })
 $BtnMinimize.Add_Click({ $window.WindowState = 'Minimized' })
+
+# --- 4. COMPORTEMENT DE LA CROIX (Cacher + Notification) ---
+$BtnClose.Add_Click({
+    $window.Hide()
+    $trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "L'application continue de tourner en arrière-plan.`nDouble-cliquez sur l'icône pour rouvrir cette fenêtre.", [System.Windows.Forms.ToolTipIcon]::Info)
+})
 
 $LinkGitHub.Add_MouseLeftButtonUp({ Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go" })
 $LinkReleases.Add_MouseLeftButtonUp({ Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" })
@@ -191,7 +196,6 @@ $BtnOpen.Add_Click({ Start-Process "http://localhost:8080" })
 
 function Update-UI {
     $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
-    
     if ($isRunning) {
         $TxtStatus.Text = "EN LIGNE"
         $TxtStatus.Foreground = "#10B981"
@@ -224,20 +228,52 @@ $BtnToggle.Add_Click({
     Update-UI
 })
 
-$BtnUpdate.Add_Click({
-    $BtnUpdate.Content = "RECHERCHE EN COURS..."
-    $BtnUpdate.IsEnabled = $false
-    Start-Sleep -Milliseconds 1500
-    $BtnUpdate.Content = "À JOUR"
-    Start-Sleep -Seconds 2
-    $BtnUpdate.Content = "VÉRIFIER LES MISES À JOUR"
-    $BtnUpdate.IsEnabled = $true
+# --- 5. SYSTEM TRAY (Icône barre des tâches) ---
+$trayIcon = New-Object System.Windows.Forms.NotifyIcon
+$IconPath = Join-Path $InstallDir "icon.ico"
+if (Test-Path $IconPath) { $trayIcon.Icon = New-Object System.Drawing.Icon($IconPath) }
+else { $trayIcon.Icon = [System.Drawing.SystemIcons]::Application }
+$trayIcon.Visible = $true
+
+$trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
+$trayMenuOpen = $trayMenu.Items.Add("🌐 Ouvrir l'interface web")
+$trayMenuOpen.Add_Click({ Start-Process "http://localhost:8080" })
+
+$trayMenuShow = $trayMenu.Items.Add("⚙️ Afficher le panneau de contrôle")
+$trayMenuShow.Add_Click({ $window.Show(); $window.WindowState = 'Normal'; $window.Activate() })
+
+$trayMenuExit = $trayMenu.Items.Add("❌ Quitter complètement")
+$trayMenuExit.Add_Click({
+    Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
+    $trayIcon.Visible = $false
+    $mutex.ReleaseMutex()
+    [System.Windows.Forms.Application]::Exit()
+})
+$trayIcon.ContextMenuStrip = $trayMenu
+$trayIcon.Add_DoubleClick({ $window.Show(); $window.WindowState = 'Normal'; $window.Activate() })
+
+# Empêcher la fermeture réelle (Alt+F4 ou autre)
+$window.Add_FormClosing({
+    param($sender, $e)
+    if ($e.CloseReason -eq 'UserClosing') {
+        $e.Cancel = $true
+        $window.Hide()
+        $trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "L'application est réduite dans la barre des tâches.", [System.Windows.Forms.ToolTipIcon]::Info)
+    }
 })
 
+# --- 6. TIMER ---
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(2)
 $timer.Add_Tick({ Update-UI })
 $timer.Start()
 
+# --- 7. DÉMARRAGE INITIAL ---
+if (-not (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
+    if (Test-Path $ExePath) {
+        Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
+        Start-Sleep -Seconds 2
+    }
+}
 Update-UI
 $window.ShowDialog() | Out-Null
