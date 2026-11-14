@@ -135,7 +135,7 @@ jobs:
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.build-windows.outputs.upstream_tag }}/birdnet-go-darwin-arm64-${{ needs.build-windows.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C payload/usr/local/bin
-          find payload/usr/local/bin -mindepth 2 -type f -exec mv -t payload/usr/local/bin/ {} +
+          cp -r payload/usr/local/bin/*/* payload/usr/local/bin/ || true
           chmod +x payload/usr/local/bin/birdnet-go
       - name: Build .pkg
         run: |
