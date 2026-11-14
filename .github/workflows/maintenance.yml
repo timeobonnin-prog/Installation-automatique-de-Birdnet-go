@@ -2,9 +2,9 @@ name: Maintenance
 
 on:
   schedule:
-    - cron: "0 3 * * *" # Quotidien 3h → cleanup releases
-    - cron: "0 0 * * 0" # Dimanche minuit → cleanup branches
-    - cron: "30 1 * * *" # Quotidien 1h30 → stale
+    - cron: "0 3 * * *"
+    - cron: "0 0 * * 0"
+    - cron: "30 1 * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -17,32 +17,26 @@ permissions:
   issues: write
 
 jobs:
-  # ============================================================
-  # FORMAT AUTO — sur chaque push main
-  # ============================================================
   format:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-
       - name: Install tools
         run: |
           npm install --no-save prettier
           sudo apt-get install -y shfmt
-
       - name: Run formatters
         run: |
           npx prettier --write "**/*.{md,yml,yaml,json}" --ignore-path .gitignore || true
           find . -name "*.sh" -exec shfmt -w -i 2 -ci {} \; || true
-
       - name: Auto-commit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
@@ -51,12 +45,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
-  # ============================================================
-  # CLEANUP BRANCHES — dimanche
-  # ============================================================
   cleanup-branches:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/github-script@v7
         with:
@@ -76,7 +68,6 @@ jobs:
             let deleted = 0;
             for (const b of branches) {
               if (protectedNames.includes(b.name) || prBranches.includes(b.name)) {
-                console.log(`Skip: ${b.name}`);
                 continue;
               }
               try {
@@ -85,7 +76,6 @@ jobs:
                   repo: context.repo.repo,
                   ref: `heads/${b.name}`,
                 });
-                console.log(`Deleted: ${b.name}`);
                 deleted++;
               } catch (e) {
                 console.log(`Error ${b.name}: ${e.message}`);
@@ -93,12 +83,10 @@ jobs:
             }
             console.log(`Total deleted: ${deleted}`);
 
-  # ============================================================
-  # CLEANUP RELEASES — quotidien
-  # ============================================================
   cleanup-releases:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/github-script@v7
         with:
@@ -108,8 +96,6 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
             });
-            console.log(`Total releases: ${releases.length}`);
-
             const byVersion = {};
             for (const r of releases) {
               const m = r.tag_name.match(/^v?(\d+)\.(\d+)$/);
@@ -119,11 +105,10 @@ jobs:
                 byVersion[v].push({ r, build: parseInt(m[2], 10) });
               }
             }
-
             for (const v in byVersion) {
               const group = byVersion[v].sort((a, b) => b.build - a.build);
-              console.log(`Version ${v}: ${group.length} release(s)`);
-              for (let i = 1; i < group.length; i++) {
+              // On garde les 2 builds les plus recents, on supprime les autres
+              for (let i = 2; i < group.length; i++) {
                 try {
                   await github.rest.repos.deleteRelease({
                     owner: context.repo.owner,
@@ -137,64 +122,40 @@ jobs:
                   });
                   console.log(`Deleted: ${group[i].r.tag_name}`);
                 } catch (e) {
-                  console.log(`Error ${group[i].r.tag_name}: ${e.message}`);
+                  console.log(`Error: ${e.message}`);
                 }
               }
             }
 
-  # ============================================================
-  # STALE — quotidien
-  # ============================================================
   stale:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/stale@v9
         with:
-          stale-issue-message: |
-            👋 Cette issue est inactive depuis 30 jours.
-            Elle sera fermée automatiquement dans 7 jours si aucun commentaire n'est ajouté.
-          stale-pr-message: |
-            👋 Cette PR est inactive depuis 30 jours.
-            Elle sera fermée automatiquement dans 7 jours si aucun commentaire n'est ajouté.
-          close-issue-message: "Issue fermée automatiquement (inactivité)."
-          close-pr-message: "PR fermée automatiquement (inactivité)."
+          stale-issue-message: "Inactive depuis 30 jours. Fermeture dans 7 jours."
+          stale-pr-message: "Inactive depuis 30 jours. Fermeture dans 7 jours."
           days-before-stale: 30
           days-before-close: 7
           exempt-issue-labels: "pinned,security,bug"
           exempt-pr-labels: "pinned,security,bug"
 
-  # ============================================================
-  # WELCOME — première issue / PR
-  # ============================================================
   welcome:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/first-interaction@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: |
-            👋 Merci d'avoir ouvert ta première Issue !
+          issue-message: "Merci pour ta premiere Issue !"
+          pr-message: "Merci pour ta premiere Pull Request !"
 
-            Un mainteneur va te répondre dès que possible.
-            En attendant, vérifie bien que tu as précisé :
-            - Ton système d'exploitation (Windows, Linux, macOS)
-            - La version de l'installateur utilisée
-            - Le message d'erreur complet
-          pr-message: |
-            🎉 Merci pour ta première Pull Request !
-
-            Les tests automatiques vont se lancer.
-            Si tout est vert, un mainteneur la relira très vite.
-            Merci de contribuer au projet !
-
-  # ============================================================
-  # LABEL PR — auto-labellisation
-  # ============================================================
   label-pr:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/labeler@v5
         with:
