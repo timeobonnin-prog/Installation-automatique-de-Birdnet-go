@@ -2,8 +2,8 @@ name: Cleanup Old Releases
 
 on:
   schedule:
-    - cron: "0 3 * * *" # Tous les jours à 3h du matin
-  workflow_dispatch:
+    - cron: '0 3 * * *' # Tous les jours à 3h du matin
+  workflow_dispatch: # Permet de le lancer manuellement
 
 permissions:
   contents: write
@@ -12,10 +12,75 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete old releases (keep latest 5)
-        uses: dev-drprasad/delete-older-releases@v0.3.4
+      - name: Delete older releases keeping the latest per BirdNET-Go version
+        uses: actions/github-script@v7
         with:
-          keep_latest: 5
-          delete_tags: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Récupérer toutes les releases
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            console.log(`Nombre total de releases trouvées : ${releases.length}`);
+
+            const releasesByVersion = {};
+
+            // 1. Grouper les releases par version de BirdNET-Go (ex: v20261031)
+            for (const release of releases) {
+              const tag = release.tag_name; // ex: v20261031.56
+              
+              // On utilise une expression régulière pour séparer la version du build
+              // Ex: "v20261031.56" -> version = "20261031", buildNum = 56
+              const match = tag.match(/^v?(\d+)\.(\d+)$/);
+              
+              if (match) {
+                const version = match[1];
+                const buildNum = parseInt(match[2], 10);
+                
+                if (!releasesByVersion[version]) {
+                  releasesByVersion[version] = [];
+                }
+                releasesByVersion[version].push({ release, buildNum, tag });
+              } else {
+                console.log(`⚠️ Format de tag ignoré : ${tag}`);
+              }
+            }
+
+            // 2. Trier chaque groupe et supprimer les anciens
+            for (const version in releasesByVersion) {
+              const group = releasesByVersion[version];
+              
+              // On trie du numéro de build le plus grand au plus petit
+              group.sort((a, b) => b.buildNum - a.buildNum);
+              
+              console.log(`\nVersion BirdNET-Go : ${version}`);
+              console.log(` -> Gardé : ${group[0].tag} (Build le plus récent)`);
+
+              // On parcourt le reste (index 1 à la fin) pour les supprimer
+              for (let i = 1; i < group.length; i++) {
+                const relToDelete = group[i].release;
+                console.log(` -> Suppression : ${relToDelete.tag_name}`);
+                
+                try {
+                  // Supprimer la release
+                  await github.rest.repos.deleteRelease({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: relToDelete.id
+                  });
+                  
+                  // Supprimer le tag associé
+                  await github.rest.git.deleteRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: `tags/${relToDelete.tag_name}`
+                  });
+                } catch (error) {
+                  console.error(`❌ Impossible de supprimer ${relToDelete.tag_name} : ${error.message}`);
+                }
+              }
+            }
+            
+            console.log("\n✅ Nettoyage terminé.");
