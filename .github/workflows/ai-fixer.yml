@@ -1,0 +1,105 @@
+name: AI Auto-Fixer (Répare les workflows)
+
+on:
+  workflow_run:
+    workflows: ["Test des Binaires et Auto-Correction par IA", "Auto-Format Code and Fix Spaces"]
+    types:
+      - completed
+
+permissions:
+  contents: write
+  pull-requests: write
+  models: read
+
+jobs:
+  ai-fix:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          # On utilise votre clé spéciale pour avoir le droit de modifier le dossier .github
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Installer Python
+        run: pip install requests
+
+      - name: Lancer l'IA de correction
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import requests
+          import glob
+
+          token = os.environ.get("GITHUB_TOKEN")
+          
+          # On cible le fichier qui a échoué (VM-test.yml ou format-and-fix.yml)
+          file_to_fix = ".github/workflows/VM-test.yml"
+          
+          with open(file_to_fix, "r", encoding="utf-8") as f:
+              content = f.read()
+
+          prompt = f"""
+          Tu es un expert en GitHub Actions. Ce workflow a échoué lors de son exécution.
+          Voici le code actuel :
+          {content}
+          
+          L'erreur principale rencontrée est souvent liée au manque de permissions ou à une mauvaise syntaxe.
+          Corrige les erreurs et renvoie UNIQUEMENT le code YAML complet corrigé, sans texte ni balises markdown.
+          """
+
+          url = "https://models.inference.ai.azure.com/chat/completions"
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Content-Type": "application/json"
+          }
+          payload = {
+              "model": "gpt-4o-mini",
+              "messages": [{"role": "user", "content": prompt}],
+              "temperature": 0.1
+          }
+
+          response = requests.post(url, headers=headers, json=payload)
+          if response.status_code == 200:
+              corrected_code = response.json()["choices"][0]["message"]["content"].strip()
+              
+              # Nettoyage des balises markdown
+              if corrected_code.startswith("```yaml"):
+                  corrected_code = corrected_code.split("\n", 1)[1]
+              elif corrected_code.startswith("```"):
+                  corrected_code = corrected_code.split("\n", 1)[1]
+              if corrected_code.endswith("```"):
+                  corrected_code = corrected_code.rsplit("\n", 1)[0]
+
+              with open(file_to_fix, "w", encoding="utf-8") as f:
+                  f.write(corrected_code)
+              print("✅ Fichier corrigé par l'IA.")
+          else:
+              print(f"Erreur API : {response.text}")
+          EOF
+
+      - name: Créer la Pull Request
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          BRANCH_NAME="ai-fix-$(date +%s)"
+          git checkout -b "$BRANCH_NAME"
+          
+          git add .github/workflows/
+          
+          if git diff --staged --quiet; then
+            echo "Aucun changement détecté."
+            exit 0
+          fi
+          
+          git commit -m "🤖 [IA] Correction automatique du workflow en échec"
+          git push origin "$BRANCH_NAME"
+          
+          gh pr create --title "🛠️ Correction automatique par l'IA" --body "L'IA a détecté une erreur dans le workflow et a généré cette correction." --base main --head "$BRANCH_NAME"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }} # Utilise la clé avec droits d'écriture
