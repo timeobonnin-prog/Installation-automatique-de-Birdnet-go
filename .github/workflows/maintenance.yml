@@ -48,14 +48,26 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const releases = await github.paginate(github.rest.repos.listReleases, { owner: context.repo.owner, repo: context.repo.repo });
+            const tags = await github.paginate(github.rest.repos.listTags, { owner: context.repo.owner, repo: context.repo.repo });
 
-            // 1. Tuer toutes les releases "manifest" (le bug)
+            // 0. Supprimer les tags qui n'ont aucune release associée
+            const releaseTagNames = new Set(releases.map(r => r.tag_name));
+            for (const tag of tags) {
+              if (!releaseTagNames.has(tag.name)) {
+                try {
+                  await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${tag.name}` });
+                  console.log(`Tag orphelin supprimé : ${tag.name}`);
+                } catch (e) { console.log(`Erreur (tag orphelin) : ${e.message}`); }
+              }
+            }
+
+            // 1. Tuer toutes les releases "manifest" ou "maintenance"
             for (const r of releases) {
-              if (r.tag_name.toLowerCase().includes('manifest')) {
+              if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) {
                 try {
                   await github.rest.repos.deleteRelease({ owner: context.repo.owner, repo: context.repo.repo, release_id: r.id });
                   await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${r.tag_name}` });
-                  console.log(`Supprimé (manifest) : ${r.tag_name}`);
+                  console.log(`Supprimé (filtre) : ${r.tag_name}`);
                 } catch (e) { console.log(`Erreur : ${e.message}`); }
               }
             }
@@ -63,7 +75,7 @@ jobs:
             // 2. Nettoyer les anciennes versions (v..., manual-v..., nightly-v...)
             const byVersion = {};
             for (const r of releases) {
-              if (r.tag_name.toLowerCase().includes('manifest')) continue;
+              if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) continue;
               const m = r.tag_name.match(/^(?:manual-|nightly-)?v?(\d+)\.(\d+)$/);
               if (m) {
                 const v = m[1];
