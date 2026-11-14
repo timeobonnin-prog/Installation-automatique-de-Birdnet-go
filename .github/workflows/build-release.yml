@@ -2,16 +2,16 @@ name: Build and Release All Platforms
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "start_birdnet.bat"
-      - ".github/workflows/build-release.yml"
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'start_birdnet.bat'
+      - '.github/workflows/build-release.yml'
   create:
     tags:
-      - "v-*"
-      - "v*.*.*"
+      - 'v-*'
+      - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
@@ -42,16 +42,16 @@ jobs:
           $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
           echo "tag=$($release.tag_name)" >> $env:GITHUB_OUTPUT
           echo "url=$($release.html_url)" >> $env:GITHUB_OUTPUT
-
+          
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-
+          
           mkdir dist -Force | Out-Null
           tar -xzf birdnet.tar.gz -C dist
-
+          
           $exe = Get-ChildItem -Path dist -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
           Move-Item -Path $exe.FullName -Destination "dist\birdnet-go.exe" -Force
-
+          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item birdnet.tar.gz
 
@@ -63,7 +63,15 @@ jobs:
           Copy-Item -Path $ffmpegPath -Destination "dist\ffmpeg.exe" -Force
           Copy-Item -Path $ffprobePath -Destination "dist\ffprobe.exe" -Force
 
+      - name: Cache Windows Installer
+        id: cache-exe
+        uses: actions/cache@v4
+        with:
+          path: Output/BirdNET-Go-Windows.exe
+          key: exe-${{ hashFiles('install-birdnet.ps1', 'BirdNET-Go-Installer.iss', 'start_birdnet.bat') }}
+
       - name: Compile installer
+        if: steps.cache-exe.outputs.cache-hit != 'true'
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
@@ -176,7 +184,7 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Binary
         run: |
           mkdir -p dist
@@ -185,10 +193,10 @@ jobs:
           tar -xzf birdnet.tar.gz -C dist
           find dist -name "birdnet-go" -type f -exec mv {} dist/ \;
           chmod +x dist/birdnet-go
-
+          
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-
+        
       - name: Build .deb
         env:
           ARCH: ${{ matrix.arch }}
@@ -197,7 +205,7 @@ jobs:
           sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
-
+          
       - name: Rename .deb
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
@@ -217,7 +225,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Binary
         run: |
           mkdir -p payload/usr/local/bin
@@ -226,7 +234,7 @@ jobs:
           tar -xzf birdnet.tar.gz -C payload/usr/local/bin
           find payload/usr/local/bin -name "birdnet-go" -type f -exec mv {} payload/usr/local/bin/ \;
           chmod +x payload/usr/local/bin/birdnet-go
-
+          
       - name: Build .pkg
         run: |
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version ${{ needs.build-windows.outputs.upstream_tag }} --install-location / BirdNET-Go-macOS.pkg
