@@ -50,9 +50,8 @@ jobs:
             const releases = await github.paginate(github.rest.repos.listReleases, { owner: context.repo.owner, repo: context.repo.repo });
             const byVersion = {};
             for (const r of releases) {
-              // On cible UNIQUEMENT les builds Stables (ex: v20261031.001) pour les nettoyer.
-              // On ignore complètement les "nightly-v..." et les "manual-v...".
-              const m = r.tag_name.match(/^v(\d+)\.(\d+)$/);
+              // On cible toutes tes releases (v..., manual-v..., nightly-v...)
+              const m = r.tag_name.match(/^(?:manual-|nightly-)?v?(\d+)\.(\d+)$/);
               if (m) {
                 const v = m[1];
                 if (!byVersion[v]) byVersion[v] = [];
@@ -61,7 +60,7 @@ jobs:
             }
             for (const v in byVersion) {
               const group = byVersion[v].sort((a, b) => b.build - a.build);
-              // On garde l'index 0 (le plus récent), on supprime à partir de l'index 1
+              // On garde l'index 0 (le plus récent), on supprime les autres
               for (let i = 1; i < group.length; i++) {
                 try {
                   await github.rest.repos.deleteRelease({ owner: context.repo.owner, repo: context.repo.repo, release_id: group[i].r.id });
