@@ -37,6 +37,9 @@ jobs:
           if (!(Test-Path "dist\ffprobe.exe")) { New-Item -ItemType File -Path "dist\ffprobe.exe" | Out-Null }
           if (!(Test-Path "dist\VERSION.txt")) { Set-Content -Path "dist\VERSION.txt" -Value "test" }
           if (!(Test-Path "dist\BirdNET-Go-Control.exe")) { New-Item -ItemType File -Path "dist\BirdNET-Go-Control.exe" | Out-Null }
+          foreach ($dll in @("onnxruntime.dll", "tensorflowlite_c.dll", "onnxruntime_providers_shared.dll")) {
+            if (!(Test-Path "dist\$dll")) { New-Item -ItemType File -Path "dist\$dll" | Out-Null }
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
