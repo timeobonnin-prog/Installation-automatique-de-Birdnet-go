@@ -5,9 +5,9 @@ version: "${VERSION}"
 section: "default"
 priority: "extra"
 replaces:
-- birdnet-go
+  - birdnet-go
 provides:
-- birdnet-go
+  - birdnet-go
 maintainer: "Timéo Bonnin <timeobonnin@outlook.fr>"
 description: |
   Automated installation for BirdNET-Go.
@@ -16,9 +16,9 @@ vendor: "timeobonnin-prog"
 homepage: "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go"
 license: "MIT"
 contents:
-- src: ./dist/birdnet-go
-  dst: /usr/local/bin/birdnet-go
-- src: ./dist/libtensorflowlite_c.so
-  dst: /usr/local/bin/libtensorflowlite_c.so
+  - src: ./dist/birdnet-go
+    dst: /usr/local/bin/birdnet-go
+  - src: ./dist/libtensorflowlite_c.so
+    dst: /usr/local/bin/libtensorflowlite_c.so
 scripts:
   postinstall: ./scripts/postinstall.sh
