@@ -2,7 +2,7 @@
 
 on:
   workflow_run:
-    workflows: 
+    workflows:
       - "Test des Binaires et Auto-Correction par IA"
       - "Build and Release All Platforms"
       - "Auto-Format Code and Fix Spaces"
