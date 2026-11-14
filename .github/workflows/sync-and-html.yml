@@ -2,7 +2,7 @@ name: Sync Upstream + Update HTML
 
 on:
   schedule:
-    - cron: "0 */12 * * *"
+    - cron: '0 */12 * * *'
   workflow_dispatch:
 
 permissions:
@@ -10,6 +10,7 @@ permissions:
   pages: write
   id-token: write
 
+# La clé est ici : on ne veut JAMAIS annuler un déploiement en cours
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -164,6 +165,7 @@ jobs:
         with:
           path: "."
 
+      # ✅ L'action est mise à jour vers v5
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
