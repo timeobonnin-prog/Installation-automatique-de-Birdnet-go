@@ -62,19 +62,31 @@ jobs:
           choco install ffmpeg --no-progress -y
 
       - name: Fetch BirdNET-Go
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/latest" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
-          $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
-          mkdir dist -Force | Out-Null
-          tar -xzf birdnet.tar.gz -C dist
-          Get-ChildItem -Path dist -Recurse -File | Move-Item -Destination dist -Force
-          Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
-          Remove-Item birdnet.tar.gz
+          $archive = "birdnet.tar.gz"
+          $extractDir = "temp_extract"
+          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+          tar -xzf $archive -C $extractDir
 
+          # Trouver le dossier qui contient l'exécutable
+          $exeFile = Get-ChildItem -Path $extractDir -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
+          if (-not $exeFile) {
+            Write-Error "birdnet-go.exe non trouvé dans l'archive."
+            exit 1
+          }
+          $sourceDir = $exeFile.Directory.FullName
+
+          # Vider dist et copier tout le contenu du dossier source
+          if (Test-Path "dist") { Remove-Item -Path "dist" -Recurse -Force }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          Copy-Item -Path (Join-Path $sourceDir '*') -Destination "dist" -Recurse -Force
+
+          # Nettoyage
+          Remove-Item -Path $extractDir -Recurse -Force
+
+          # Vérification
+          Write-Host "Contenu de dist après extraction :"
+          Get-ChildItem -Path "dist"
       - name: Copy FFmpeg
         shell: pwsh
         run: |
