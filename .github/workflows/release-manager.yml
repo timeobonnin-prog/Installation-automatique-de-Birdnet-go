@@ -2,7 +2,7 @@ name: Release Manager (Build & Scan)
 
 on:
   schedule:
-    - cron: '0 6 * * *' # Tous les jours à 6h
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       force_build:
@@ -14,9 +14,6 @@ permissions:
   contents: write
 
 jobs:
-  # ==========================================
-  # JOB 1 : VÉRIFICATION DES MISES À JOUR
-  # ==========================================
   check-update:
     runs-on: ubuntu-latest
     outputs:
@@ -36,18 +33,14 @@ jobs:
         run: |
           CURRENT=$(cat VERSION.txt 2>/dev/null || echo "none")
           UPSTREAM="${{ steps.upstream.outputs.tag }}"
-          
           if [ "$CURRENT" != "$UPSTREAM" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
             echo "build=true" >> $GITHUB_OUTPUT
-            echo "✅ Nouvelle version détectée ($UPSTREAM) ou build forcé."
+            echo "Nouvelle version detectee ($UPSTREAM) ou build force."
           else
             echo "build=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Aucune nouvelle version. Arrêt."
+            echo "Aucune nouvelle version. Arret."
           fi
 
-  # ==========================================
-  # JOB 2 : COMPILATION WINDOWS
-  # ==========================================
   build-windows:
     needs: check-update
     if: needs.check-update.outputs.should_build == 'true'
@@ -56,6 +49,7 @@ jobs:
       tag_name: ${{ steps.version.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Install Inno Setup and FFmpeg
         run: |
           choco install innosetup --no-progress -y
@@ -72,7 +66,6 @@ jobs:
           if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           tar -xzf "birdnet.tar.gz" -C "dist"
-          
           $required = @("birdnet-go.exe", "onnxruntime.dll", "tensorflowlite_c.dll")
           $missing = @()
           foreach ($f in $required) {
@@ -83,7 +76,6 @@ jobs:
             Get-ChildItem -Path "dist" -Recurse | Format-Table -AutoSize
             exit 1
           }
-          
           Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
           Remove-Item "birdnet.tar.gz" -Force
 
@@ -100,13 +92,15 @@ jobs:
           Invoke-ps2exe -InputFile "BirdNET-Go-Tray.ps1" -OutputFile "dist\BirdNET-Go-Control.exe" -noConsole -iconFile "icon.ico"
 
       - name: Compile installer
-        run: & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
 
       - name: Calculate Padded Version
         id: version
         shell: pwsh
         run: |
-          $runNumber = "{0:D3}" -f ${{ github.run_number }} # Ajoute des zéros (001, 002...)
+          $runNumber = "{0:D3}" -f ${{ github.run_number }}
           $upstreamTag = "${{ needs.check-update.outputs.upstream_tag }}"
           echo "tag_name=v$upstreamTag.$runNumber" >> $env:GITHUB_OUTPUT
 
@@ -116,9 +110,6 @@ jobs:
           name: windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
-  # ==========================================
-  # JOB 3 : COMPILATION LINUX / MAC
-  # ==========================================
   build-linux-mac:
     needs: [check-update, build-windows]
     if: needs.check-update.outputs.should_build == 'true'
@@ -128,13 +119,14 @@ jobs:
         platform: [linux-amd64, linux-arm64, darwin-arm64]
     steps:
       - uses: actions/checkout@v4
+
       - name: Download Binary
         run: |
           mkdir -p dist
           URL="https://github.com/tphakala/birdnet-go/releases/download/${{ needs.check-update.outputs.upstream_tag }}/birdnet-go-${{ matrix.platform }}-${{ needs.check-update.outputs.upstream_tag }}.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
           tar -xzf birdnet.tar.gz -C dist
-          
+
       - name: Install nfpm (Linux only)
         if: contains(matrix.platform, 'linux')
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
@@ -166,14 +158,12 @@ jobs:
             *.deb
             *.pkg
 
-  # ==========================================
-  # JOB 4 : PUBLICATION ET SCAN VIRUSTOTAL
-  # ==========================================
   publish-release:
     needs: [check-update, build-windows, build-linux-mac]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -184,15 +174,13 @@ jobs:
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
-          if [ -z "$VT_API_KEY" ]; then echo "Pas de clé API."; exit 0; fi
+          if [ -z "$VT_API_KEY" ]; then echo "Pas de cle API."; exit 0; fi
           FILES=("all-files/BirdNET-Go-Windows.exe" "all-files/BirdNET-Go-Linux-x64.deb" "all-files/BirdNET-Go-RaspberryPi.deb" "all-files/BirdNET-Go-macOS.pkg")
-          
           for FILE in "${FILES[@]}"; do
             if [ ! -f "$FILE" ]; then continue; fi
             HASH=$(sha256sum "$FILE" | cut -d ' ' -f 1)
             LOOKUP="https://www.virustotal.com/api/v3/files/$HASH"
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "x-apikey: $VT_API_KEY" "$LOOKUP")
-            
             if [ "$HTTP_STATUS" -eq 404 ]; then
               UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
               curl -s -X POST "$UPLOAD_URL" -H "x-apikey: $VT_API_KEY" -F "file=@$FILE" > /dev/null
@@ -202,7 +190,6 @@ jobs:
           done
 
       - name: Compute Hashes
-        id: hashes
         run: |
           echo "WIN_HASH=$(sha256sum all-files/BirdNET-Go-Windows.exe | cut -d ' ' -f 1)" >> $GITHUB_ENV
           echo "LINUX_HASH=$(sha256sum all-files/BirdNET-Go-Linux-x64.deb | cut -d ' ' -f 1)" >> $GITHUB_ENV
@@ -227,13 +214,13 @@ jobs:
           name: "Version ${{ needs.build-windows.outputs.tag_name }}"
           files: all-files/*
           body: |
-            ### 🪶 BirdNET-Go (Multi-Plateformes)
-            
-            | Plateforme | Téléchargement | VirusTotal |
+            ### BirdNET-Go (Multi-Plateformes)
+
+            | Plateforme | Telechargement | VirusTotal |
             | :--- | :--- | :--- |
-            | 🪟 **Windows** | [Télécharger (.exe)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-Windows.exe) | [🔍 Rapport](https://www.virustotal.com/gui/file/${{ env.WIN_HASH }}) |
-            | 🐧 **Linux** | [Télécharger (.deb)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-Linux-x64.deb) | [🔍 Rapport](https://www.virustotal.com/gui/file/${{ env.LINUX_HASH }}) |
-            | 🍓 **Raspberry Pi** | [Télécharger (.deb)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-RaspberryPi.deb) | [🔍 Rapport](https://www.virustotal.com/gui/file/${{ env.PI_HASH }}) |
-            | 🍎 **macOS** | [Télécharger (.pkg)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-macOS.pkg) | [🔍 Rapport](https://www.virustotal.com/gui/file/${{ env.MAC_HASH }}) |
+            | Windows | [Telecharger (.exe)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-Windows.exe) | [Rapport](https://www.virustotal.com/gui/file/${{ env.WIN_HASH }}) |
+            | Linux | [Telecharger (.deb)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-Linux-x64.deb) | [Rapport](https://www.virustotal.com/gui/file/${{ env.LINUX_HASH }}) |
+            | Raspberry Pi | [Telecharger (.deb)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-RaspberryPi.deb) | [Rapport](https://www.virustotal.com/gui/file/${{ env.PI_HASH }}) |
+            | macOS | [Telecharger (.pkg)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest/download/BirdNET-Go-macOS.pkg) | [Rapport](https://www.virustotal.com/gui/file/${{ env.MAC_HASH }}) |
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
