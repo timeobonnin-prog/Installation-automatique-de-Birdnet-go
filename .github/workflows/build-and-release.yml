@@ -4,7 +4,7 @@ on:
   # 1. Déclenchement automatique : tous les jours à 6h00 UTC
   schedule:
     - cron: "0 6 * * *"
-      
+
   # 2. Déclenchement manuel
   workflow_dispatch:
     inputs:
