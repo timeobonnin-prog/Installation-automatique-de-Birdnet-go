@@ -67,33 +67,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/latest" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
-          $asset = $release.assets | Where-Object { name: Release Manager (Build & Scan)
-
-on:
-  schedule:
-    - cron: '0 6 * * *' # Tous les jours Ã  6h
-  workflow_dispatch:
-    inputs:
-      force_build:
-        description: 'Forcer la compilation mÃªme si pas de nouvelle version'
-        type: boolean
-        default: false
-
-permissions:
-  contents: write
-
-jobs:
-  # ==========================================
-  # JOB 1 : VÃ‰RIFICATION DES MISES Ã€ JOUR
-  # ==========================================
-  check-update:
-    runs-on: ubuntu-latest
-    outputs:
-      upstream_tag: ${{ steps.upstream.outputs.tag }}
-      should_build: ${{ steps.check.outputs.build }}
-    steps:
-      - uses: actions/checkout@v4
-
+          $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
+          if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          tar -xzf "birdnet.tar.gz" -C "dist" --strip-components=1
+          $required = @("birdnet-go.exe", "onnxruntime.dll", "tensorflowlite_c.dll")
+          $missing = @()
+          foreach ($f in $required) {
+            if (-not (Test-Path "dist\$f")) { $missing += $f }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Error "Fichiers manquants dans dist : $($missing -join ', ')"
+            Get-ChildItem -Path "dist" -Recurse | Format-Table -AutoSize
+            exit 1
+          }
+          Set-Content -Path "dist\VERSION.txt" -Value $release.tag_name -Encoding UTF8
+          Remove-Item "birdnet.tar.gz" -Force
+          Write-Host "Contenu final de dist :" -ForegroundColor Green
+          Get-ChildItem -Path "dist" | Select-Object Name, Length
       - name: Get latest upstream version
         id: upstream
         run: |
