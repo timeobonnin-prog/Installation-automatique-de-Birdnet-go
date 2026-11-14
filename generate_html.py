@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Génère index.html à partir des releases du dépôt."""
+"""Génère index.html à partir des releases du dépôt.
+Garde uniquement la release de build la plus récente (manual-v* ou v*)."""
 import json
 import os
 import sys
@@ -15,22 +16,25 @@ if not os.path.exists(RELEASES_FILE):
 with open(RELEASES_FILE, 'r', encoding='utf-8') as f:
     releases = json.load(f)
 
-stable = [r for r in releases if not r.get('prerelease') and not r.get('draft')]
-nightly = [r for r in releases if r.get('prerelease') and not r.get('draft')]
+# Filtrer uniquement les releases de type "manual-v*" ou "v*" (compilations de l'installateur)
+build_releases = [
+    r for r in releases
+    if not r.get('draft')
+    and (r['tag_name'].startswith('manual-v') or r['tag_name'].startswith('v'))
+]
 
-stable.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-nightly.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+# Trier par date de création (la plus récente d'abord)
+build_releases.sort(key=lambda x: x.get('created_at', ''), reverse=True)
 
-# Construire les options du <select>
+# Construire les options du <select> : une seule option (la plus récente)
 options = []
-if stable:
-    options.append(f'<option value="latest">Dernière stable ({stable[0]["tag_name"]})</option>')
-for r in stable[:5]:
-    options.append(f'<option value="{r["tag_name"]}">{r["tag_name"]} (stable)</option>')
-for r in nightly[:3]:
-    options.append(f'<option value="{r["tag_name"]}">{r["tag_name"]} (nightly)</option>')
+if build_releases:
+    latest = build_releases[0]
+    options.append(f'<option value="{latest["tag_name"]}">{latest["tag_name"]} (stable)</option>')
+else:
+    options.append('<option value="latest">Aucune version disponible</option>')
 
-options_html = '\n            '.join(options) if options else '<option value="latest">Aucune release disponible</option>'
+options_html = '\n            '.join(options)
 
 # Charger le template
 if not os.path.exists(TEMPLATE_FILE):
@@ -47,4 +51,4 @@ html = html.replace('{{VERSION_OPTIONS}}', options_html)
 with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
     f.write(html)
 
-print(f"✅ {OUTPUT_FILE} généré ({len(stable)} stable, {len(nightly)} nightly)")
+print(f"✅ {OUTPUT_FILE} généré ({len(build_releases)} release(s) de build trouvée(s))")
