@@ -2,12 +2,12 @@ name: Update HTML Page
 
 on:
   schedule:
-    - cron: '0 8 * * *'   # Tous les jours à 8h
+    - cron: "0 8 * * *" # Tous les jours à 8h
   workflow_dispatch:
   push:
     paths:
-      - 'index.html.template'
-      - 'generate_html.py'
+      - "index.html.template"
+      - "generate_html.py"
 
 permissions:
   contents: write
@@ -45,7 +45,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: "."
 
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
