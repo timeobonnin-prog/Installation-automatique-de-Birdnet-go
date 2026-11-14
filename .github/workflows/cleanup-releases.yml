@@ -2,7 +2,7 @@ name: Cleanup Old Releases
 
 on:
   schedule:
-    - cron: '0 3 * * *' # Tous les jours à 3h du matin
+    - cron: "0 3 * * *" # Tous les jours à 3h du matin
   workflow_dispatch: # Permet de le lancer manuellement
 
 permissions:
@@ -82,5 +82,5 @@ jobs:
                 }
               }
             }
-            
+
             console.log("\n✅ Nettoyage terminé.");
