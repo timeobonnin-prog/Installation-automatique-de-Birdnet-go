@@ -27,15 +27,15 @@ jobs:
         run: |
           set -e
           STABLE=$(gh release list --repo "$UPSTREAM" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
-          
+
           # On ignore "manifest" et on ne garde que les vraies nightlies avec une date
           NIGHTLY_RAW=$(gh release list --repo "$UPSTREAM" --exclude-drafts --pre-releases --limit 50 --json tagName -q '.[].tagName' | grep -E '^nightly-[0-9]{8}$' | head -n 1 || true)
-          
+
           KEEP="$STABLE"
           if [ -n "$NIGHTLY_RAW" ]; then
             KEEP="$KEEP $NIGHTLY_RAW"
           fi
-          
+
           echo "À conserver : $KEEP"
 
           # Supprime les vieilles releases officielles (sauf celles qu'on garde)
