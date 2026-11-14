@@ -17,15 +17,15 @@ on:
   # Déclenchement uniquement si on modifie ces fichiers
   push:
     paths:
-      - "BirdNET-Go-Tray.ps1"
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "icon.ico"
-      - "logo.png"
-      - "start_birdnet.bat"
-      - "install-birdnet.sh"
-      - "scripts/**"
-      - ".github/workflows/build-and-release.yml"
+      - 'BirdNET-Go-Tray.ps1'
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'icon.ico'
+      - 'logo.png'
+      - 'start_birdnet.bat'
+      - 'install-birdnet.sh'
+      - 'scripts/**'
+      - '.github/workflows/build-and-release.yml'
 
 permissions:
   contents: write
@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   # ============================================================
-  # JOB 1 : VÉRIFICATION (L'API regarde les releases existantes)
+  # JOB 1 : VÉRIFICATION DES VERSIONS
   # ============================================================
   check-version:
     runs-on: ubuntu-latest
@@ -62,8 +62,8 @@ jobs:
           else
             echo "build_stable=false" >> $GITHUB_OUTPUT
           fi
-
-          # 2. Vérifier la Nightly (Maintenant tous les jours !)
+          
+          # 2. Vérifier la Nightly
           NIGHTLY=$(gh api repos/tphakala/birdnet-go/releases --jq '[.[] | select(.prerelease == true)][0].tag_name')
           CLEAN_NIGHTLY="${NIGHTLY#nightly-}"
           echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
@@ -75,19 +75,13 @@ jobs:
           fi
 
   # ============================================================
-  # JOB 2 : COMPILATION WINDOWS
+  # JOB 2A : COMPILATION WINDOWS STABLE
   # ============================================================
-  build-windows:
+  build-windows-stable:
     needs: check-version
-    if: |
-      (matrix.target == 'stable' && needs.check-version.outputs.build_stable == 'true') ||
-      (matrix.target == 'nightly' && needs.check-version.outputs.build_nightly == 'true')
+    if: needs.check-version.outputs.build_stable == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        target: [stable, nightly]
     steps:
       - uses: actions/checkout@v4
       - name: Install Inno Setup and FFmpeg
@@ -99,9 +93,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ("${{ matrix.target }}" -eq "stable") { $tag = "${{ needs.check-version.outputs.stable_tag }}" } 
-          else { $tag = "nightly-${{ needs.check-version.outputs.nightly_tag }}" }
-
+          $tag = "${{ needs.check-version.outputs.stable_tag }}"
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/tags/$tag" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
@@ -130,22 +122,70 @@ jobs:
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}-windows-installer
+          name: stable-windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
   # ============================================================
-  # JOB 3 : COMPILATION LINUX / MAC (En parallèle)
+  # JOB 2B : COMPILATION WINDOWS NIGHTLY
   # ============================================================
-  build-linux-mac:
+  build-windows-nightly:
     needs: check-version
-    if: |
-      (matrix.target == 'stable' && needs.check-version.outputs.build_stable == 'true') ||
-      (matrix.target == 'nightly' && needs.check-version.outputs.build_nightly == 'true')
+    if: needs.check-version.outputs.build_nightly == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Inno Setup and FFmpeg
+        run: |
+          choco install innosetup --no-progress -y
+          choco install ffmpeg --no-progress -y
+      - name: Fetch BirdNET-Go
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "nightly-${{ needs.check-version.outputs.nightly_tag }}"
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/tags/$tag" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
+          $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
+          if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          tar -xzf "birdnet.tar.gz" -C "dist"
+          $required = @("birdnet-go.exe", "onnxruntime.dll", "tensorflowlite_c.dll")
+          foreach ($f in $required) {
+            if (-not (Test-Path "dist\$f")) { Write-Error "Manquant: $f"; exit 1 }
+          }
+          Remove-Item "birdnet.tar.gz" -Force
+      - name: Copy FFmpeg
+        shell: pwsh
+        run: |
+          Copy-Item -Path (Get-Command ffmpeg).Source -Destination "dist\ffmpeg.exe" -Force
+          Copy-Item -Path (Get-Command ffprobe).Source -Destination "dist\ffprobe.exe" -Force
+      - name: Compile GUI to EXE
+        shell: pwsh
+        run: |
+          Install-Module ps2exe -Scope CurrentUser -Force
+          Invoke-ps2exe -InputFile "BirdNET-Go-Tray.ps1" -OutputFile "dist\BirdNET-Go-Control.exe" -noConsole -iconFile "icon.ico"
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-windows-installer
+          path: Output/BirdNET-Go-Windows.exe
+
+  # ============================================================
+  # JOB 3A : COMPILATION LINUX / MAC STABLE
+  # ============================================================
+  build-linux-mac-stable:
+    needs: check-version
+    if: needs.check-version.outputs.build_stable == 'true'
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        target: [stable, nightly]
         include:
           - os: ubuntu-latest
             platform: linux-amd64
@@ -158,11 +198,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Download Binary
         run: |
-          if [ "${{ matrix.target }}" == "stable" ]; then 
-            TAG="${{ needs.check-version.outputs.stable_tag }}"
-          else 
-            TAG="nightly-${{ needs.check-version.outputs.nightly_tag }}"
-          fi
+          TAG="${{ needs.check-version.outputs.stable_tag }}"
           mkdir -p dist
           URL="https://github.com/tphakala/birdnet-go/releases/download/$TAG/birdnet-go-${{ matrix.platform }}-$TAG.tar.gz"
           curl -fsSL -o birdnet.tar.gz "$URL"
@@ -175,11 +211,7 @@ jobs:
         env:
           ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
         run: |
-          if [ "${{ matrix.target }}" == "stable" ]; then 
-            VERSION="${{ needs.check-version.outputs.stable_tag }}"
-          else 
-            VERSION="${{ needs.check-version.outputs.nightly_tag }}"
-          fi
+          VERSION="${{ needs.check-version.outputs.stable_tag }}"
           sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
@@ -187,11 +219,7 @@ jobs:
       - name: Build .pkg (Mac only)
         if: matrix.os == 'macos-latest'
         run: |
-          if [ "${{ matrix.target }}" == "stable" ]; then 
-            VERSION="${{ needs.check-version.outputs.stable_tag }}"
-          else 
-            VERSION="${{ needs.check-version.outputs.nightly_tag }}"
-          fi
+          VERSION="${{ needs.check-version.outputs.stable_tag }}"
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
           chmod +x payload/usr/local/bin/birdnet-go
@@ -199,7 +227,63 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}-${{ matrix.platform }}-pkg
+          name: stable-${{ matrix.platform }}-pkg
+          path: |
+            *.deb
+            *.pkg
+
+  # ============================================================
+  # JOB 3B : COMPILATION LINUX / MAC NIGHTLY
+  # ============================================================
+  build-linux-mac-nightly:
+    needs: check-version
+    if: needs.check-version.outputs.build_nightly == 'true'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+          - os: ubuntu-latest
+            platform: linux-arm64
+          - os: macos-latest
+            platform: darwin-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Binary
+        run: |
+          TAG="nightly-${{ needs.check-version.outputs.nightly_tag }}"
+          mkdir -p dist
+          URL="https://github.com/tphakala/birdnet-go/releases/download/$TAG/birdnet-go-${{ matrix.platform }}-$TAG.tar.gz"
+          curl -fsSL -o birdnet.tar.gz "$URL"
+          tar -xzf birdnet.tar.gz -C dist
+      - name: Install nfpm (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - name: Build .deb (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
+        run: |
+          VERSION="${{ needs.check-version.outputs.nightly_tag }}"
+          sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
+          sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
+          ~/go/bin/nfpm package -p deb -f nfpm.yaml
+          if [ "$ARCH" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
+      - name: Build .pkg (Mac only)
+        if: matrix.os == 'macos-latest'
+        run: |
+          VERSION="${{ needs.check-version.outputs.nightly_tag }}"
+          mkdir -p payload/usr/local/bin
+          cp -r dist/* payload/usr/local/bin/
+          chmod +x payload/usr/local/bin/birdnet-go
+          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ matrix.platform }}-pkg
           path: |
             *.deb
             *.pkg
@@ -208,7 +292,7 @@ jobs:
   # JOB 4 : PUBLICATION DES RELEASES
   # ============================================================
   publish-release:
-    needs: [check-version, build-windows, build-linux-mac]
+    needs: [check-version, build-windows-stable, build-windows-nightly, build-linux-mac-stable, build-linux-mac-nightly]
     if: |
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true') &&
       always()
@@ -216,7 +300,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
