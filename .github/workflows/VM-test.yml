@@ -2,9 +2,9 @@
 
 on:
   push:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   pull_request:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
           } catch {
             Set-Content -Path "dist\birdnet-go.exe" -Value "Fichier de secours temporaire"
           }
-          
+
           if (!(Test-Path "dist\ffmpeg.exe")) { New-Item -ItemType File -Path "dist\ffmpeg.exe" | Out-Null }
           if (!(Test-Path "dist\ffprobe.exe")) { New-Item -ItemType File -Path "dist\ffprobe.exe" | Out-Null }
           if (!(Test-Path "dist\VERSION.txt")) { Set-Content -Path "dist\VERSION.txt" -Value "test" }
@@ -174,7 +174,13 @@ jobs:
           fi
 
   auto-reparation-ia:
-    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
+    needs:
+      [
+        test-release-windows,
+        test-release-linux,
+        test-release-raspberry,
+        test-release-macos,
+      ]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
