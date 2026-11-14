@@ -1,9 +1,9 @@
-name: Daily Check and Release
+﻿name: Daily Check and Release
 
 on:
   schedule:
-    - cron: "0 6 * * *" # Tous les jours à 6h du matin
-  workflow_dispatch: # Permet de le lancer manuellement
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,24 +15,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Important pour voir l'historique des commits
+          fetch-depth: 0
 
       - name: Get latest BirdNET-Go version
         id: upstream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | jq -r .tag_name)
+          TAG=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/tphakala/birdnet-go/releases/latest | jq -r .tag_name)
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Check if release is needed
         id: check
         run: |
-          # 1. Vérifier si la version de BirdNET-Go a changé
           CURRENT_VERSION=$(cat VERSION.txt)
           UPSTREAM_VERSION="${{ steps.upstream.outputs.tag }}"
-
-          # 2. Vérifier s'il y a de nouveaux commits (tes modifications) depuis le dernier tag
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
+          
           if [ -z "$LATEST_TAG" ]; then
             NEW_COMMITS="true"
           else
@@ -44,13 +43,10 @@ jobs:
             fi
           fi
 
-          # 3. Décision
           if [ "$CURRENT_VERSION" != "$UPSTREAM_VERSION" ] || [ "$NEW_COMMITS" == "true" ]; then
             echo "release_needed=true" >> $GITHUB_OUTPUT
-            echo "✅ Nouvelle version ou modification détectée."
           else
             echo "release_needed=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Aucun changement. Pas de nouvelle release."
           fi
 
       - name: Update VERSION.txt if upstream changed
@@ -62,16 +58,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Commit le fichier VERSION.txt s'il a changé
+          
           git add VERSION.txt
           if ! git diff --cached --quiet; then
             git commit -m "chore: update BirdNET-Go version to ${{ steps.upstream.outputs.tag }} [skip ci]"
             git push
           fi
-
-          # Créer et pousser le nouveau tag pour déclencher le build
-          # Exemple: v20261031.100
+          
           NEW_TAG="v${{ steps.upstream.outputs.tag }}.${{ github.run_number }}"
           git tag "$NEW_TAG"
           git push origin "$NEW_TAG"
