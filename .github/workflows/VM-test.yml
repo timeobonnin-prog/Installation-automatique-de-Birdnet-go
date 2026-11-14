@@ -2,9 +2,9 @@
 
 on:
   push:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   pull_request:
-    branches: [ main, master, principal ]
+    branches: [main, master, principal]
   workflow_dispatch:
 
 permissions:
@@ -136,7 +136,13 @@ jobs:
   # --- NOUVEAU JOB : RÉSUMÉ DES TESTS ---
   summary:
     name: 📊 Résumé des Tests
-    needs: [test-release-windows, test-release-linux, test-release-raspberry, test-release-macos]
+    needs:
+      [
+        test-release-windows,
+        test-release-linux,
+        test-release-raspberry,
+        test-release-macos,
+      ]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -146,17 +152,17 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Plateforme | Statut |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- |" >> $GITHUB_STEP_SUMMARY
-          
+
           # On regarde le résultat de chaque job
           WIN_STATUS="${{ needs.test-release-windows.result }}"
           LINUX_STATUS="${{ needs.test-release-linux.result }}"
           PI_STATUS="${{ needs.test-release-raspberry.result }}"
           MAC_STATUS="${{ needs.test-release-macos.result }}"
-          
+
           if [ "$WIN_STATUS" == "success" ]; then echo "| 🪟 Windows (.exe) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🪟 Windows (.exe) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
           if [ "$LINUX_STATUS" == "success" ]; then echo "| 🐧 Linux x64 (.deb) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🐧 Linux x64 (.deb) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
           if [ "$PI_STATUS" == "success" ]; then echo "| 🍓 Raspberry Pi (.deb) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🍓 Raspberry Pi (.deb) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
           if [ "$MAC_STATUS" == "success" ]; then echo "| 🍎 macOS (.pkg) | ✅ **SUCCÈS** |" >> $GITHUB_STEP_SUMMARY; else echo "| 🍎 macOS (.pkg) | ❌ Échec / Avertissement |" >> $GITHUB_STEP_SUMMARY; fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "*Note : Si un test indique 'Avertissement', cela peut être un faux positif du simulateur QEMU ou une bibliothèque manquante.*" >> $GITHUB_STEP_SUMMARY
