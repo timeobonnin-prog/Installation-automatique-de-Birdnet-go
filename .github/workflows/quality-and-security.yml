@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: '30 2 * * 1' # Tous les lundis à 2h30 pour CodeQL
+    - cron: "30 2 * * 1" # Tous les lundis à 2h30 pour CodeQL
   workflow_dispatch:
 
 permissions:
@@ -26,16 +26,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Vérifier le Python
         run: |
           python -m py_compile generate_html.py
-          
+
       - name: Vérifier le YAML (Workflows)
         run: |
           pip install yamllint
           yamllint .github/workflows/ || true # Ignore les petites erreurs de style
-          
+
       - name: Vérifier le PowerShell
         shell: pwsh
         run: |
@@ -56,13 +56,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Télécharger le dernier installateur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-          
+
       - name: Installer silencieusement
         run: |
           if (Test-Path "dist\BirdNET-Go-Windows.exe") {
@@ -71,7 +71,7 @@ jobs:
             Write-Host "Pas d'installateur trouvé (peut-être le premier build)."
             exit 0
           }
-          
+
       - name: Vérifier que le serveur démarre
         run: |
           $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
