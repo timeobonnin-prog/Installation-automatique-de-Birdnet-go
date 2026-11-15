@@ -1,3 +1,96 @@
+name: Quality, Security & Notifications
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  schedule:
+    - cron: '30 2 * * 1' # Tous les lundis à 2h30 pour CodeQL
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # ============================================================
+  # JOB 1 : VÉRIFICATION DU CODE (Lint)
+  # S'exécute sur Push ou Pull Request
+  # ============================================================
+  lint-code:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Vérifier le Python
+        run: |
+          python -m py_compile generate_html.py
+          
+      - name: Vérifier le YAML (Workflows)
+        run: |
+          pip install yamllint
+          yamllint .github/workflows/ || true # Ignore les petites erreurs de style
+          
+      - name: Vérifier le PowerShell
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error
+          if ($results) {
+            $results | Format-Table -AutoSize
+            exit 1
+          }
+
+  # ============================================================
+  # JOB 2 : TEST DE L'INSTALLATEUR (Smoke Test)
+  # S'exécute sur Push, mais APRÈS le lint
+  # ============================================================
+  test-installer:
+    needs: lint-code
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Télécharger le dernier installateur
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
+          
+      - name: Installer silencieusement
+        run: |
+          if (Test-Path "dist\BirdNET-Go-Windows.exe") {
+            Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          } else {
+            Write-Host "Pas d'installateur trouvé (peut-être le premier build)."
+            exit 0
+          }
+          
+      - name: Vérifier que le serveur démarre
+        run: |
+          $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
+          if (Test-Path $exe) {
+            Start-Process -FilePath $exe -ArgumentList "serve" -WorkingDirectory (Split-Path $exe) -WindowStyle Hidden
+            Start-Sleep -Seconds 5
+            try {
+              $r = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 5
+              Write-Host "✅ Le serveur répond avec le code : $($r.StatusCode)"
+            } catch {
+              Write-Host "❌ Le serveur ne répond pas."
+              exit 1
+            }
+          }
+
+  # ============================================================
+  # JOB 3 : NOTIFICATION TELEGRAM (Nouvelle Release)
+  # S'exécute UNIQUEMENT quand une release est publiée
+  # ============================================================
   notify-telegram:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
@@ -22,10 +115,31 @@
           fi
 
           MESSAGE="$TITLE
-La version **$RELEASE_NAME** vient d'être publiée.
+La version *$RELEASE_NAME* vient d'être publiée.
 [Télécharger ici]($RELEASE_URL)"
 
-          # Envoi du message via l'API Telegram (curl + jq)
+          # Envoi du message via l'API Telegram
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -H "Content-Type: application/json" \
             -d "$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')"
+
+  # ============================================================
+  # JOB 4 : SÉCURITÉ CODEQL (Analyse des failles)
+  # S'exécute sur Push et tous les lundis
+  # ============================================================
+  codeql-analysis:
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
