@@ -38,6 +38,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
+  cleanup-tags:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, { owner, repo, ref: 'tags/' });
+
+            const publishedTagNames = new Set(releases.filter(r => !r.draft).map(r => r.tag_name));
+            for (const refObj of refs) {
+              const tagName = refObj.ref.replace('refs/tags/', '');
+              if (!publishedTagNames.has(tagName)) {
+                try {
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tagName}` });
+                  console.log(`Tag orphelin supprimé : ${tagName}`);
+                } catch (e) {
+                  console.log(`Erreur (tag orphelin ${tagName}) : ${e.message}`);
+                }
+              }
+            }
+
   cleanup-releases:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -47,28 +73,19 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const releases = await github.paginate(github.rest.repos.listReleases, { owner: context.repo.owner, repo: context.repo.repo });
-            const tags = await github.paginate(github.rest.repos.listTags, { owner: context.repo.owner, repo: context.repo.repo });
-
-            // 0. Supprimer les tags qui n'ont aucune release associée
-            const releaseTagNames = new Set(releases.map(r => r.tag_name));
-            for (const tag of tags) {
-              if (!releaseTagNames.has(tag.name)) {
-                try {
-                  await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${tag.name}` });
-                  console.log(`Tag orphelin supprimé : ${tag.name}`);
-                } catch (e) { console.log(`Erreur (tag orphelin) : ${e.message}`); }
-              }
-            }
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
 
             // 1. Tuer toutes les releases "manifest" ou "maintenance"
             for (const r of releases) {
               if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) {
                 try {
-                  await github.rest.repos.deleteRelease({ owner: context.repo.owner, repo: context.repo.repo, release_id: r.id });
-                  await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${r.tag_name}` });
+                  await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` });
                   console.log(`Supprimé (filtre) : ${r.tag_name}`);
-                } catch (e) { console.log(`Erreur : ${e.message}`); }
+                } catch (e) {
+                  console.log(`Erreur : ${e.message}`);
+                }
               }
             }
 
@@ -87,10 +104,12 @@ jobs:
               const group = byVersion[v].sort((a, b) => b.build - a.build);
               for (let i = 1; i < group.length; i++) {
                 try {
-                  await github.rest.repos.deleteRelease({ owner: context.repo.owner, repo: context.repo.repo, release_id: group[i].r.id });
-                  await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `tags/${group[i].r.tag_name}` });
+                  await github.rest.repos.deleteRelease({ owner, repo, release_id: group[i].r.id });
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${group[i].r.tag_name}` });
                   console.log(`Supprimé : ${group[i].r.tag_name}`);
-                } catch (e) { console.log(`Erreur : ${e.message}`); }
+                } catch (e) {
+                  console.log(`Erreur : ${e.message}`);
+                }
               }
             }
 
@@ -103,11 +122,14 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const branches = await github.paginate(github.rest.repos.listBranches, { owner: context.repo.owner, repo: context.repo.repo });
-            const prs = await github.paginate(github.rest.pulls.list, { owner: context.repo.owner, repo: context.repo.repo, state: 'open' });
+            const { owner, repo } = context.repo;
+            const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo });
+            const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open' });
             const prot = ['main', 'master', 'gh-pages'];
             const prB = prs.map(p => p.head.ref);
             for (const b of branches) {
               if (prot.includes(b.name) || prB.includes(b.name)) continue;
-              try { await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: `heads/${b.name}` }); } catch (e) {}
+              try {
+                await github.rest.git.deleteRef({ owner, repo, ref: `heads/${b.name}` });
+              } catch (e) {}
             }
