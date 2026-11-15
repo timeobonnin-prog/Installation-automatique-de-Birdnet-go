@@ -1,4 +1,4 @@
-name: Maintenance
+Name: Maintenance
 
 on:
   schedule:
@@ -64,8 +64,34 @@ jobs:
               }
             }
 
+  cleanup-incomplete-releases:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+
+            for (const r of releases) {
+              const fileCount = r.assets ? r.assets.length : 0;
+              if (fileCount < 4) {
+                try {
+                  await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` });
+                  console.log(`Supprimé (< 4 fichiers [${fileCount}]) : ${r.tag_name}`);
+                } catch (e) {
+                  console.log(`Erreur (${r.tag_name}) : ${e.message}`);
+                }
+              }
+            }
+
   cleanup-releases:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: cleanup-incomplete-releases
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
