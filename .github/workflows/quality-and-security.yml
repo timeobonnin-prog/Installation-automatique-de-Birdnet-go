@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: '30 2 * * 1'
+    - cron: "30 2 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -25,15 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Vérifier le Python
         run: python -m py_compile generate_html.py
-          
+
       - name: Vérifier le YAML
         run: |
           pip install yamllint
           yamllint .github/workflows/ || true
-          
+
       - name: Vérifier le PowerShell
         shell: pwsh
         run: |
@@ -53,18 +53,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Télécharger le dernier installateur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-          
+
       - name: Installer silencieusement
         run: |
           if (Test-Path "dist\BirdNET-Go-Windows.exe") {
             Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
           }
-          
+
       - name: Vérifier que le serveur démarre
         run: |
           $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
@@ -97,7 +97,7 @@ jobs:
             const token = process.env.TELEGRAM_TOKEN;
             const chatId = process.env.TELEGRAM_CHAT;
             const release = context.payload.release;
-            
+
             if (!token || !chatId) {
               console.log("Secrets Telegram manquants, on ignore.");
               return;
@@ -107,7 +107,7 @@ jobs:
             const message = `${title}\n\nLa version *${release.name}* vient d'être publiée.\n[Télécharger ici](${release.html_url})`;
 
             const url = `https://api.telegram.org/bot${token}/sendMessage`;
-            
+
             const response = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
