@@ -1,9 +1,11 @@
 name: Scan VirusTotal
 
 on:
-  # Une seule fois par jour, à 4h du matin (avant le build de 6h)
+  # Scan VirusTotal à 19h00 (heure de Paris / 18h00 UTC)
+  # Et les autres exécutions 2 fois par jour à 12h00 et 00h00 (heure de Paris / 11h00 et 23h00 UTC)
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "0 18 * * *"
+    - cron: "0 11,23 * * *"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +28,7 @@ jobs:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
           if [ -z "$VT_API_KEY" ]; then
-            echo "VT_API_KEY non configuree - scan ignore."
+            echo "VT_API_KEY non configurée - scan ignoré."
             exit 0
           fi
 
@@ -34,7 +36,7 @@ jobs:
           RELEASES=$(gh release list --limit 100 --json tagName,isDraft \
             -q '.[] | select(.isDraft == false) | .tagName')
           if [ -z "$RELEASES" ]; then
-            echo "Aucune release a scanner."
+            echo "Aucune release à scanner."
             exit 0
           fi
 
@@ -49,7 +51,7 @@ jobs:
 
             BODY=$(gh release view "$tag" --json body -q '.body // ""')
             if echo "$BODY" | grep -qi "virustotal.com"; then
-              echo "Deja scanne - skip."
+              echo "Déjà scanné - skip."
               SKIPPED=$((SKIPPED + 1))
               continue
             fi
@@ -82,11 +84,11 @@ jobs:
                 "https://www.virustotal.com/api/v3/files/$HASH")
 
               if [ "$HTTP_STATUS" = "200" ]; then
-                echo "    Deja analyse par VirusTotal."
+                echo "    Déjà analysé par VirusTotal."
               else
                 echo "    Upload vers VirusTotal..."
                 UPLOAD_URL=$(curl -s -H "x-apikey: $VT_API_KEY" \
-                  "https://www.virustotal.com/api/v3/files/upload_url" | jq -r .data)
+                  "https://www.virustotal.com/api/v3/files/upload_url" | jq -r '.data')
                 if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
                   echo "    Impossible d'obtenir l'URL."
                   ERRORS=$((ERRORS + 1))
@@ -105,7 +107,7 @@ jobs:
               fi
 
               VT_URL="https://www.virustotal.com/gui/file/${HASH}"
-              echo "| ${FILENAME} | ${FILESIZE} | [Voir le rapport](${VT_URL}) |" >> /tmp/vt_table.md
+              echo "| [${FILENAME}](${VT_URL}) | ${FILESIZE} | [Voir le rapport](${VT_URL}) |" >> /tmp/vt_table.md
             done
 
             echo "$BODY" > /tmp/new_body.md
@@ -117,20 +119,20 @@ jobs:
             cat /tmp/vt_table.md >> /tmp/new_body.md
 
             if gh release edit "$tag" --notes-file /tmp/new_body.md; then
-              echo "  Body mis a jour pour $tag"
+              echo "  Body mis à jour pour $tag"
               SCANNED=$((SCANNED + 1))
             else
-              echo "  Echec mise a jour body pour $tag"
+              echo "  Échec mise à jour body pour $tag"
               ERRORS=$((ERRORS + 1))
             fi
           done
 
           echo ""
           echo "============================================================"
-          echo " RESUME DU SCAN"
+          echo " RÉSUMÉ DU SCAN"
           echo "============================================================"
-          echo " Scannees  : $SCANNED"
-          echo " Ignorees  : $SKIPPED"
+          echo " Scannées  : $SCANNED"
+          echo " Ignorées  : $SKIPPED"
           echo " Erreurs   : $ERRORS"
           echo "============================================================"
 
