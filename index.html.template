@@ -92,7 +92,7 @@
 <nav class="navbar">
   <div class="nav-content">
     <a href="#" class="nav-logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <img src="icon.ico" alt="Logo BirdNET-Go" style="width: 32px; height: 32px; margin-right: 8px; border-radius: 6px;">
       BirdNET-Go
     </a>
     <ul class="nav-links">
@@ -120,7 +120,7 @@
         </div>
         <div class="version-field">
           <label for="customVersion">Ou saisir un tag précis</label>
-          <input type="text" id="customVersion" placeholder="ex: 20261031">
+          <input type="text" id="customVersion" placeholder="ex: v20261031.37">
         </div>
       </div>
       <div class="version-actions">
@@ -208,28 +208,14 @@
     if (!version || version === 'latest') {
       return `https://github.com/${REPO}/releases/latest`;
     }
-
-    // Releases manuelles (manual-v...) ou release-manager (v...)
-    // -> assets compiles : BirdNET-Go-Windows.exe, .deb, .pkg
-    if (version.startsWith('manual-') || version.startsWith('v')) {
-      const manualMap = {
-        windows: 'BirdNET-Go-Windows.exe',
-        linux: 'BirdNET-Go-Linux-x64.deb',
-        raspberry: 'BirdNET-Go-RaspberryPi.deb',
-        macos: 'BirdNET-Go-macOS.pkg'
-      };
-      return `https://github.com/${REPO}/releases/download/${version}/${manualMap[platform]}`;
-    }
-
-    // Releases upstream synchronisees (20261031, etc.)
-    // -> assets bruts : birdnet-go-windows-amd64-{version}.tar.gz
-    const upstreamMap = {
-      windows: `birdnet-go-windows-amd64-${version}.tar.gz`,
-      linux: `birdnet-go-linux-amd64-${version}.tar.gz`,
-      raspberry: `birdnet-go-linux-arm64-${version}.tar.gz`,
-      macos: `birdnet-go-darwin-arm64-${version}.tar.gz`
+    // Noms d'assets standard de birdnet-go
+    const map = {
+      windows: `BirdNET-Go-Windows.exe`,
+      linux: `BirdNET-Go-Linux-x64.deb`,
+      raspberry: `BirdNET-Go-RaspberryPi.deb`,
+      macos: `BirdNET-Go-macOS.pkg`
     };
-    return `https://github.com/${REPO}/releases/download/${version}/${upstreamMap[platform]}`;
+    return `https://github.com/${REPO}/releases/download/${version}/${map[platform]}`;
   }
 
   function telecharger(platform) {
