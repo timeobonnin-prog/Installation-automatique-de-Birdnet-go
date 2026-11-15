@@ -1,4 +1,4 @@
-Name: Maintenance
+name: Maintenance
 
 on:
   schedule:
