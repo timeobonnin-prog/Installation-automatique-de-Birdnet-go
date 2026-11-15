@@ -4,25 +4,27 @@
 
 # --- 1. VERROU SINGLE INSTANCE ---
 $mutex = New-Object System.Threading.Mutex($false, "Global\BirdNET-Go-Client")
-if (-not $mutex.WaitOne(0, $false)) {
-    exit
-}
+# Le [void] empêche le popup "True"
+[void]$mutex.WaitOne(0, $false)
 
 # --- 2. Cacher la console et activer le DPI ---
-Add-Type -Name Window -Namespace Console -MemberDefinition '
+[void](Add-Type -Name Window -Namespace Console -MemberDefinition '
 [DllImport("Kernel32.dll")] public static extern IntPtr GetConsoleWindow();
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-'
-$consolePtr = [Console.Window]::GetConsoleWindow()
-[Console.Window]::ShowWindow($consolePtr, 0)
-[Console.Window]::SetProcessDPIAware()
+')
 
-Add-Type -AssemblyName PresentationFramework
-Add-Type -AssemblyName PresentationCore
-Add-Type -AssemblyName WindowsBase
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+$consolePtr = [Console.Window]::GetConsoleWindow()
+# Le [void] empêche les popups ici aussi
+[void][Console.Window]::ShowWindow($consolePtr, 0)
+[void][Console.Window]::SetProcessDPIAware()
+
+# On cache le résultat de Add-Type (qui affiche parfois le nom du type)
+[void](Add-Type -AssemblyName PresentationFramework)
+[void](Add-Type -AssemblyName PresentationCore)
+[void](Add-Type -AssemblyName WindowsBase)
+[void](Add-Type -AssemblyName System.Windows.Forms)
+[void](Add-Type -AssemblyName System.Drawing)
 
 # --- 3. Chemins d'installation ---
 $InstallDir = [System.AppDomain]::CurrentDomain.BaseDirectory
@@ -191,6 +193,7 @@ $BtnMinimize  = $window.FindName("BtnMinimize")
 $LinkGitHub   = $window.FindName("LinkGitHub")
 $LinkReleases = $window.FindName("LinkReleases")
 
+# Le | Out-Null à la fin empêche les erreurs
 [void]$TitleBar.Add_MouseLeftButtonDown({ $window.DragMove() })
 [void]$BtnMinimize.Add_Click({ $window.WindowState = 'Minimized' })
 
@@ -209,11 +212,9 @@ $LinkReleases = $window.FindName("LinkReleases")
 })
 [void]$BtnOpen.Add_Click({ Start-Process "http://localhost:8080" })
 
-# --- 7. LOGIQUE DE MISE À JOUR (Avec affichage des étapes) ---
+# --- 7. LOGIQUE DE MISE À JOUR ---
 function Update-BirdNETGo {
     $BtnUpdate.IsEnabled = $false
-    
-    # Petit raccourci pour forcer l'interface à se rafraîchir immédiatement
     function Refresh-UI { $window.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render) }
 
     try {
@@ -235,7 +236,6 @@ function Update-BirdNETGo {
             return
         }
 
-        # Télécharger
         $BtnUpdate.Content = "TÉLÉCHARGEMENT..."
         Refresh-UI
 
@@ -245,7 +245,6 @@ function Update-BirdNETGo {
         $tempZip = Join-Path $env:TEMP "birdnet-update.tar.gz"
         Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip
 
-        # Extraire
         $BtnUpdate.Content = "EXTRACTION..."
         Refresh-UI
 
@@ -257,14 +256,12 @@ function Update-BirdNETGo {
         $newExe = Get-ChildItem -Path $tempDir -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
         if (-not $newExe) { throw "birdnet-go.exe non trouvé dans l'archive" }
 
-        # Arrêter le serveur
         $BtnUpdate.Content = "ARRÊT DU SERVEUR..."
         Refresh-UI
 
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 2
 
-        # Remplacer les fichiers
         $BtnUpdate.Content = "INSTALLATION..."
         Refresh-UI
 
@@ -274,7 +271,6 @@ function Update-BirdNETGo {
         Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
         Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
-        # Redémarrer
         $BtnUpdate.Content = "REDÉMARRAGE..."
         Refresh-UI
 
@@ -335,7 +331,7 @@ function Update-UI {
     Update-UI
 })
 
-# --- 9. SYSTEM TRAY (L'icône reste active en arrière-plan) ---
+# --- 9. SYSTEM TRAY ---
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
 $IconPath = Join-Path $InstallDir "icon.ico"
 if (Test-Path $IconPath) {
@@ -356,7 +352,7 @@ $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
 [void]$trayMenu.Items.Add("⚙️ Afficher le panneau de contrôle").Add_Click({
     $window.Show()
     $window.WindowState = 'Normal'
-    $window.Activate() | Out-Null
+    $window.Activate()
 })
 
 [void]$trayMenu.Items.Add("❌ Quitter complètement").Add_Click({
@@ -371,10 +367,9 @@ $trayIcon.ContextMenuStrip = $trayMenu
 [void]$trayIcon.Add_DoubleClick({
     $window.Show()
     $window.WindowState = 'Normal'
-    $window.Activate() | Out-Null
+    $window.Activate()
 })
 
-# Empêcher la fermeture réelle
 [void]$window.Add_Closing({
     param($sender, $e)
     if ($e.CloseReason -eq 'UserClosing') {
@@ -384,7 +379,7 @@ $trayIcon.ContextMenuStrip = $trayMenu
     }
 })
 
-# --- 10. TIMER (Toutes les 0.5 secondes) ---
+# --- 10. TIMER ---
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(500)
 [void]$timer.Add_Tick({ Update-UI })
@@ -399,7 +394,7 @@ if (-not (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
 }
 Update-UI
 
-# Notification de démarrage
-[void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "Le panneau de contrôle est prêt.`nLe serveur est en cours d'exécution en arrière-plan.", [System.Windows.Forms.ToolTipIcon]::Info)
+[void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "Le panneau de contrôle est prêt.", [System.Windows.Forms.ToolTipIcon]::Info)
 
-$window.ShowDialog() | Out-Null
+# --- 12. LANCEMENT (Le [void] final bloque le popup "True") ---
+[void]$window.ShowDialog()
