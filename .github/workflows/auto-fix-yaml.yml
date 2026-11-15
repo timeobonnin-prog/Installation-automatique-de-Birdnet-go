@@ -3,7 +3,7 @@ name: 🤖 Auto-Fix YAML (Blindé)
 on:
   # S'exécute toutes les 6 heures pour rattraper les erreurs
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: "0 */6 * * *"
   # Permet de le lancer manuellement
   workflow_dispatch:
 
@@ -23,7 +23,7 @@ jobs:
       - name: Installer Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Installer Prettier
         run: npm install -g prettier
@@ -31,12 +31,12 @@ jobs:
       - name: Vérifier et corriger la syntaxe YAML
         run: |
           echo "Recherche des fichiers YAML à corriger..."
-          
+
           # Prettier va reformater les fichiers. 
           # S'il y a une erreur de syntaxe simple (espace, guillemet), il la corrige.
           # Le "|| true" évite que le workflow plante si le fichier est irrécupérable.
           prettier --write ".github/workflows/*.yml" || true
-          
+
           echo "Vérification terminée."
 
       - name: Vérifier s'il y a des modifications
@@ -56,7 +56,7 @@ jobs:
       - name: Résumé
         if: steps.git-check.outputs.changed == 'true'
         run: echo "✅ Des erreurs de syntaxe ont été trouvées et corrigées automatiquement !"
-        
+
       - name: Aucun changement
         if: steps.git-check.outputs.changed != 'true'
         run: echo "✨ Tous les fichiers YAML sont déjà parfaitement formatés."
