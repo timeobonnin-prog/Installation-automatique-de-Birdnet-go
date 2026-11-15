@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: "30 2 * * 1" # Tous les lundis à 2h30 pour CodeQL
+    - cron: '30 2 * * 1' # Tous les lundis à 2h30 pour CodeQL
   workflow_dispatch:
 
 permissions:
@@ -19,23 +19,22 @@ permissions:
 jobs:
   # ============================================================
   # JOB 1 : VÉRIFICATION DU CODE (Lint)
-  # S'exécute sur Push ou Pull Request
   # ============================================================
   lint-code:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Vérifier le Python
         run: |
           python -m py_compile generate_html.py
-
+          
       - name: Vérifier le YAML (Workflows)
         run: |
           pip install yamllint
-          yamllint .github/workflows/ || true # Ignore les petites erreurs de style
-
+          yamllint .github/workflows/ || true
+          
       - name: Vérifier le PowerShell
         shell: pwsh
         run: |
@@ -48,7 +47,6 @@ jobs:
 
   # ============================================================
   # JOB 2 : TEST DE L'INSTALLATEUR (Smoke Test)
-  # S'exécute sur Push, mais APRÈS le lint
   # ============================================================
   test-installer:
     needs: lint-code
@@ -56,22 +54,22 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Télécharger le dernier installateur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-
+          
       - name: Installer silencieusement
         run: |
           if (Test-Path "dist\BirdNET-Go-Windows.exe") {
             Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
           } else {
-            Write-Host "Pas d'installateur trouvé (peut-être le premier build)."
+            Write-Host "Pas d'installateur trouvé."
             exit 0
           }
-
+          
       - name: Vérifier que le serveur démarre
         run: |
           $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
@@ -88,8 +86,7 @@ jobs:
           }
 
   # ============================================================
-  # JOB 3 : NOTIFICATION TELEGRAM (Nouvelle Release)
-  # S'exécute UNIQUEMENT quand une release est publiée
+  # JOB 3 : NOTIFICATION TELEGRAM (Méthode simplifiée)
   # ============================================================
   notify-telegram:
     if: github.event_name == 'release'
@@ -114,23 +111,18 @@ jobs:
             TITLE="🚀 Nouvelle Version Stable disponible !"
           fi
 
-          # Création du fichier JSON de manière propre (évite les erreurs YAML)
-          cat <<EOF > payload.json
-          {
-            "chat_id": "$TELEGRAM_CHAT_ID",
-            "text": "$TITLE\nLa version *$RELEASE_NAME* vient d'être publiée.\n[Télécharger ici]($RELEASE_URL)",
-            "parse_mode": "Markdown"
-          }
-          EOF
+          MESSAGE="$TITLE
+La version *$RELEASE_NAME* vient d'être publiée.
+[Télécharger ici]($RELEASE_URL)"
 
-          # Envoi du message via l'API Telegram
+          # Utilisation de --data-urlencode pour éviter les problèmes de JSON/YAML
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d @payload.json
+            -d "chat_id=$TELEGRAM_CHAT_ID" \
+            --data-urlencode "text=$MESSAGE" \
+            -d "parse_mode=Markdown"
 
   # ============================================================
-  # JOB 4 : SÉCURITÉ CODEQL (Analyse des failles)
-  # S'exécute sur Push et tous les lundis
+  # JOB 4 : SÉCURITÉ CODEQL
   # ============================================================
   codeql-analysis:
     if: github.event_name == 'push' || github.event_name == 'schedule'
