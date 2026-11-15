@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import re
 
 RELEASES_FILE = 'releases.json'
 TEMPLATE_FILE = 'index.html.template'
@@ -13,24 +14,35 @@ if not os.path.exists(RELEASES_FILE):
 with open(RELEASES_FILE, 'r', encoding='utf-8') as f:
     releases = json.load(f)
 
-# Garder uniquement tes builds (exclut les releases brutes officielles)
-stable = [r for r in releases if r['tag_name'].startswith('v') and not r['tag_name'].startswith('nightly-v') and not r['tag_name'].startswith('manual-')]
-nightly = [r for r in releases if r['tag_name'].startswith('nightly-v')]
+# Filtrage STRICT :
+# - Stable : commence par 'v' et suivi de chiffres (ex: v20261031.37)
+# - Nightly : commence par 'nightly-v' (ex: nightly-v20260615.24)
+stable_releases = [
+    r for r in releases 
+    if re.match(r'^v\d+\.\d+$', r['tag_name']) and not r.get('prerelease') and not r.get('draft')
+]
+nightly_releases = [
+    r for r in releases 
+    if re.match(r'^nightly-v\d+\.\d+$', r['tag_name']) and not r.get('draft')
+]
 
-stable.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-nightly.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+# Tri par date (le plus récent en premier)
+stable_releases.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+nightly_releases.sort(key=lambda x: x.get('created_at', ''), reverse=True)
 
+# Création du menu déroulant
 options = []
-if stable:
-    options.append(f'<option value="{stable[0]["tag_name"]}">Dernière stable ({stable[0]["tag_name"]})</option>')
-if nightly:
-    options.append(f'<option value="{nightly[0]["tag_name"]}">Dernière nightly ({nightly[0]["tag_name"]})</option>')
+if stable_releases:
+    options.append(f'<option value="{stable_releases[0]["tag_name"]}">Dernière stable ({stable_releases[0]["tag_name"]})</option>')
+if nightly_releases:
+    options.append(f'<option value="{nightly_releases[0]["tag_name"]}">Dernière nightly ({nightly_releases[0]["tag_name"]})</option>')
 
 if not options:
     options.append('<option value="latest">Aucune version disponible</option>')
 
 options_html = '\n            '.join(options)
 
+# Remplacement dans le template
 with open(TEMPLATE_FILE, 'r', encoding='utf-8') as f:
     html = f.read()
 
