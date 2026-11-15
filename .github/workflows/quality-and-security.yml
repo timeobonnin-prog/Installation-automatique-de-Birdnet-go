@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: '30 2 * * 1' # Tous les lundis à 2h30 pour CodeQL
+    - cron: '30 2 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -27,10 +27,9 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Vérifier le Python
-        run: |
-          python -m py_compile generate_html.py
+        run: python -m py_compile generate_html.py
           
-      - name: Vérifier le YAML (Workflows)
+      - name: Vérifier le YAML
         run: |
           pip install yamllint
           yamllint .github/workflows/ || true
@@ -58,16 +57,12 @@ jobs:
       - name: Télécharger le dernier installateur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
+        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
           
       - name: Installer silencieusement
         run: |
           if (Test-Path "dist\BirdNET-Go-Windows.exe") {
             Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
-          } else {
-            Write-Host "Pas d'installateur trouvé."
-            exit 0
           }
           
       - name: Vérifier que le serveur démarre
@@ -86,40 +81,49 @@ jobs:
           }
 
   # ============================================================
-  # JOB 3 : NOTIFICATION TELEGRAM (Méthode simplifiée)
+  # JOB 3 : NOTIFICATION TELEGRAM (Via JavaScript natif)
   # ============================================================
   notify-telegram:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - name: Envoyer un message sur Telegram
+        uses: actions/github-script@v7
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RELEASE_NAME: ${{ github.event.release.name }}
-          RELEASE_URL: ${{ github.event.release.html_url }}
-          IS_PRERELEASE: ${{ github.event.release.prerelease }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Secrets Telegram manquants, on ignore."
-            exit 0
-          fi
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        with:
+          script: |
+            const token = process.env.TELEGRAM_TOKEN;
+            const chatId = process.env.TELEGRAM_CHAT;
+            const release = context.payload.release;
+            
+            if (!token || !chatId) {
+              console.log("Secrets Telegram manquants, on ignore.");
+              return;
+            }
 
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            TITLE="🌙 Nouvelle Nightly disponible !"
-          else
-            TITLE="🚀 Nouvelle Version Stable disponible !"
-          fi
+            const title = release.prerelease ? "🌙 Nouvelle Nightly disponible !" : "🚀 Nouvelle Version Stable disponible !";
+            const message = `${title}\n\nLa version *${release.name}* vient d'être publiée.\n[Télécharger ici](${release.html_url})`;
 
-          MESSAGE="$TITLE
-La version *$RELEASE_NAME* vient d'être publiée.
-[Télécharger ici]($RELEASE_URL)"
+            const url = `https://api.telegram.org/bot${token}/sendMessage`;
+            
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: message,
+                parse_mode: 'Markdown'
+              })
+            });
 
-          # Utilisation de --data-urlencode pour éviter les problèmes de JSON/YAML
-          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-            -d "chat_id=$TELEGRAM_CHAT_ID" \
-            --data-urlencode "text=$MESSAGE" \
-            -d "parse_mode=Markdown"
+            if (!response.ok) {
+              const errorText = await response.text();
+              core.setFailed(`Erreur Telegram : ${errorText}`);
+            } else {
+              console.log("✅ Message Telegram envoyé avec succès !");
+            }
 
   # ============================================================
   # JOB 4 : SÉCURITÉ CODEQL
@@ -130,13 +134,8 @@ La version *$RELEASE_NAME* vient d'être publiée.
     permissions:
       security-events: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
         with:
           languages: python
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v3
