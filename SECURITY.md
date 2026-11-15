@@ -1,4 +1,4 @@
-# Politique de sécurité (Security Policy)
+# Politique de sécurité
 
 ## Versions supportées
 
