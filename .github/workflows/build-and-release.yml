@@ -1,7 +1,6 @@
 name: Build & Release
 
 on:
-  # Tous les jours à 16h55 (Heure de Paris : 15h55 UTC)
   schedule:
     - cron: "55 15 * * *"
   workflow_dispatch:
@@ -34,9 +33,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ============================================================
-  # JOB 1 : VÉRIFICATION DES VERSIONS
-  # ============================================================
   check-version:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -52,7 +48,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Vérifier la Stable
           STABLE=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
           echo "stable=$STABLE" >> $GITHUB_OUTPUT
           HAS_STABLE=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
@@ -63,7 +58,6 @@ jobs:
             echo "build_stable=false" >> $GITHUB_OUTPUT
           fi
 
-          # 2. Vérifier la Nightly (STRICTEMENT 8 chiffres, ignore manifest)
           NIGHTLY_RAW=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --pre-releases --limit 50 --json tagName -q '.[].tagName' | grep -E '^nightly-[0-9]{8}$' | head -n 1 || true)
 
           if [ -n "$NIGHTLY_RAW" ]; then
@@ -81,9 +75,6 @@ jobs:
             echo "build_nightly=false" >> $GITHUB_OUTPUT
           fi
 
-  # ============================================================
-  # JOB 2A : COMPILATION WINDOWS STABLE
-  # ============================================================
   build-windows-stable:
     needs: check-version
     if: needs.check-version.outputs.build_stable == 'true'
@@ -113,7 +104,7 @@ jobs:
           }
           Set-Content -Path "dist\VERSION.txt" -Value $tag -Encoding UTF8
           Remove-Item "birdnet.tar.gz" -Force
-      - name: Copy FFmpeg
+      - name: Copy FFmpeg & FFprobe
         shell: pwsh
         run: |
           Copy-Item -Path (Get-Command ffmpeg).Source -Destination "dist\ffmpeg.exe" -Force
@@ -135,9 +126,6 @@ jobs:
           name: stable-windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
-  # ============================================================
-  # JOB 2B : COMPILATION WINDOWS NIGHTLY
-  # ============================================================
   build-windows-nightly:
     needs: check-version
     if: needs.check-version.outputs.build_nightly == 'true'
@@ -167,7 +155,7 @@ jobs:
           }
           Set-Content -Path "dist\VERSION.txt" -Value $tag -Encoding UTF8
           Remove-Item "birdnet.tar.gz" -Force
-      - name: Copy FFmpeg
+      - name: Copy FFmpeg & FFprobe
         shell: pwsh
         run: |
           Copy-Item -Path (Get-Command ffmpeg).Source -Destination "dist\ffmpeg.exe" -Force
@@ -189,9 +177,6 @@ jobs:
           name: nightly-windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
-  # ============================================================
-  # JOB 3A : COMPILATION LINUX / MAC STABLE
-  # ============================================================
   build-linux-mac-stable:
     needs: check-version
     if: needs.check-version.outputs.build_stable == 'true'
@@ -222,6 +207,20 @@ jobs:
           fi
           curl -fsSL -o birdnet.tar.gz -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "$ASSET_URL"
           tar -xzf birdnet.tar.gz -C dist
+
+      - name: Download FFmpeg & FFprobe (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          wget -q https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          tar -xf ffmpeg-master-latest-linux64-gpl.tar.xz
+          cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg dist/
+          cp ffmpeg-master-latest-linux64-gpl/bin/ffprobe dist/
+          rm -rf ffmpeg-master-latest-linux64-gpl*
+
+      - name: Install FFmpeg (Mac)
+        if: matrix.os == 'macos-latest'
+        run: brew install ffmpeg
+
       - name: Install nfpm (Linux only)
         if: matrix.os == 'ubuntu-latest'
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
@@ -241,8 +240,10 @@ jobs:
           VERSION="${{ needs.check-version.outputs.stable_tag }}"
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
+          cp -L $(which ffmpeg) payload/usr/local/bin/
+          cp -L $(which ffprobe) payload/usr/local/bin/
           install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
-          chmod +x payload/usr/local/bin/birdnet-go
+          chmod +x payload/usr/local/bin/*
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -252,9 +253,6 @@ jobs:
             *.deb
             *.pkg
 
-  # ============================================================
-  # JOB 3B : COMPILATION LINUX / MAC NIGHTLY
-  # ============================================================
   build-linux-mac-nightly:
     needs: check-version
     if: needs.check-version.outputs.build_nightly == 'true'
@@ -285,6 +283,20 @@ jobs:
           fi
           curl -fsSL -o birdnet.tar.gz -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "$ASSET_URL"
           tar -xzf birdnet.tar.gz -C dist
+
+      - name: Download FFmpeg & FFprobe (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          wget -q https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          tar -xf ffmpeg-master-latest-linux64-gpl.tar.xz
+          cp ffmpeg-master-latest-linux64-gpl/bin/ffmpeg dist/
+          cp ffmpeg-master-latest-linux64-gpl/bin/ffprobe dist/
+          rm -rf ffmpeg-master-latest-linux64-gpl*
+
+      - name: Install FFmpeg (Mac)
+        if: matrix.os == 'macos-latest'
+        run: brew install ffmpeg
+
       - name: Install nfpm (Linux only)
         if: matrix.os == 'ubuntu-latest'
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
@@ -304,8 +316,10 @@ jobs:
           VERSION="${{ needs.check-version.outputs.nightly_tag }}"
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
+          cp -L $(which ffmpeg) payload/usr/local/bin/
+          cp -L $(which ffprobe) payload/usr/local/bin/
           install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
-          chmod +x payload/usr/local/bin/birdnet-go
+          chmod +x payload/usr/local/bin/*
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -315,9 +329,6 @@ jobs:
             *.deb
             *.pkg
 
-  # ============================================================
-  # JOB 4 : PUBLICATION DES RELEASES
-  # ============================================================
   publish-release:
     needs:
       [

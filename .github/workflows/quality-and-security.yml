@@ -219,6 +219,7 @@ jobs:
       - name: Vérifier le paquet
         run: |
           if [ -f "BirdNET-Go-RaspberryPi.deb" ]; then
+            # On vérifie que le paquet est valide pour ARM64 sans utiliser QEMU (qui est cassé sur GitHub)
             dpkg-deb -I BirdNET-Go-RaspberryPi.deb
             echo "✅ Le paquet Raspberry Pi est valide."
           else
