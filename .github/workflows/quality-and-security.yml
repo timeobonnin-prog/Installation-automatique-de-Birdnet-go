@@ -36,7 +36,7 @@ jobs:
           if ($results) { $results | Format-Table -AutoSize; exit 1 }
 
   # ============================================================
-  # JOB 2 : TEST WINDOWS (.exe)
+  # JOB 2 : TEST WINDOWS (.exe) - 30 secondes max
   # ============================================================
   test-windows:
     name: Test de l'installateur Windows (.exe)
@@ -46,32 +46,65 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Installer FFmpeg
+        run: choco install ffmpeg -y --no-progress
       - name: Télécharger l'installateur
         shell: pwsh
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: |
-          gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-      - name: Installer et Tester
+        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
+      - name: Installer et Tester (30s max)
         run: |
           if (Test-Path "dist\BirdNET-Go-Windows.exe") {
             Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -PassThru | Out-Null
             Start-Sleep -Seconds 60
             Get-Process -Name "BirdNET-Go-Windows", "Setup" -ErrorAction SilentlyContinue | Stop-Process -Force
+            
             $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
             if (Test-Path $exe) {
-              # On vérifie que le binaire s'exécute bien (pas de --version, mais authors)
-              & $exe authors
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "✅ Le binaire Windows s'exécute correctement."
+              $logOut = "$env:TEMP\birdnet.log"
+              $logErr = "$env:TEMP\birdnet.err"
+              
+              $process = Start-Process -FilePath $exe -ArgumentList "serve" -WorkingDirectory (Split-Path $exe) -PassThru -NoNewWindow -RedirectStandardOutput $logOut -RedirectStandardError $logErr
+              
+              $success = $false
+              for ($i=0; $i -lt 15; $i++) {
+                if ($process.HasExited) {
+                  Write-Host "❌ Le serveur Windows a planté."
+                  Get-Content $logOut
+                  Get-Content $logErr
+                  exit 1
+                }
+                try {
+                  $r = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 2
+                  if ($r.StatusCode -eq 200) {
+                    $success = $true
+                    break
+                  }
+                } catch {}
+                Start-Sleep -Seconds 2
+              }
+              
+              if ($success) {
+                Write-Host "✅ Le serveur Windows répond !"
+                Stop-Process -Id $process.Id -Force
               } else {
-                Write-Host "❌ Le binaire Windows ne s'exécute pas."
+                Write-Host "❌ Le serveur Windows n'a pas répondu après 30s."
+                Get-Content $logOut
+                Get-Content $logErr
+                Stop-Process -Id $process.Id -Force
                 exit 1
               }
-            } else { Write-Host "❌ Installation échouée."; exit 1 }
-          } else { Write-Host "⚠️ Pas d'installateur Windows dans la release."; exit 0 }
+            } else {
+              Write-Host "❌ Installation échouée."
+              exit 1
+            }
+          } else {
+            Write-Host "⚠️ Pas d'installateur Windows dans la release."
+            exit 0
+          }
 
   # ============================================================
-  # JOB 3 : TEST LINUX (.deb)
+  # JOB 3 : TEST LINUX (.deb) - 30 secondes max
   # ============================================================
   test-linux:
     name: Test du paquet Linux x64 (.deb)
@@ -81,24 +114,52 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Installer FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Télécharger le paquet
         shell: bash
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber || true
-      - name: Installer et Tester
+      - name: Installer et Tester (30s max)
         run: |
           if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
             sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
             export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-            # On utilise 'authors' car '--version' n'existe pas
-            /usr/local/bin/birdnet-go authors
-            echo "✅ Le binaire Linux s'exécute correctement."
+            
+            /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
+            SERVER_PID=$!
+            
+            SUCCESS=0
+            for i in {1..15}; do
+              if ! kill -0 $SERVER_PID 2>/dev/null; then
+                echo "❌ Le serveur Linux a planté."
+                cat /tmp/birdnet.log
+                exit 1
+              fi
+              
+              HTTP_CODE=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+              if [ "$HTTP_CODE" == "200" ]; then
+                echo "✅ Le serveur Linux répond !"
+                kill $SERVER_PID 2>/dev/null
+                SUCCESS=1
+                break
+              fi
+              sleep 2
+            done
+            
+            if [ $SUCCESS -eq 0 ]; then
+              echo "❌ Le serveur Linux n'a pas répondu après 30s."
+              cat /tmp/birdnet.log
+              kill $SERVER_PID 2>/dev/null
+              exit 1
+            fi
           else
             echo "⚠️ Pas de paquet Linux dans la release, test ignoré."
+            exit 0
           fi
 
   # ============================================================
-  # JOB 4 : TEST MACOS (.pkg)
+  # JOB 4 : TEST MACOS (.pkg) - 30 secondes max
   # ============================================================
   test-macos:
     name: Test du paquet macOS (.pkg)
@@ -108,22 +169,51 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Installer FFmpeg
+        run: brew install ffmpeg
       - name: Télécharger le paquet
         shell: bash
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-macOS.pkg" --clobber || true
-      - name: Installer et Tester
+      - name: Installer et Tester (30s max)
         run: |
           if [ -f "BirdNET-Go-macOS.pkg" ]; then
             sudo installer -pkg BirdNET-Go-macOS.pkg -target /
-            /usr/local/bin/birdnet-go authors
-            echo "✅ Le binaire macOS s'exécute correctement."
+            
+            /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
+            SERVER_PID=$!
+            
+            SUCCESS=0
+            for i in {1..15}; do
+              if ! kill -0 $SERVER_PID 2>/dev/null; then
+                echo "❌ Le serveur macOS a planté."
+                cat /tmp/birdnet.log
+                exit 1
+              fi
+              
+              HTTP_CODE=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+              if [ "$HTTP_CODE" == "200" ]; then
+                echo "✅ Le serveur macOS répond !"
+                kill $SERVER_PID 2>/dev/null
+                SUCCESS=1
+                break
+              fi
+              sleep 2
+            done
+            
+            if [ $SUCCESS -eq 0 ]; then
+              echo "❌ Le serveur macOS n'a pas répondu après 30s."
+              cat /tmp/birdnet.log
+              kill $SERVER_PID 2>/dev/null
+              exit 1
+            fi
           else
             echo "⚠️ Pas de paquet macOS dans la release, test ignoré."
+            exit 0
           fi
 
   # ============================================================
-  # JOB 5 : TEST RASPBERRY PI (.deb)
+  # JOB 5 : TEST RASPBERRY PI (.deb) - 30 secondes max
   # ============================================================
   test-raspberry:
     name: Test du paquet Raspberry Pi (.deb)
@@ -137,7 +227,7 @@ jobs:
         shell: bash
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-RaspberryPi.deb" --clobber || true
-      - name: Tester dans QEMU
+      - name: Tester dans QEMU (30s max)
         uses: pguyot/arm-runner-action@v2.6.5
         continue-on-error: true
         with:
@@ -149,15 +239,41 @@ jobs:
             if [ -f "/tmp/BirdNET-Go-RaspberryPi.deb" ]; then
               sudo dpkg -i --force-all /tmp/BirdNET-Go-RaspberryPi.deb || true
               export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-              /usr/local/bin/birdnet-go authors
-              echo "✅ Le binaire Raspberry Pi s'exécute correctement."
+              
+              /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
+              SERVER_PID=$!
+              
+              SUCCESS=0
+              for i in {1..15}; do
+                if ! kill -0 $SERVER_PID 2>/dev/null; then
+                  echo "❌ Le serveur Raspberry Pi a planté."
+                  cat /tmp/birdnet.log
+                  exit 1
+                fi
+                
+                HTTP_CODE=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+                if [ "$HTTP_CODE" == "200" ]; then
+                  echo "✅ Le serveur Raspberry Pi répond !"
+                  kill $SERVER_PID 2>/dev/null
+                  SUCCESS=1
+                  break
+                fi
+                sleep 2
+              done
+              
+              if [ $SUCCESS -eq 0 ]; then
+                echo "❌ Le serveur Raspberry Pi n'a pas répondu après 30s."
+                cat /tmp/birdnet.log
+                kill $SERVER_PID 2>/dev/null
+                exit 1
+              fi
             fi
 
   # ============================================================
-  # JOB 6 : SÉCURITÉ CODEQL
+  # JOB 6 : SÉCURITÉ CODEQL (Corrigé pour s'exécuter sur PR)
   # ============================================================
   codeql-analysis:
-    if: github.event_name == 'push' || github.event_name == 'schedule'
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
