@@ -1,12 +1,12 @@
-      - name: Build .pkg (Mac only)
-        if: matrix.os == 'macos-latest'
-        run: |
-          VERSION="${{ needs.check-version.outputs.stable_tag }}"
-          mkdir -p payload/usr/local/bin
-          cp -r dist/* payload/usr/local/bin/
-          
-          # 🔧 CORRECTION : On indique au binaire d'aller chercher la .dylib à côté de lui
-          install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
-          
-          chmod +x payload/usr/local/bin/birdnet-go
-          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
+- name: Build .pkg (Mac only)
+  if: matrix.os == 'macos-latest'
+  run: |
+    VERSION="${{ needs.check-version.outputs.stable_tag }}"
+    mkdir -p payload/usr/local/bin
+    cp -r dist/* payload/usr/local/bin/
+
+    # 🔧 CORRECTION : On indique au binaire d'aller chercher la .dylib à côté de lui
+    install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
+
+    chmod +x payload/usr/local/bin/birdnet-go
+    pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
