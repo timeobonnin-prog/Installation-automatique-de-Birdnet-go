@@ -15,11 +15,11 @@ description: |
 vendor: "timeobonnin-prog"
 homepage: "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go"
 license: "MIT"
-# On retire "depends: ffmpeg" pour ne pas bloquer l'installation sur les systèmes qui ont des soucis de dépendances
 contents:
   - src: ./dist/birdnet-go
     dst: /usr/local/bin/birdnet-go
+  # On place la bibliothèque dans le dossier standard de Linux
   - src: ./dist/libtensorflowlite_c.so
-    dst: /usr/local/bin/libtensorflowlite_c.so
+    dst: /usr/local/lib/libtensorflowlite_c.so
 scripts:
   postinstall: ./scripts/postinstall.sh
