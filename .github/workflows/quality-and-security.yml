@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   # ============================================================
-  # JOB 1 : LINT (Vérification syntaxe)
+  # JOB 1 : LINT
   # ============================================================
   lint-code:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
@@ -48,22 +48,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Télécharger l'installateur
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber || true
+        run: |
+          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber; then
+            echo "⚠️ Pas d'installateur Windows dans la release, test ignoré."
+            exit 0
+          fi
       - name: Installer et Tester
         run: |
-          if (Test-Path "dist\BirdNET-Go-Windows.exe") {
-            Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -PassThru | Out-Null
-            Start-Sleep -Seconds 60
-            Get-Process -Name "BirdNET-Go-Windows", "Setup" -ErrorAction SilentlyContinue | Stop-Process -Force
-            $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
-            if (Test-Path $exe) {
-              Start-Process -FilePath $exe -ArgumentList "serve" -WorkingDirectory (Split-Path $exe) -WindowStyle Hidden
-              for ($i=0; $i -lt 30; $i++) {
-                try { $r = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 2; exit 0 } catch { Start-Sleep -Seconds 2 }
-              }
-              Write-Host "❌ Le serveur Windows ne répond pas après 60s."; exit 1
-            } else { Write-Host "❌ Installation échouée."; exit 1 }
-          } else { Write-Host "⚠️ Pas d'installateur Windows dans la release, test ignoré."; exit 0 }
+          Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -PassThru | Out-Null
+          Start-Sleep -Seconds 60
+          Get-Process -Name "BirdNET-Go-Windows", "Setup" -ErrorAction SilentlyContinue | Stop-Process -Force
+          $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
+          if (Test-Path $exe) {
+            Start-Process -FilePath $exe -ArgumentList "serve" -WorkingDirectory (Split-Path $exe) -WindowStyle Hidden
+            for ($i=0; $i -lt 30; $i++) {
+              try { $r = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 2; exit 0 } catch { Start-Sleep -Seconds 2 }
+            }
+            Write-Host "❌ Le serveur Windows ne répond pas après 60s."; exit 1
+          } else { Write-Host "❌ Installation échouée."; exit 1 }
 
   # ============================================================
   # JOB 3 : TEST LINUX (.deb)
@@ -78,30 +80,29 @@ jobs:
       - uses: actions/checkout@v4
       - name: Télécharger le paquet
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber || true
+        run: |
+          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber; then
+            if gh release view --repo ${{ github.repository }} --json assets -q '.assets[].name' | grep -q "BirdNET-Go-Linux-x64.deb"; then
+              echo "❌ Le fichier existe mais le téléchargement a échoué."; exit 1
+            else
+              echo "⚠️ Le fichier n'existe pas dans la release."; exit 0
+            fi
+          fi
       - name: Installer et Tester
         run: |
-          if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
-            sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
-            if [ -f "/usr/local/bin/birdnet-go" ]; then
-              export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-              /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
-              SERVER_PID=$!
-              for i in {1..30}; do
-                if ! kill -0 $SERVER_PID 2>/dev/null; then
-                  echo "❌ Le serveur Linux a planté."; cat /tmp/birdnet.log; exit 1
-                fi
-                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-                if [ "$HTTP_CODE" == "200" ]; then echo "✅ Le serveur Linux répond !"; kill $SERVER_PID 2>/dev/null; exit 0; fi
-                sleep 2
-              done
-              echo "❌ Le serveur Linux ne répond pas après 60s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
-            else
-              echo "❌ Binaire Linux introuvable."; exit 1
+          sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
+          export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+          /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
+          SERVER_PID=$!
+          for i in {1..30}; do
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ Le serveur Linux a planté."; cat /tmp/birdnet.log; exit 1
             fi
-          else
-            echo "⚠️ Pas de paquet Linux dans la release, test ignoré."; exit 0
-          fi
+            HTTP_CODE=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+            if [ "$HTTP_CODE" == "200" ]; then echo "✅ Le serveur Linux répond !"; kill $SERVER_PID 2>/dev/null; exit 0; fi
+            sleep 2
+          done
+          echo "❌ Le serveur Linux ne répond pas après 60s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
 
   # ============================================================
   # JOB 4 : TEST MACOS (.pkg)
@@ -116,29 +117,28 @@ jobs:
       - uses: actions/checkout@v4
       - name: Télécharger le paquet
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-macOS.pkg" --clobber || true
+        run: |
+          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-macOS.pkg" --clobber; then
+            if gh release view --repo ${{ github.repository }} --json assets -q '.assets[].name' | grep -q "BirdNET-Go-macOS.pkg"; then
+              echo "❌ Le fichier existe mais le téléchargement a échoué."; exit 1
+            else
+              echo "⚠️ Le fichier n'existe pas dans la release."; exit 0
+            fi
+          fi
       - name: Installer et Tester
         run: |
-          if [ -f "BirdNET-Go-macOS.pkg" ]; then
-            sudo installer -pkg BirdNET-Go-macOS.pkg -target /
-            if [ -f "/usr/local/bin/birdnet-go" ]; then
-              /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
-              SERVER_PID=$!
-              for i in {1..30}; do
-                if ! kill -0 $SERVER_PID 2>/dev/null; then
-                  echo "❌ Le serveur macOS a planté."; cat /tmp/birdnet.log; exit 1
-                fi
-                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-                if [ "$HTTP_CODE" == "200" ]; then echo "✅ Le serveur macOS répond !"; kill $SERVER_PID 2>/dev/null; exit 0; fi
-                sleep 2
-              done
-              echo "❌ Le serveur macOS ne répond pas après 60s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
-            else
-              echo "❌ Binaire macOS introuvable."; exit 1
+          sudo installer -pkg BirdNET-Go-macOS.pkg -target /
+          /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
+          SERVER_PID=$!
+          for i in {1..30}; do
+            if ! kill -0 $SERVER_PID 2>/dev/null; then
+              echo "❌ Le serveur macOS a planté."; cat /tmp/birdnet.log; exit 1
             fi
-          else
-            echo "⚠️ Pas de paquet macOS dans la release, test ignoré."; exit 0
-          fi
+            HTTP_CODE=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+            if [ "$HTTP_CODE" == "200" ]; then echo "✅ Le serveur macOS répond !"; kill $SERVER_PID 2>/dev/null; exit 0; fi
+            sleep 2
+          done
+          echo "❌ Le serveur macOS ne répond pas après 60s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
 
   # ============================================================
   # JOB 5 : TEST RASPBERRY PI (.deb)
@@ -153,7 +153,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Télécharger le paquet
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-RaspberryPi.deb" --clobber || true
+        run: |
+          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-RaspberryPi.deb" --clobber; then
+            if gh release view --repo ${{ github.repository }} --json assets -q '.assets[].name' | grep -q "BirdNET-Go-RaspberryPi.deb"; then
+              echo "❌ Le fichier existe mais le téléchargement a échoué."; exit 1
+            else
+              echo "⚠️ Le fichier n'existe pas dans la release."; exit 0
+            fi
+          fi
       - name: Tester dans QEMU
         uses: pguyot/arm-runner-action@v2.6.5
         continue-on-error: true
@@ -163,20 +170,16 @@ jobs:
           copy_artifact_path: BirdNET-Go-RaspberryPi.deb
           copy_artifact_dest: /tmp/
           commands: |
-            if [ -f "/tmp/BirdNET-Go-RaspberryPi.deb" ]; then
-              sudo dpkg -i --force-all /tmp/BirdNET-Go-RaspberryPi.deb || true
-              if [ -f "/usr/local/bin/birdnet-go" ]; then
-                export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-                /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
-                SERVER_PID=$!
-                for i in {1..30}; do
-                  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-                  if [ "$HTTP_CODE" == "200" ]; then exit 0; fi
-                  sleep 2
-                done
-                exit 1
-              fi
-            fi
+            sudo dpkg -i --force-all /tmp/BirdNET-Go-RaspberryPi.deb || true
+            export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+            /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
+            SERVER_PID=$!
+            for i in {1..30}; do
+              HTTP_CODE=$(curl -s --max-time 2 -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+              if [ "$HTTP_CODE" == "200" ]; then exit 0; fi
+              sleep 2
+            done
+            exit 1
 
   # ============================================================
   # JOB 6 : SÉCURITÉ CODEQL
