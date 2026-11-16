@@ -26,7 +26,7 @@
   .navbar{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 2rem;background:rgba(15,23,42,.7);backdrop-filter:blur(20px);border-bottom:1px solid rgba(51,65,85,.5)}
   .nav-content{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:2rem}
   .nav-logo{display:flex;align-items:center;gap:.75rem;font-weight:800;font-size:1.25rem;color:var(--text)}
-  .nav-logo svg{width:32px;height:32px}
+  .nav-logo img{width:32px;height:32px;border-radius:6px}
   .nav-links{display:flex;gap:2rem;list-style:none}
   .nav-links a{color:var(--text-muted);font-size:.9rem;font-weight:500}
   .nav-links a:hover{color:var(--text);opacity:1}
@@ -92,7 +92,7 @@
 <nav class="navbar">
   <div class="nav-content">
     <a href="#" class="nav-logo">
-      <img src="icon.ico" alt="Logo BirdNET-Go" style="width: 32px; height: 32px; margin-right: 8px; border-radius: 6px;">
+      <img src="icon.ico" alt="Logo BirdNET-Go">
       BirdNET-Go
     </a>
     <ul class="nav-links">
