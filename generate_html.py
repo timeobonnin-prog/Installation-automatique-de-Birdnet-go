@@ -50,3 +50,5 @@ html = html.replace('{{VERSION_OPTIONS}}', options_html)
 
 with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
     f.write(html)
+
+print(f"✅ {OUTPUT_FILE} généré avec succès ({len(stable_releases)} stable, {len(nightly_releases)} nightly)")
