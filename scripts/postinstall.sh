@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# Mise à jour du cache des bibliothèques partagées
+# Mise à jour du cache des bibliothèques partagées (Très important !)
 ldconfig
 
 # Création de l'utilisateur système
@@ -34,7 +34,7 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-# Activation du service uniquement si systemd est actif (absent de WSL par défaut)
+# Activation du service uniquement si systemd est actif
 if [ -d /run/systemd/system ]; then
   systemctl daemon-reload
   systemctl enable birdnet-go
