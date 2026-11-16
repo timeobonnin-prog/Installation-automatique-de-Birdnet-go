@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: '30 2 * * 1'
+    - cron: "30 2 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -25,15 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Vérifier le Python
         run: python -m py_compile generate_html.py
-          
+
       - name: Vérifier le YAML
         run: |
           pip install yamllint
           yamllint .github/workflows/ || true
-          
+
       - name: Vérifier le PowerShell
         shell: pwsh
         run: |
@@ -54,13 +54,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Télécharger le dernier installateur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-          
+
       - name: Vérifier le fichier téléchargé
         run: |
           if (-Not (Test-Path "dist\BirdNET-Go-Windows.exe")) {
@@ -73,10 +73,10 @@ jobs:
           Write-Host "Lancement de l'installateur en arrière-plan..."
           # On lance sans -Wait. On ajoute /LOG pour tracer en cas de problème.
           Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=`"$env:TEMP\install.log`""
-          
+
           Write-Host "Attente de 60 secondes pour laisser le temps à l'installation de se terminer..."
           Start-Sleep -Seconds 60
-          
+
           # On tue les processus de l'installateur s'ils traînent encore
           Get-Process -Name "BirdNET-Go-Windows", "Setup", "unins000" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Write-Host "Vérification de l'installation..."
@@ -122,7 +122,7 @@ jobs:
             const token = process.env.TELEGRAM_TOKEN;
             const chatId = process.env.TELEGRAM_CHAT;
             const release = context.payload.release;
-            
+
             if (!token || !chatId) {
               console.log("Secrets Telegram manquants, on ignore.");
               return;
@@ -132,7 +132,7 @@ jobs:
             const message = `${title}\n\nLa version *${release.name}* vient d'être publiée.\n[Télécharger ici](${release.html_url})`;
 
             const url = `https://api.telegram.org/bot${token}/sendMessage`;
-            
+
             const response = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
