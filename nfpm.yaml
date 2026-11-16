@@ -18,8 +18,12 @@ license: "MIT"
 contents:
   - src: ./dist/birdnet-go
     dst: /usr/local/bin/birdnet-go
-  # On place la bibliothèque dans le dossier standard de Linux
   - src: ./dist/libtensorflowlite_c.so
     dst: /usr/local/lib/libtensorflowlite_c.so
+  # On inclut FFmpeg et FFprobe directement dans le paquet
+  - src: ./dist/ffmpeg
+    dst: /usr/local/bin/ffmpeg
+  - src: ./dist/ffprobe
+    dst: /usr/local/bin/ffprobe
 scripts:
   postinstall: ./scripts/postinstall.sh
