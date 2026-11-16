@@ -1,0 +1,35 @@
+name: Auto-Merge (Dependabot & Moi)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    # On accepte les PR de Dependabot ET les PR créées par toi (le propriétaire du dépôt)
+    if: github.actor == 'dependabot[bot]' || github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer les infos de la PR
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        # On ne récupère les métadonnées QUE si c'est Dependabot
+        if: github.actor == 'dependabot[bot]'
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Approuver la Pull Request
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Activer la fusion automatique (si les tests passent)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
