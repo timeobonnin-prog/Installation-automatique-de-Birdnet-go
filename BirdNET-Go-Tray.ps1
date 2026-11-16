@@ -1,12 +1,10 @@
 # ============================================================
-#  BirdNET-Go-Tray.ps1  —  Panneau de contrôle + Tray + MAJ
+#  BirdNET-Go-Tray.ps1  —  Panneau de contrôle + Tray + MAJ Auto
 # ============================================================
 
 # --- 1. VERROU SINGLE INSTANCE ---
 $mutex = New-Object System.Threading.Mutex($false, "Global\BirdNET-Go-Client")
-if (-not $mutex.WaitOne(0, $false)) {
-    exit
-}
+if (-not $mutex.WaitOne(0, $false)) { exit }
 
 # --- 2. Cacher la console et activer le DPI ---
 Add-Type -Name Window -Namespace Console -MemberDefinition '
@@ -33,16 +31,14 @@ $InstallDir  = $InstallDir.TrimEnd('\')
 $ExePath     = Join-Path $InstallDir "birdnet-go.exe"
 $VersionFile = Join-Path $InstallDir "VERSION.txt"
 
-# --- 4. Interface XAML (Boutons explicites) ---
+# --- 4. Interface XAML ---
 $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="BirdNET-Go" Height="650" Width="850"
         WindowStartupLocation="CenterScreen" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
-
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="Margin" Value="0,0,0,12"/>
@@ -66,7 +62,6 @@ $xaml = @"
                 </Setter.Value>
             </Setter>
         </Style>
-
         <Style x:Key="WindowBtn" TargetType="Button">
             <Setter Property="Width" Value="45"/>
             <Setter Property="Height" Value="35"/>
@@ -91,17 +86,13 @@ $xaml = @"
             </Setter>
         </Style>
     </Window.Resources>
-
     <Border CornerRadius="12" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1" Margin="10">
-        <Border.Effect>
-            <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
-        </Border.Effect>
+        <Border.Effect><DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/></Border.Effect>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-
             <Grid Grid.Row="0" Background="Transparent" Name="TitleBar">
                 <TextBlock Text="BirdNET-Go // Control Center" Foreground="#64748B" FontSize="12" VerticalAlignment="Center" Margin="20,0,0,0"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -109,13 +100,11 @@ $xaml = @"
                     <Button Style="{StaticResource WindowBtn}" Content="✕" Name="BtnClose"/>
                 </StackPanel>
             </Grid>
-
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="240"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-
                 <Border Grid.Column="0" Background="#020617" CornerRadius="0,0,0,12">
                     <StackPanel Margin="20,30,20,0">
                         <TextBlock Text="BirdNET-Go" Foreground="#38BDF8" FontSize="22" FontWeight="Bold" Margin="0,0,0,40"/>
@@ -142,15 +131,12 @@ $xaml = @"
                         </Border>
                     </StackPanel>
                 </Border>
-
                 <Grid Grid.Column="1" Margin="40">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-
                     <TextBlock Grid.Row="0" Text="Dashboard" Foreground="#F8FAFC" FontSize="32" FontWeight="Bold"/>
-
                     <StackPanel Grid.Row="1" Margin="0,30,0,0">
                         <Border Background="#1E293B" CornerRadius="8" Padding="25" Margin="0,0,0,20" BorderThickness="1" BorderBrush="#334155">
                             <Grid>
@@ -165,12 +151,13 @@ $xaml = @"
                                 </StackPanel>
                             </Grid>
                         </Border>
-
                         <Button Name="BtnOpen"   Content="OUVRIR L'INTERFACE WEB" Background="#0284C7"/>
                         <Button Name="BtnToggle" Content="DÉMARRER LE SERVEUR"     Background="#10B981"/>
                         
-                        <!-- Les deux boutons de mise à jour distincts -->
+                        <!-- Bouton et statut de mise à jour -->
                         <Button Name="BtnUpdateServer" Content="METTRE À JOUR LE MOTEUR (BIRDNET-GO)" Background="#8B5CF6"/>
+                        <TextBlock Name="TxtUpdateStatus" Text="Vérification en cours..." Foreground="#64748B" FontSize="11" HorizontalAlignment="Center" Margin="0,-5,0,15"/>
+                        
                         <Button Name="BtnUpdateUI"     Content="METTRE À JOUR L'INTERFACE (CONTRÔLEUR)" Background="#F59E0B"/>
                     </StackPanel>
                 </Grid>
@@ -189,6 +176,7 @@ $TxtStatus     = $window.FindName("TxtStatus")
 $BtnToggle     = $window.FindName("BtnToggle")
 $BtnOpen       = $window.FindName("BtnOpen")
 $BtnUpdateServer = $window.FindName("BtnUpdateServer")
+$TxtUpdateStatus = $window.FindName("TxtUpdateStatus")
 $BtnUpdateUI     = $window.FindName("BtnUpdateUI")
 $BtnClose      = $window.FindName("BtnClose")
 $BtnMinimize   = $window.FindName("BtnMinimize")
@@ -209,15 +197,33 @@ $LinkReleases  = $window.FindName("LinkReleases")
 [void]$LinkReleases.Add_MouseLeftButtonUp({ Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" })
 [void]$BtnOpen.Add_Click({ Start-Process "http://localhost:8080" })
 
-# --- 7. LOGIQUE : MISE À JOUR DU MOTEUR (Backend) ---
+# --- 7. SPINNER ANIMÉ ---
+$script:spinnerFrames = @('⟳', '⟲')
+$script:spinnerIndex = 0
+$spinnerTimer = New-Object System.Windows.Threading.DispatcherTimer
+$spinnerTimer.Interval = [TimeSpan]::FromMilliseconds(300)
+[void]$spinnerTimer.Add_Tick({
+    $script:spinnerIndex = ($script:spinnerIndex + 1) % 2
+    $frame = $script:spinnerFrames[$script:spinnerIndex]
+    
+    if ($BtnUpdateServer.Tag -eq 'loading') {
+        $BtnUpdateServer.Content = "$frame MISE À JOUR DU MOTEUR..."
+        $BtnUpdateServer.Background = "#10B981"
+    }
+    if ($BtnUpdateUI.Tag -eq 'loading') {
+        $BtnUpdateUI.Content = "$frame MISE À JOUR DE L'INTERFACE..."
+        $BtnUpdateUI.Background = "#10B981"
+    }
+})
+$spinnerTimer.Start()
+
+# --- 8. MISE À JOUR DU MOTEUR ---
 function Update-BirdNETGo {
+    $BtnUpdateServer.Tag = 'loading'
     $BtnUpdateServer.IsEnabled = $false
-    function Refresh-UI { $window.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render) }
+    $ProgressPreference = 'SilentlyContinue'
 
     try {
-        $BtnUpdateServer.Content = "RECHERCHE DU MOTEUR..."
-        Refresh-UI
-
         $apiUrl  = "https://api.github.com/repos/tphakala/birdnet-go/releases/latest"
         $headers = @{ "User-Agent" = "PowerShell" }
         $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
@@ -226,24 +232,22 @@ function Update-BirdNETGo {
         $currentTag = if (Test-Path $VersionFile) { (Get-Content $VersionFile -Raw).Trim() } else { "0.0.0" }
 
         if ($latestTag -eq $currentTag) {
+            $BtnUpdateServer.Tag = ''
             $BtnUpdateServer.Content = "MOTEUR DÉJÀ À JOUR"
+            $BtnUpdateServer.Background = "#8B5CF6"
+            $TxtUpdateStatus.Text = "À jour (v$currentTag)"
+            $TxtUpdateStatus.Foreground = "#10B981"
             Start-Sleep -Seconds 2
             $BtnUpdateServer.Content = "METTRE À JOUR LE MOTEUR (BIRDNET-GO)"
             $BtnUpdateServer.IsEnabled = $true
             return
         }
 
-        $BtnUpdateServer.Content = "TÉLÉCHARGEMENT DU MOTEUR..."
-        Refresh-UI
-
         $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
         if (-not $asset) { throw "Aucun asset trouvé" }
 
         $tempZip = Join-Path $env:TEMP "birdnet-update.tar.gz"
         Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempZip
-
-        $BtnUpdateServer.Content = "EXTRACTION..."
-        Refresh-UI
 
         $tempDir = Join-Path $env:TEMP "birdnet-update-extract"
         if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
@@ -253,9 +257,6 @@ function Update-BirdNETGo {
         $newExe = Get-ChildItem -Path $tempDir -Filter "birdnet-go.exe" -Recurse | Select-Object -First 1
         if (-not $newExe) { throw "birdnet-go.exe introuvable" }
 
-        $BtnUpdateServer.Content = "INSTALLATION DU MOTEUR..."
-        Refresh-UI
-
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 2
 
@@ -264,37 +265,42 @@ function Update-BirdNETGo {
         Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
         Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
-        $BtnUpdateServer.Content = "REDÉMARRAGE DU SERVEUR..."
-        Refresh-UI
         Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
         Start-Sleep -Seconds 2
         Update-UI
 
+        $BtnUpdateServer.Tag = ''
         $BtnUpdateServer.Content = "MOTEUR MIS À JOUR"
+        $BtnUpdateServer.Background = "#8B5CF6"
+        $TxtUpdateStatus.Text = "À jour (v$latestTag)"
+        $TxtUpdateStatus.Foreground = "#10B981"
         Start-Sleep -Seconds 2
         $BtnUpdateServer.Content = "METTRE À JOUR LE MOTEUR (BIRDNET-GO)"
     }
     catch {
+        $BtnUpdateServer.Tag = ''
         $BtnUpdateServer.Content = "ERREUR MOTEUR"
+        $BtnUpdateServer.Background = "#EF4444"
+        $TxtUpdateStatus.Text = "Erreur de mise à jour"
+        $TxtUpdateStatus.Foreground = "#EF4444"
         Start-Sleep -Seconds 2
         $BtnUpdateServer.Content = "METTRE À JOUR LE MOTEUR (BIRDNET-GO)"
+        $BtnUpdateServer.Background = "#8B5CF6"
     }
     finally {
         $BtnUpdateServer.IsEnabled = $true
+        $ProgressPreference = 'Continue'
     }
 }
 [void]$BtnUpdateServer.Add_Click({ Update-BirdNETGo })
 
-# --- 8. LOGIQUE : MISE À JOUR DE L'INTERFACE (Frontend) ---
+# --- 9. MISE À JOUR DE L'INTERFACE ---
 function Update-Interface {
+    $BtnUpdateUI.Tag = 'loading'
     $BtnUpdateUI.IsEnabled = $false
-    function Refresh-UI { $window.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render) }
+    $ProgressPreference = 'SilentlyContinue'
 
     try {
-        $BtnUpdateUI.Content = "RECHERCHE DE L'INTERFACE..."
-        Refresh-UI
-
-        # On interroge TON dépôt pour avoir le dernier installateur
         $apiUrl  = "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest"
         $headers = @{ "User-Agent" = "PowerShell" }
         $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
@@ -302,36 +308,32 @@ function Update-Interface {
         $asset = $release.assets | Where-Object { $_.name -eq "BirdNET-Go-Windows.exe" } | Select-Object -First 1
         if (-not $asset) { throw "Installateur introuvable" }
 
-        $BtnUpdateUI.Content = "TÉLÉCHARGEMENT DE L'INTERFACE..."
-        Refresh-UI
-
         $tempInstaller = Join-Path $env:TEMP "BirdNET-Go-Update.exe"
         Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempInstaller
 
-        $BtnUpdateUI.Content = "INSTALLATION EN COURS..."
-        Refresh-UI
-
-        # On affiche un message à l'utilisateur
         [System.Windows.MessageBox]::Show("L'installateur va se lancer pour mettre à jour l'interface. L'application actuelle va se fermer.", "Mise à jour de l'interface", "OK", "Information")
-
-        # On lance l'installateur en mode silencieux et on quitte l'application actuelle
         Start-Process -FilePath $tempInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
         
-        # On quitte cette instance pour que l'installateur puisse remplacer le fichier .exe
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
         $trayIcon.Visible = $false
         [System.Windows.Application]::Current.Shutdown()
     }
     catch {
+        $BtnUpdateUI.Tag = ''
         $BtnUpdateUI.Content = "ERREUR INTERFACE"
+        $BtnUpdateUI.Background = "#EF4444"
         Start-Sleep -Seconds 2
         $BtnUpdateUI.Content = "METTRE À JOUR L'INTERFACE (CONTRÔLEUR)"
+        $BtnUpdateUI.Background = "#F59E0B"
         $BtnUpdateUI.IsEnabled = $true
+    }
+    finally {
+        $ProgressPreference = 'Continue'
     }
 }
 [void]$BtnUpdateUI.Add_Click({ Update-Interface })
 
-# --- 9. LOGIQUE DÉMARRAGE / ARRÊT ---
+# --- 10. LOGIQUE DÉMARRAGE / ARRÊT ---
 function Update-UI {
     $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
     if ($isRunning) {
@@ -368,20 +370,15 @@ function Update-UI {
     Update-UI
 })
 
-# --- 10. SYSTEM TRAY ---
+# --- 11. SYSTEM TRAY ---
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
 $IconPath = Join-Path $InstallDir "icon.ico"
-if (Test-Path $IconPath) {
-    $trayIcon.Icon = New-Object System.Drawing.Icon($IconPath)
-}
-else {
-    $trayIcon.Icon = [System.Drawing.SystemIcons]::Application
-}
+if (Test-Path $IconPath) { $trayIcon.Icon = New-Object System.Drawing.Icon($IconPath) }
+else { $trayIcon.Icon = [System.Drawing.SystemIcons]::Application }
 $trayIcon.Text = "BirdNET-Go Control Center"
 $trayIcon.Visible = $true
 
 $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
-
 [void]$trayMenu.Items.Add("🌐 Ouvrir l'interface web").Add_Click({ Start-Process "http://localhost:8080" })
 [void]$trayMenu.Items.Add("⚙️ Afficher le panneau").Add_Click({ $window.Show(); $window.WindowState = 'Normal'; $window.Activate() })
 [void]$trayMenu.Items.Add("❌ Quitter complètement").Add_Click({
@@ -390,7 +387,6 @@ $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
     try { $mutex.ReleaseMutex() } catch { }
     [System.Windows.Forms.Application]::Exit()
 })
-
 $trayIcon.ContextMenuStrip = $trayMenu
 [void]$trayIcon.Add_DoubleClick({ $window.Show(); $window.WindowState = 'Normal'; $window.Activate() })
 
@@ -403,13 +399,63 @@ $trayIcon.ContextMenuStrip = $trayMenu
     }
 })
 
-# --- 11. TIMER ---
+# --- 12. TIMER DU STATUT ---
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(500)
 [void]$timer.Add_Tick({ Update-UI })
 $timer.Start()
 
-# --- 12. DÉMARRAGE INITIAL ---
+# --- 13. VÉRIFICATION AUTOMATIQUE (Démarrage & 15h) ---
+$script:lastUpdateCheck = [DateTime]::MinValue
+
+function Check-ForUpdates {
+    $apiUrl  = "https://api.github.com/repos/tphakala/birdnet-go/releases/latest"
+    $headers = @{ "User-Agent" = "PowerShell" }
+    try {
+        $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
+        $latestTag = $release.tag_name
+        $currentTag = if (Test-Path $VersionFile) { (Get-Content $VersionFile -Raw).Trim() } else { "0.0.0" }
+        
+        if ($latestTag -ne $currentTag) {
+            $BtnUpdateServer.Content = "⚡ NOUVELLE MISE À JOUR DISPO !"
+            $BtnUpdateServer.Background = "#10B981"
+            $TxtUpdateStatus.Text = "Mise à jour disponible : $latestTag !"
+            $TxtUpdateStatus.Foreground = "#F59E0B"
+        } else {
+            $TxtUpdateStatus.Text = "À jour (v$currentTag)"
+            $TxtUpdateStatus.Foreground = "#10B981"
+        }
+    } catch {
+        $TxtUpdateStatus.Text = "Vérification impossible (hors ligne)"
+        $TxtUpdateStatus.Foreground = "#EF4444"
+    }
+    
+    $script:lastUpdateCheck = Get-Date
+}
+
+# Vérification au démarrage (après 3 secondes)
+$startupTimer = New-Object System.Windows.Threading.DispatcherTimer
+$startupTimer.Interval = [TimeSpan]::FromSeconds(3)
+$startupTimer.Add_Tick({
+    $startupTimer.Stop()
+    Check-ForUpdates
+})
+$startupTimer.Start()
+
+# Vérification toutes les minutes pour 15h00
+$dailyTimer = New-Object System.Windows.Threading.DispatcherTimer
+$dailyTimer.Interval = [TimeSpan]::FromMinutes(1)
+$dailyTimer.Add_Tick({
+    $now = Get-Date
+    if ($now.Hour -eq 15 -and $now.Minute -eq 0) {
+        if (($now - $script:lastUpdateCheck).TotalHours -gt 23) {
+            Check-ForUpdates
+        }
+    }
+})
+$dailyTimer.Start()
+
+# --- 14. DÉMARRAGE INITIAL ---
 if (-not (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
     if (Test-Path $ExePath) {
         Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
