@@ -20,7 +20,7 @@ contents:
     dst: /usr/local/bin/birdnet-go
   - src: ./dist/libtensorflowlite_c.so
     dst: /usr/local/lib/libtensorflowlite_c.so
-  # On inclut FFmpeg et FFprobe directement dans le paquet
+  # On inclut FFmpeg et FFprobe
   - src: ./dist/ffmpeg
     dst: /usr/local/bin/ffmpeg
   - src: ./dist/ffprobe
