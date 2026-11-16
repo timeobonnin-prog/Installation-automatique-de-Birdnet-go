@@ -31,7 +31,6 @@ jobs:
       - run: |
           npx prettier --write "**/*.{md,yml,yaml,json}" --ignore-path .gitignore || true
           find . -name "*.sh" -exec shfmt -w -i 2 -ci {} \; || true
-      # Voici la correction : stefanzweifel (avec un 'e')
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: auto-format [skip ci]"
@@ -40,7 +39,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
   # ============================================================
-  # 1. SUPPRIME LES RELEASES QUI ONT MOINS DE 4 FICHIERS
+  # 1. SUPPRIME LES RELEASES INCOMPLÈTES ET LES MIROIRS
   # ============================================================
   cleanup-incomplete-releases:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -55,15 +54,15 @@ jobs:
             const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
 
             for (const r of releases) {
-              // On cible uniquement les builds qui ont ce format : v20261031.001, manual-v..., nightly-v...
-              if (!r.tag_name.match(/^(?:manual-|nightly-)?v\d+\.\d+$/)) continue;
+              const isBuild = r.tag_name.match(/^(?:manual-|nightly-)?v\d+\.\d+$/);
+              const isMirror = /^\d{8}$/.test(r.tag_name); // Ex: 20261031
 
-              const fileCount = r.assets ? r.assets.length : 0;
-              if (fileCount < 4) {
+              // Si c'est un miroir (que des chiffres) OU un build avec moins de 4 fichiers
+              if (isMirror || (isBuild && r.assets.length < 4)) {
                 try {
                   await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
                   await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` });
-                  console.log(`🗑️ Supprimé (Incomplet : ${fileCount}/4 fichiers) : ${r.tag_name}`);
+                  console.log(`🗑️ Supprimé (${isMirror ? 'Miroir' : 'Incomplet'}) : ${r.tag_name}`);
                 } catch (e) {
                   console.log(`❌ Erreur (${r.tag_name}) : ${e.message}`);
                 }
@@ -86,7 +85,7 @@ jobs:
             const { owner, repo } = context.repo;
             const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
 
-            // 1. Tuer toutes les releases "manifest" ou "maintenance" (fichiers système)
+            // 1. Tuer toutes les releases "manifest" ou "maintenance"
             for (const r of releases) {
               if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) {
                 try {
@@ -99,7 +98,7 @@ jobs:
               }
             }
 
-            // 2. Nettoyer les anciennes versions (v..., manual-v..., nightly-v...)
+            // 2. Nettoyer les anciennes versions (garde le build le plus récent)
             const byVersion = {};
             for (const r of releases) {
               if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) continue;
@@ -114,7 +113,6 @@ jobs:
 
             for (const v in byVersion) {
               const group = byVersion[v].sort((a, b) => b.build - a.build);
-              // On garde l'index 0 (le plus récent), on supprime à partir de l'index 1
               for (let i = 1; i < group.length; i++) {
                 try {
                   await github.rest.repos.deleteRelease({ owner, repo, release_id: group[i].r.id });
@@ -127,7 +125,7 @@ jobs:
             }
 
   # ============================================================
-  # 3. NETTOYAGE DES TAGS ORPHELINS (sans release associée)
+  # 3. NETTOYAGE DES TAGS ORPHELINS
   # ============================================================
   cleanup-tags:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -171,10 +169,10 @@ jobs:
             const { owner, repo } = context.repo;
             const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo });
             const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open' });
-
+            
             const prot = ['main', 'master', 'gh-pages'];
             const prB = prs.map(p => p.head.ref);
-
+            
             for (const b of branches) {
               if (prot.includes(b.name) || prB.includes(b.name)) continue;
               try {
