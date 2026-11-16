@@ -1,0 +1,12 @@
+name: 💡 Demander une fonctionnalité
+description: Suggérer une idée pour l'installateur.
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Ton idée
+      description: Explique ce que tu aimerais voir ajouté.
+    validations:
+      required: true
