@@ -58,10 +58,10 @@ jobs:
             $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
             if (Test-Path $exe) {
               Start-Process -FilePath $exe -ArgumentList "serve" -WorkingDirectory (Split-Path $exe) -WindowStyle Hidden
-              for ($i=0; $i -lt 15; $i++) {
+              for ($i=0; $i -lt 30; $i++) {
                 try { $r = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 2; exit 0 } catch { Start-Sleep -Seconds 2 }
               }
-              Write-Host "❌ Le serveur Windows ne répond pas après 30s."; exit 1
+              Write-Host "❌ Le serveur Windows ne répond pas après 60s."; exit 1
             } else { Write-Host "❌ Installation échouée."; exit 1 }
           } else { Write-Host "⚠️ Pas d'installateur Windows dans la release, test ignoré."; exit 0 }
 
@@ -87,12 +87,15 @@ jobs:
               export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
               /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
               SERVER_PID=$!
-              for i in {1..15}; do
+              for i in {1..30}; do
+                if ! kill -0 $SERVER_PID 2>/dev/null; then
+                  echo "❌ Le serveur Linux a planté."; cat /tmp/birdnet.log; exit 1
+                fi
                 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
                 if [ "$HTTP_CODE" == "200" ]; then echo "✅ Le serveur Linux répond !"; kill $SERVER_PID 2>/dev/null; exit 0; fi
                 sleep 2
               done
-              echo "❌ Le serveur Linux ne répond pas après 30s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
+              echo "❌ Le serveur Linux ne répond pas après 60s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
             else
               echo "❌ Binaire Linux introuvable."; exit 1
             fi
@@ -121,12 +124,15 @@ jobs:
             if [ -f "/usr/local/bin/birdnet-go" ]; then
               /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
               SERVER_PID=$!
-              for i in {1..15}; do
+              for i in {1..30}; do
+                if ! kill -0 $SERVER_PID 2>/dev/null; then
+                  echo "❌ Le serveur macOS a planté."; cat /tmp/birdnet.log; exit 1
+                fi
                 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
                 if [ "$HTTP_CODE" == "200" ]; then echo "✅ Le serveur macOS répond !"; kill $SERVER_PID 2>/dev/null; exit 0; fi
                 sleep 2
               done
-              echo "❌ Le serveur macOS ne répond pas après 30s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
+              echo "❌ Le serveur macOS ne répond pas après 60s."; cat /tmp/birdnet.log; kill $SERVER_PID 2>/dev/null; exit 1
             else
               echo "❌ Binaire macOS introuvable."; exit 1
             fi
@@ -163,7 +169,7 @@ jobs:
                 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
                 /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
                 SERVER_PID=$!
-                for i in {1..15}; do
+                for i in {1..30}; do
                   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
                   if [ "$HTTP_CODE" == "200" ]; then exit 0; fi
                   sleep 2

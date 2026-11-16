@@ -57,8 +57,7 @@ jobs:
           echo "stable=$STABLE" >> $GITHUB_OUTPUT
           HAS_STABLE=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
 
-          # Si c'est un PUSH (modif de fichier), on force la compilation Stable !
-          if [ "${{ github.event_name }}" == "push" ] || [ -z "$HAS_STABLE" ] || [ "${{ github.event.inputs.force_build }}" == "true" ]; then
+          if [ -z "$HAS_STABLE" ] || [ "${{ github.event.inputs.force_build }}" == "true" ] || [ "${{ github.event_name }}" == "push" ]; then
             echo "build_stable=true" >> $GITHUB_OUTPUT
           else
             echo "build_stable=false" >> $GITHUB_OUTPUT
@@ -72,7 +71,6 @@ jobs:
             echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
             HAS_NIGHTLY=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"nightly-v$CLEAN_NIGHTLY\")) | .tagName" || true)
             
-            # Pour la Nightly, on compile seulement si elle n'existe pas ou si on force manuellement
             if [ -z "$HAS_NIGHTLY" ] || [ "${{ github.event.inputs.force_build }}" == "true" ] || [ "${{ github.event.inputs.build_nightly }}" == "true" ]; then
               echo "build_nightly=true" >> $GITHUB_OUTPUT
             else
@@ -243,6 +241,7 @@ jobs:
           VERSION="${{ needs.check-version.outputs.stable_tag }}"
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
+          install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
           chmod +x payload/usr/local/bin/birdnet-go
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
       - name: Upload Artifacts
@@ -305,6 +304,7 @@ jobs:
           VERSION="${{ needs.check-version.outputs.nightly_tag }}"
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
+          install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
           chmod +x payload/usr/local/bin/birdnet-go
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
       - name: Upload Artifacts
