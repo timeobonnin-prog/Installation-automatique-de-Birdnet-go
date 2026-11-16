@@ -1,41 +1,41 @@
-  # ============================================================
-  # JOB 3 : TEST LINUX (.deb)
-  # ============================================================
-  test-linux:
-    name: Test du paquet Linux x64 (.deb)
-    needs: lint-code
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Télécharger le paquet
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber
-      - name: Installer et Tester
-        run: |
-          if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
-            sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
+# ============================================================
+# JOB 3 : TEST LINUX (.deb)
+# ============================================================
+test-linux:
+  name: Test du paquet Linux x64 (.deb)
+  needs: lint-code
+  if: github.event_name == 'push' || github.event_name == 'pull_request'
+  runs-on: ubuntu-latest
+  timeout-minutes: 10
+  steps:
+    - uses: actions/checkout@v4
+    - name: Télécharger le paquet
+      env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber
+    - name: Installer et Tester
+      run: |
+        if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
+          sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
+          
+          if [ -f "/usr/local/bin/birdnet-go" ]; then
+            # On indique à Linux où chercher la bibliothèque
+            export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
             
-            if [ -f "/usr/local/bin/birdnet-go" ]; then
-              # On indique à Linux où chercher la bibliothèque
-              export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-              
-              /usr/local/bin/birdnet-go serve &
-              SERVER_PID=$!
-              sleep 5
-              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
-              
-              if [ "$HTTP_CODE" == "200" ]; then 
-                echo "✅ Le serveur Linux répond !"
-                kill $SERVER_PID 2>/dev/null || true
-                exit 0
-              else 
-                echo "❌ Le serveur Linux ne répond pas (Code: $HTTP_CODE)"
-                kill $SERVER_PID 2>/dev/null || true
-                exit 1
-              fi
-            else
+            /usr/local/bin/birdnet-go serve &
+            SERVER_PID=$!
+            sleep 5
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "000")
+            
+            if [ "$HTTP_CODE" == "200" ]; then 
+              echo "✅ Le serveur Linux répond !"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 0
+            else 
+              echo "❌ Le serveur Linux ne répond pas (Code: $HTTP_CODE)"
+              kill $SERVER_PID 2>/dev/null || true
               exit 1
             fi
+          else
+            exit 1
           fi
+        fi
