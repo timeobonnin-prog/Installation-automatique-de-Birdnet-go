@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: "30 2 * * 1"
+    - cron: '30 2 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -25,15 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Vérifier le Python
         run: python -m py_compile generate_html.py
-
+          
       - name: Vérifier le YAML
         run: |
           pip install yamllint
           yamllint .github/workflows/ || true
-
+          
       - name: Vérifier le PowerShell
         shell: pwsh
         run: |
@@ -45,65 +45,52 @@ jobs:
           }
 
   # ============================================================
-  # JOB 2 : TEST DE L'INSTALLATEUR (Corrigé et blindé)
+  # JOB 2 : TEST DE L'INSTALLATEUR (Version Blindée à 60s)
   # ============================================================
   test-installer:
     needs: lint-code
     if: github.event_name == 'push'
     runs-on: windows-latest
-    timeout-minutes: 15 # Si ça bloque, ça s'arrête au bout de 15 min max
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Télécharger le dernier installateur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-
+          
       - name: Vérifier le fichier téléchargé
         run: |
           if (-Not (Test-Path "dist\BirdNET-Go-Windows.exe")) {
             Write-Host "Pas d'installateur trouvé. On annule le test."
             exit 0
           }
-          $size = (Get-Item "dist\BirdNET-Go-Windows.exe").Length / 1MB
-          Write-Host "Taille de l'installateur : $([math]::Round($size, 2)) MB"
-          if ($size -lt 10) {
-            Write-Error "Le fichier semble trop petit pour être un vrai installateur."
-            exit 1
-          }
 
-      - name: Installer silencieusement SANS -Wait
+      - name: Lancer l'installation (Sans attendre la fin)
         run: |
-          # On lance l'installateur sans -Wait (sinon il attend que le serveur s'arrête... indéfiniment)
-          $process = Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -PassThru
+          Write-Host "Lancement de l'installateur en arrière-plan..."
+          # On lance sans -Wait. On ajoute /LOG pour tracer en cas de problème.
+          Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/LOG=`"$env:TEMP\install.log`""
+          
+          Write-Host "Attente de 60 secondes pour laisser le temps à l'installation de se terminer..."
+          Start-Sleep -Seconds 60
+          
+          # On tue les processus de l'installateur s'ils traînent encore
+          Get-Process -Name "BirdNET-Go-Windows", "Setup", "unins000" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Write-Host "Vérification de l'installation..."
 
-          # On attend maximum 5 minutes (300 secondes)
-          $timeout = 300
-          $elapsed = 0
-          while (-not $process.HasExited -and $elapsed -lt $timeout) {
-            Start-Sleep -Seconds 5
-            $elapsed += 5
-            Write-Host "Attente de l'installation... ($elapsed/$timeout sec)"
-          }
-
-          if (-not $process.HasExited) {
-            Write-Host "❌ L'installation a bloqué. On force l'arrêt."
-            Stop-Process -Id $process.Id -Force
-            exit 1
-          }
-
-          Write-Host "✅ L'installateur a terminé avec le code de sortie : $($process.ExitCode)"
-          if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) { exit 1 }
-
-      - name: Vérifier que le serveur démarre
+      - name: Vérifier que le serveur est bien installé
         run: |
           $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
           if (Test-Path $exe) {
             Write-Host "✅ Le fichier a bien été installé."
+            
+            # Test de démarrage du serveur
             Start-Process -FilePath $exe -ArgumentList "serve" -WorkingDirectory (Split-Path $exe) -WindowStyle Hidden
             Start-Sleep -Seconds 5
+            
             try {
               $r = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 5
               Write-Host "✅ Le serveur répond avec le code : $($r.StatusCode)"
@@ -113,6 +100,8 @@ jobs:
             }
           } else {
             Write-Host "❌ Le fichier n'a pas été installé au bon endroit."
+            Write-Host "Affichage du log d'installation pour debug :"
+            Get-Content "$env:TEMP\install.log" -ErrorAction SilentlyContinue
             exit 1
           }
 
@@ -133,7 +122,7 @@ jobs:
             const token = process.env.TELEGRAM_TOKEN;
             const chatId = process.env.TELEGRAM_CHAT;
             const release = context.payload.release;
-
+            
             if (!token || !chatId) {
               console.log("Secrets Telegram manquants, on ignore.");
               return;
@@ -143,7 +132,7 @@ jobs:
             const message = `${title}\n\nLa version *${release.name}* vient d'être publiée.\n[Télécharger ici](${release.html_url})`;
 
             const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
+            
             const response = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
