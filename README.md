@@ -61,6 +61,15 @@ Pour vérifier l'intégrité du fichier `.exe` (sous PowerShell) :
 
 ---
 
+## 🆘 Besoin d'aide ?
+
+Vous avez rencontré un problème lors de l'installation ?
+
+1. Vérifiez que vous avez bien lu les instructions ci-dessus.
+2. Si le problème persiste, [ouvrez une Issue](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/issues/new/choose) en précisant votre système d'exploitation et le message d'erreur.
+
+---
+
 ## 🔏 Code signing policy
 
 Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
@@ -68,15 +77,6 @@ Free code signing provided by [SignPath.io](https://signpath.io/), certificate b
 - **Committers and reviewers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
 - **Approvers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
 - **Privacy policy:** This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
-
----
-
-## 🆘 Besoin d'aide ?
-
-Vous avez rencontré un problème lors de l'installation ?
-
-1. Vérifiez que vous avez bien lu les instructions ci-dessus.
-2. Si le problème persiste, [ouvrez une Issue](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/issues/new/choose) en précisant votre système d'exploitation et le message d'erreur.
 
 ---
 
