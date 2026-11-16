@@ -47,13 +47,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Télécharger l'installateur
+        id: dl
+        shell: pwsh
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber; then
-            echo "⚠️ Pas d'installateur Windows dans la release, test ignoré."
-            exit 0
-          fi
+          gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
+          if (Test-Path "dist\BirdNET-Go-Windows.exe") {
+            echo "status=success" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "status=missing" >> $env:GITHUB_OUTPUT
+          }
       - name: Installer et Tester
+        if: steps.dl.outputs.status == 'success'
         run: |
           Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -PassThru | Out-Null
           Start-Sleep -Seconds 60
@@ -79,16 +84,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Télécharger le paquet
+        id: dl
+        shell: bash
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber; then
-            if gh release view --repo ${{ github.repository }} --json assets -q '.assets[].name' | grep -q "BirdNET-Go-Linux-x64.deb"; then
-              echo "❌ Le fichier existe mais le téléchargement a échoué."; exit 1
-            else
-              echo "⚠️ Le fichier n'existe pas dans la release."; exit 0
-            fi
+          if gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=missing" >> $GITHUB_OUTPUT
           fi
       - name: Installer et Tester
+        if: steps.dl.outputs.status == 'success'
         run: |
           sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
           export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
@@ -116,16 +122,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Télécharger le paquet
+        id: dl
+        shell: bash
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-macOS.pkg" --clobber; then
-            if gh release view --repo ${{ github.repository }} --json assets -q '.assets[].name' | grep -q "BirdNET-Go-macOS.pkg"; then
-              echo "❌ Le fichier existe mais le téléchargement a échoué."; exit 1
-            else
-              echo "⚠️ Le fichier n'existe pas dans la release."; exit 0
-            fi
+          if gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-macOS.pkg" --clobber; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=missing" >> $GITHUB_OUTPUT
           fi
       - name: Installer et Tester
+        if: steps.dl.outputs.status == 'success'
         run: |
           sudo installer -pkg BirdNET-Go-macOS.pkg -target /
           /usr/local/bin/birdnet-go serve > /tmp/birdnet.log 2>&1 &
@@ -152,16 +159,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Télécharger le paquet
+        id: dl
+        shell: bash
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          if ! gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-RaspberryPi.deb" --clobber; then
-            if gh release view --repo ${{ github.repository }} --json assets -q '.assets[].name' | grep -q "BirdNET-Go-RaspberryPi.deb"; then
-              echo "❌ Le fichier existe mais le téléchargement a échoué."; exit 1
-            else
-              echo "⚠️ Le fichier n'existe pas dans la release."; exit 0
-            fi
+          if gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-RaspberryPi.deb" --clobber; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=missing" >> $GITHUB_OUTPUT
           fi
       - name: Tester dans QEMU
+        if: steps.dl.outputs.status == 'success'
         uses: pguyot/arm-runner-action@v2.6.5
         continue-on-error: true
         with:
