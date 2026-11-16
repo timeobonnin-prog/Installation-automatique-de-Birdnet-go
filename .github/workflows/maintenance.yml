@@ -31,15 +31,106 @@ jobs:
       - run: |
           npx prettier --write "**/*.{md,yml,yaml,json}" --ignore-path .gitignore || true
           find . -name "*.sh" -exec shfmt -w -i 2 -ci {} \; || true
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: auto-format [skip ci]"
           file_pattern: "*.md *.yml *.yaml *.sh *.bat *.iss"
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
+  # ============================================================
+  # 1. SUPPRIME LES RELEASES QUI ONT MOINS DE 4 FICHIERS
+  # ============================================================
+  cleanup-incomplete-releases:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+
+            for (const r of releases) {
+              // On cible uniquement les builds qui ont ce format : v20261031.001, manual-v..., nightly-v...
+              if (!r.tag_name.match(/^(?:manual-|nightly-)?v\d+\.\d+$/)) continue;
+
+              const fileCount = r.assets ? r.assets.length : 0;
+              if (fileCount < 4) {
+                try {
+                  await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` });
+                  console.log(`🗑️ Supprimé (Incomplet : ${fileCount}/4 fichiers) : ${r.tag_name}`);
+                } catch (e) {
+                  console.log(`❌ Erreur (${r.tag_name}) : ${e.message}`);
+                }
+              }
+            }
+
+  # ============================================================
+  # 2. GARDE LA DERNIÈRE VERSION DE CHAQUE BUILD
+  # ============================================================
+  cleanup-releases:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: cleanup-incomplete-releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+
+            // 1. Tuer toutes les releases "manifest" ou "maintenance" (fichiers système)
+            for (const r of releases) {
+              if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) {
+                try {
+                  await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` });
+                  console.log(`🗑️ Supprimé (Fichier système) : ${r.tag_name}`);
+                } catch (e) {
+                  console.log(`❌ Erreur : ${e.message}`);
+                }
+              }
+            }
+
+            // 2. Nettoyer les anciennes versions (v..., manual-v..., nightly-v...)
+            const byVersion = {};
+            for (const r of releases) {
+              if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) continue;
+              
+              const m = r.tag_name.match(/^(?:manual-|nightly-)?v?(\d+)\.(\d+)$/);
+              if (m) {
+                const v = m[1];
+                if (!byVersion[v]) byVersion[v] = [];
+                byVersion[v].push({ r, build: parseInt(m[2], 10) });
+              }
+            }
+
+            for (const v in byVersion) {
+              const group = byVersion[v].sort((a, b) => b.build - a.build);
+              // On garde l'index 0 (le plus récent), on supprime à partir de l'index 1
+              for (let i = 1; i < group.length; i++) {
+                try {
+                  await github.rest.repos.deleteRelease({ owner, repo, release_id: group[i].r.id });
+                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${group[i].r.tag_name}` });
+                  console.log(`🗑️ Supprimé (Ancien build) : ${group[i].r.tag_name}`);
+                } catch (e) {
+                  console.log(`❌ Erreur : ${e.message}`);
+                }
+              }
+            }
+
+  # ============================================================
+  # 3. NETTOYAGE DES TAGS ORPHELINS (sans release associée)
+  # ============================================================
   cleanup-tags:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: cleanup-releases
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -57,88 +148,16 @@ jobs:
               if (!publishedTagNames.has(tagName)) {
                 try {
                   await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tagName}` });
-                  console.log(`Tag orphelin supprimé : ${tagName}`);
+                  console.log(`🗑️ Tag orphelin supprimé : ${tagName}`);
                 } catch (e) {
-                  console.log(`Erreur (tag orphelin ${tagName}) : ${e.message}`);
+                  console.log(`❌ Erreur (tag orphelin ${tagName}) : ${e.message}`);
                 }
               }
             }
 
-  cleanup-incomplete-releases:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { owner, repo } = context.repo;
-            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
-
-            for (const r of releases) {
-              const fileCount = r.assets ? r.assets.length : 0;
-              if (fileCount < 4) {
-                try {
-                  await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
-                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` });
-                  console.log(`Supprimé (< 4 fichiers [${fileCount}]) : ${r.tag_name}`);
-                } catch (e) {
-                  console.log(`Erreur (${r.tag_name}) : ${e.message}`);
-                }
-              }
-            }
-
-  cleanup-releases:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    needs: cleanup-incomplete-releases
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { owner, repo } = context.repo;
-            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
-
-            // 1. Tuer toutes les releases "manifest" ou "maintenance"
-            for (const r of releases) {
-              if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) {
-                try {
-                  await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
-                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${r.tag_name}` });
-                  console.log(`Supprimé (filtre) : ${r.tag_name}`);
-                } catch (e) {
-                  console.log(`Erreur : ${e.message}`);
-                }
-              }
-            }
-
-            // 2. Nettoyer les anciennes versions (v..., manual-v..., nightly-v...)
-            const byVersion = {};
-            for (const r of releases) {
-              if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) continue;
-              const m = r.tag_name.match(/^(?:manual-|nightly-)?v?(\d+)\.(\d+)$/);
-              if (m) {
-                const v = m[1];
-                if (!byVersion[v]) byVersion[v] = [];
-                byVersion[v].push({ r, build: parseInt(m[2], 10) });
-              }
-            }
-            for (const v in byVersion) {
-              const group = byVersion[v].sort((a, b) => b.build - a.build);
-              for (let i = 1; i < group.length; i++) {
-                try {
-                  await github.rest.repos.deleteRelease({ owner, repo, release_id: group[i].r.id });
-                  await github.rest.git.deleteRef({ owner, repo, ref: `tags/${group[i].r.tag_name}` });
-                  console.log(`Supprimé : ${group[i].r.tag_name}`);
-                } catch (e) {
-                  console.log(`Erreur : ${e.message}`);
-                }
-              }
-            }
-
+  # ============================================================
+  # 4. NETTOYAGE DES BRANCHES INUTILES
+  # ============================================================
   cleanup-branches:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -151,11 +170,16 @@ jobs:
             const { owner, repo } = context.repo;
             const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo });
             const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open' });
+            
             const prot = ['main', 'master', 'gh-pages'];
             const prB = prs.map(p => p.head.ref);
+            
             for (const b of branches) {
               if (prot.includes(b.name) || prB.includes(b.name)) continue;
               try {
                 await github.rest.git.deleteRef({ owner, repo, ref: `heads/${b.name}` });
-              } catch (e) {}
+                console.log(`🗑️ Branche supprimée : ${b.name}`);
+              } catch (e) {
+                console.log(`❌ Erreur : ${e.message}`);
+              }
             }
