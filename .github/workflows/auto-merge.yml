@@ -14,10 +14,9 @@ jobs:
     if: github.actor == 'dependabot[bot]' || github.actor == github.repository_owner
     runs-on: ubuntu-latest
     steps:
-      - name: Récupérer les infos de la PR
+      - name: Récupérer les infos de la PR (Dependabot)
         id: metadata
         uses: dependabot/fetch-metadata@v2
-        # On ne récupère les métadonnées QUE si c'est Dependabot
         if: github.actor == 'dependabot[bot]'
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
