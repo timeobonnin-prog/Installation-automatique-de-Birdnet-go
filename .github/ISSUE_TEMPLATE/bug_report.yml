@@ -1,0 +1,28 @@
+name: 🐛 Signaler un bug
+description: Créer un rapport pour m'aider à améliorer l'installateur.
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Merci de prendre le temps de remplir ce formulaire !"
+  - type: input
+    id: os
+    attributes:
+      label: Système d'exploitation
+      description: Sur quel OS as-tu rencontré le problème ?
+      placeholder: ex. Windows 11, Ubuntu 22.04, macOS...
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description du problème
+      description: Décris ce qui s'est passé et ce à quoi tu t'attendais.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Message d'erreur (Logs)
+      description: Colle ici le message d'erreur ou la capture d'écran.
