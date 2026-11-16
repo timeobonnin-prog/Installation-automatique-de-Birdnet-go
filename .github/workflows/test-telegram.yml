@@ -1,0 +1,48 @@
+name: Test Telegram Notification
+
+on:
+  workflow_dispatch: # Uniquement manuel
+
+jobs:
+  test-telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Envoyer un message de test
+        uses: actions/github-script@v7
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        with:
+          script: |
+            const token = process.env.TELEGRAM_TOKEN;
+            const chatId = process.env.TELEGRAM_CHAT;
+
+            if (!token || !chatId) {
+              core.setFailed("❌ Erreur : Les secrets TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID sont manquants dans les paramètres du dépôt.");
+              return;
+            }
+
+            const message = "🚀 *Test de notification Telegram réussi !*\n\nL'intégration GitHub Actions ↔ Telegram fonctionne parfaitement. Tu recevras tes prochaines alertes ici.";
+
+            const url = `https://api.telegram.org/bot${token}/sendMessage`;
+
+            try {
+              const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: message,
+                  parse_mode: 'Markdown'
+                })
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                core.setFailed(`❌ Erreur de l'API Telegram : ${errorText}`);
+              } else {
+                console.log("✅ Message Telegram envoyé avec succès !");
+              }
+            } catch (error) {
+              core.setFailed(`❌ Erreur réseau : ${error.message}`);
+            }
