@@ -365,7 +365,7 @@ jobs:
             *.deb
             *.pkg
 
-  publish-release:
+    publish-release:
     needs:
       [
         check-version,
@@ -374,8 +374,7 @@ jobs:
         build-linux-mac-stable,
         build-linux-mac-nightly,
       ]
-    # CORRECTION MAJEURE : Suppression de "always()".
-    # Si un build (ex: Windows) échoue, la publication est annulée pour éviter les releases partielles.
+    # On exécute cette étape même si certains builds ont échoué, pour au moins publier ce qui a réussi
     if: |
       !cancelled() && 
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true')
@@ -384,6 +383,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ==========================================
+      # GESTION DE LA VERSION STABLE
+      # ==========================================
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
@@ -392,14 +394,20 @@ jobs:
           pattern: stable-*
           merge-multiple: true
 
-      - name: Verify Stable Artifacts
+      - name: Verify Stable Artifacts Completeness
         if: needs.check-version.outputs.build_stable == 'true'
+        id: verify_stable
         run: |
-          echo "Fichiers stables téléchargés :"
-          ls -la all-files/
-          if [ ! -f "all-files/BirdNET-Go-Windows.exe" ]; then
-            echo "::error::L'installateur Windows (BirdNET-Go-Windows.exe) est manquant dans les artefacts stables. La publication est annulée pour éviter une release incomplète."
-            exit 1
+          echo "📦 Fichiers stables téléchargés :"
+          ls -la all-files/ || true
+          
+          # Vérifie la présence des 3 fichiers principaux
+          if [ -f "all-files/BirdNET-Go-Windows.exe" ] && [ -f "all-files/BirdNET-Go-Linux-x64.deb" ] && [ -f "all-files/BirdNET-Go-macOS.pkg" ]; then
+            echo "is_complete=true" >> $GITHUB_OUTPUT
+            echo "✅ Tous les fichiers sont présents. La release sera marquée comme 'latest'."
+          else
+            echo "is_complete=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Fichiers manquants (probablement Windows.exe). La release sera publiée en 'prerelease' pour ne pas écraser la version stable actuelle."
           fi
 
       - name: Publish Stable Release
@@ -407,13 +415,21 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
-          name: "Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}"
+          # Ajoute un avertissement visuel dans le titre si incomplet
+          name: "Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ${{ steps.verify_stable.outputs.is_complete == 'false' && '⚠️ INCOMPLET (PRERELEASE)' || '✅' }}"
           files: all-files/*
-          make_latest: true
+          # DEVIENT "latest" SEULEMENT SI TOUT EST PRÉSENT
+          make_latest: ${{ steps.verify_stable.outputs.is_complete == 'true' }}
+          # DEVIENT "prerelease" SI DES FICHIERS MANQUENT
+          prerelease: ${{ steps.verify_stable.outputs.is_complete == 'false' }}
           generate_release_notes: true
+          body: ${{ steps.verify_stable.outputs.is_complete == 'false' && '⚠️ **ATTENTION** : Cette publication est incomplète (fichier Windows manquant). Elle est marquée comme prerelease pour protéger la dernière version stable fonctionnelle. Vérifiez le job `build-windows-stable`.' || '🎉 Publication complète et stable de toutes les plateformes (Windows, Linux, macOS).' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
+      # ==========================================
+      # GESTION DE LA VERSION NIGHTLY
+      # ==========================================
       - name: Download Nightly artifacts
         if: needs.check-version.outputs.build_nightly == 'true'
         uses: actions/download-artifact@v4
@@ -422,14 +438,17 @@ jobs:
           pattern: nightly-*
           merge-multiple: true
 
-      - name: Verify Nightly Artifacts
+      - name: Verify Nightly Artifacts Completeness
         if: needs.check-version.outputs.build_nightly == 'true'
+        id: verify_nightly
         run: |
-          echo "Fichiers nightly téléchargés :"
-          ls -la all-files-nightly/
-          if [ ! -f "all-files-nightly/BirdNET-Go-Windows.exe" ]; then
-            echo "::error::L'installateur Windows (BirdNET-Go-Windows.exe) est manquant dans les artefacts nightly. La publication est annulée pour éviter une release incomplète."
-            exit 1
+          echo "📦 Fichiers nightly téléchargés :"
+          ls -la all-files-nightly/ || true
+          
+          if [ -f "all-files-nightly/BirdNET-Go-Windows.exe" ]; then
+            echo "is_complete=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_complete=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Publish Nightly Release
@@ -437,10 +456,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly-v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
-          name: "Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}"
+          name: "Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }} ${{ steps.verify_nightly.outputs.is_complete == 'false' && '⚠️ INCOMPLET' || '' }}"
           files: all-files-nightly/*
-          prerelease: true
           make_latest: false
+          prerelease: true
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
