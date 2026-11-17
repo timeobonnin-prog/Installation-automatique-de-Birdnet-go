@@ -154,10 +154,10 @@ jobs:
             const { owner, repo } = context.repo;
             const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo });
             const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open' });
-            
+
             const prot = ['main', 'master', 'gh-pages'];
             const prB = prs.map(p => p.head.ref);
-            
+
             for (const b of branches) {
               if (prot.includes(b.name) || prB.includes(b.name)) continue;
               try {
