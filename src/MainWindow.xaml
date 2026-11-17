@@ -5,9 +5,29 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" WindowStartupLocation="CenterScreen">
     
+    <!-- Style réutilisable pour des boutons aux bords arrondis -->
+    <Window.Resources>
+        <Style x:Key="RoundedButton" TargetType="Button">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="8" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+    </Window.Resources>
+
     <Border Background="#1E1E2E" CornerRadius="12" BorderBrush="#313244" BorderThickness="1">
         <DockPanel>
-            <!-- Title Bar -->
+            <!-- Barre de titre -->
             <Border x:Name="TitleBar" DockPanel.Dock="Top" Background="#313244" CornerRadius="12,12,0,0" Padding="12,8">
                 <Grid>
                     <TextBlock Text="BirdNET-Go" Foreground="#CDD6F4" FontWeight="Bold" VerticalAlignment="Center" FontSize="14"/>
@@ -18,9 +38,9 @@
                 </Grid>
             </Border>
 
-            <!-- Main Content -->
+            <!-- Contenu principal -->
             <StackPanel Margin="24">
-                <!-- Status Indicator -->
+                <!-- Indicateur de statut -->
                 <Border Background="#313244" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse x:Name="StatusDot" Width="12" Height="12" Fill="#F38BA8" Margin="0,0,12,0"/>
@@ -28,15 +48,15 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Server Controls -->
-                <Button x:Name="BtnToggle" Content="DÉMARRER LE SERVEUR" Background="#10B981" Foreground="White" FontWeight="Bold" Padding="16" CornerRadius="8" Click="OnToggle" Cursor="Hand" Margin="0,0,0,16"/>
-                <Button x:Name="BtnOpen" Content="🌐 Ouvrir l'interface web" Background="#45475A" Foreground="#CDD6F4" Padding="16" CornerRadius="8" Click="OnOpen" IsEnabled="False" Cursor="Hand" Margin="0,0,0,24"/>
+                <!-- Contrôles du serveur -->
+                <Button x:Name="BtnToggle" Content="DÉMARRER LE SERVEUR" Background="#10B981" Padding="16" Click="OnToggle" Margin="0,0,0,16" Style="{StaticResource RoundedButton}"/>
+                <Button x:Name="BtnOpen" Content="🌐 Ouvrir l'interface web" Background="#45475A" Foreground="#CDD6F4" Padding="16" Click="OnOpen" IsEnabled="False" Margin="0,0,0,24" Style="{StaticResource RoundedButton}"/>
 
-                <!-- Update Section -->
+                <!-- Section Mise à jour -->
                 <Border Background="#313244" CornerRadius="8" Padding="16">
                     <StackPanel>
                         <TextBlock x:Name="TxtUpdateStatus" Text="Vérification des mises à jour..." Foreground="#A6ADC8" HorizontalAlignment="Center" FontSize="13" Margin="0,0,0,12"/>
-                        <Button x:Name="BtnUpdate" Content="METTRE À JOUR BIRDNET-GO" Background="#8B5CF6" Foreground="White" FontWeight="Bold" Padding="16" CornerRadius="8" Click="OnUpdate" Cursor="Hand"/>
+                        <Button x:Name="BtnUpdate" Content="METTRE À JOUR BIRDNET-GO" Background="#8B5CF6" Padding="16" Click="OnUpdate" Style="{StaticResource RoundedButton}"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
