@@ -5,12 +5,11 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <ImplicitUsings>disable</ImplicitUsings> <!-- ON DÉSACTIVE POUR ÉVITER LES CONFLITS -->
     <ApplicationIcon>..\icon.ico</ApplicationIcon>
     <AssemblyName>BirdNET-Go-Control</AssemblyName>
     <RootNamespace>BirdNETGoControl</RootNamespace>
     
-    <!-- Optimisations -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
