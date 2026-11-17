@@ -21,71 +21,56 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Nettoyage de mes anciennes releases
+      - name: Nettoyage des miroirs et tri par version officielle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LOCAL: ${{ github.repository }}
         run: |
-          set -e
-          # Récupère votre dernière version stable (commençant par v, ex: v20261031.100)
-          LAST_STABLE=$(gh release list --repo "$LOCAL" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName' || echo "")
+          python3 - << 'EOF'
+          import os, re, json, subprocess
 
-          # Récupère votre dernière nightly (commençant par nightly-v)
-          LAST_NIGHTLY=$(gh release list --repo "$LOCAL" --exclude-drafts --pre-releases --limit 20 --json tagName -q '.[].tagName' | grep -E '^nightly-v' | head -n 1 || echo "")
+          repo = os.environ["LOCAL"]
+          
+          # Récupère toutes les releases via l'API GitHub
+          raw = subprocess.check_output(["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]).decode()
+          releases = json.loads(raw)
 
-          KEEP="$LAST_STABLE $LAST_NIGHTLY"
-          echo "Versions conservées : $KEEP"
+          # Regex pour tes versions : v<officiel>.<build> ou nightly-v<officiel>.<build>
+          pattern = re.compile(r'^(nightly-v|v)([^.]+)\.(\d+)$')
 
-          # Supprime vos anciennes releases (sauf les manuelles, la dernière stable et la dernière nightly)
-          ALL_LOCAL_TAGS=$(gh api "repos/$LOCAL/releases?per_page=100" --jq '.[].tag_name' | grep -vE '^manual-' || echo "")
+          grouped = {}
+          to_delete = []
 
-          for tag in $ALL_LOCAL_TAGS; do
-            if ! echo "$KEEP" | tr ' ' '\n' | grep -qx "$tag"; then
-              echo "Suppression de l'ancienne release : $tag"
-              gh release delete "$tag" --repo "$LOCAL" --yes --cleanup-tag || true
-            fi
-          done
+          for r in releases:
+              tag = r["tag_name"]
+              
+              # 1. On ne touche jamais aux versions manuelles
+              if tag.startswith("manual-"):
+                  print(f"[CONSERVÉ - Manuel] {tag}")
+                  continue
 
-  update-html:
-    needs: cleanup-releases
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
+              match = pattern.match(tag)
+              if not match:
+                  # 2. Tout ce qui ne correspond pas à ton format (ex: 3496620, 20261031...) est un miroir -> suppression
+                  print(f"[À SUPPRIMER - Miroir/Non-conforme] {tag}")
+                  to_delete.append(tag)
+              else:
+                  prefix, base_ver, build_str = match.groups()
+                  build_num = int(build_str)
+                  key = f"{prefix}{base_ver}" # Ex: "v20261031" ou "nightly-v20261101"
+                  grouped.setdefault(key, []).append((build_num, tag))
 
-      - name: Fetch releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
+          # 3. Pour chaque version officielle, on ne garde que le build le plus élevé
+          for key, items in grouped.items():
+              items.sort(key=lambda x: x[0], reverse=True) # Trie du plus grand build au plus petit
+              best_build, best_tag = items[0]
+              print(f"[CONSERVÉ - Dernier build de {key}] {best_tag}")
+              
+              for old_build, old_tag in items[1:]:
+                  print(f"[À SUPPRIMER - Ancien build de {key}] {old_tag}")
+                  to_delete.append(old_tag)
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Generate index.html
-        run: python3 generate_html.py
-
-      - name: Commit index.html
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html
-          if git diff --staged --quiet; then
-            echo "Aucun changement sur index.html"
-          else
-            git commit -m "chore: update index.html [skip ci]"
-            git push || true
-          fi
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: "."
-
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v5
+          # Exécution des suppressions
+          for tag in to_delete:
+              print(f"Suppression définitive de {tag}...")
+              subprocess.run(["gh", "release", "delete", tag, "--repo", repo, "--yes", "--cleanup-
