@@ -1,39 +1,32 @@
 using System;
 using System.IO;
-using System.Windows;
 
-namespace BirdNETGoControl;
-
-public partial class App : Application
+namespace BirdNETGoControl
 {
-    /// <summary>
-    /// Méthode de journalisation centralisée pour l'application.
-    /// </summary>
-    public static void Log(string message)
+    // Héritage explicite de WPF Application pour éviter le conflit avec WinForms
+    public partial class App : System.Windows.Application
     {
-        try
+        public static void Log(string message)
         {
-            // Détermine le répertoire de l'application
-            string appDir = AppDomain.CurrentDomain.BaseDirectory;
-            string logDir = Path.Combine(appDir, "logs");
-            
-            // Crée le dossier logs s'il n'existe pas
-            if (!Directory.Exists(logDir))
+            try
             {
-                Directory.CreateDirectory(logDir);
+                string appDir = System.AppDomain.CurrentDomain.BaseDirectory;
+                string logDir = System.IO.Path.Combine(appDir, "logs");
+                
+                if (!System.IO.Directory.Exists(logDir))
+                {
+                    System.IO.Directory.CreateDirectory(logDir);
+                }
+                
+                string logFile = System.IO.Path.Combine(logDir, $"app_{System.DateTime.Now:yyyyMMdd}.log");
+                string logEntry = $"[{System.DateTime.Now:HH:mm:ss}] {message}{System.Environment.NewLine}";
+                
+                System.IO.File.AppendAllText(logFile, logEntry);
             }
-            
-            // Nom du fichier de log basé sur la date du jour
-            string logFile = Path.Combine(logDir, $"app_{DateTime.Now:yyyyMMdd}.log");
-            string logEntry = $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}";
-            
-            // Ajoute le message au fichier
-            File.AppendAllText(logFile, logEntry);
-        }
-        catch
-        {
-            // En cas d'échec d'écriture (ex: permissions), on ignore silencieusement 
-            // pour éviter de faire planter l'application à cause du système de log.
+            catch
+            {
+                // Échec silencieux pour ne jamais bloquer l'application à cause du logging
+            }
         }
     }
 }
