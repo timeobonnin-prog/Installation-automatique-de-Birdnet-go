@@ -8,7 +8,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: "30 2 * * 1"
+    - cron: '30 2 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -17,9 +17,6 @@ permissions:
   actions: read
 
 jobs:
-  # ============================================================
-  # JOB 1 : LINT
-  # ============================================================
   lint-code:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -35,9 +32,6 @@ jobs:
           $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error
           if ($results) { $results | Format-Table -AutoSize; exit 1 }
 
-  # ============================================================
-  # JOB 2 : TEST WINDOWS (.exe) - Serveur complet
-  # ============================================================
   test-windows:
     name: Test de l'installateur Windows (.exe)
     needs: lint-code
@@ -89,9 +83,6 @@ jobs:
             } else { Write-Host "❌ Installation échouée."; exit 1 }
           } else { Write-Host "⚠️ Pas d'installateur Windows."; exit 0 }
 
-  # ============================================================
-  # JOB 3 : TEST LINUX (.deb) - Vérification du binaire
-  # ============================================================
   test-linux:
     name: Test du paquet Linux x64 (.deb)
     needs: lint-code
@@ -109,7 +100,6 @@ jobs:
           if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
             sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
             export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-            # On vérifie que le binaire s'exécute (charge les bibliothèques .so)
             /usr/local/bin/birdnet-go authors
             echo "✅ Le binaire Linux s'exécute correctement (bibliothèques OK)."
           else
@@ -117,9 +107,6 @@ jobs:
             exit 0
           fi
 
-  # ============================================================
-  # JOB 4 : TEST MACOS (.pkg) - Vérification du binaire
-  # ============================================================
   test-macos:
     name: Test du paquet macOS (.pkg)
     needs: lint-code
@@ -136,7 +123,6 @@ jobs:
         run: |
           if [ -f "BirdNET-Go-macOS.pkg" ]; then
             sudo installer -pkg BirdNET-Go-macOS.pkg -target /
-            # On vérifie que le binaire s'exécute (charge les bibliothèques .dylib)
             /usr/local/bin/birdnet-go authors
             echo "✅ Le binaire macOS s'exécute correctement (bibliothèques OK)."
           else
@@ -144,9 +130,6 @@ jobs:
             exit 0
           fi
 
-  # ============================================================
-  # JOB 5 : TEST RASPBERRY PI (.deb)
-  # ============================================================
   test-raspberry:
     name: Test du paquet Raspberry Pi (.deb)
     needs: lint-code
@@ -168,9 +151,6 @@ jobs:
             echo "⚠️ Pas de paquet Raspberry Pi, test ignoré."
           fi
 
-  # ============================================================
-  # JOB 6 : SÉCURITÉ CODEQL
-  # ============================================================
   codeql-analysis:
     if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
@@ -182,9 +162,6 @@ jobs:
         with: { languages: python }
       - uses: github/codeql-action/analyze@v3
 
-  # ============================================================
-  # JOB 7 : NOTIFICATION TELEGRAM
-  # ============================================================
   notify-telegram:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
