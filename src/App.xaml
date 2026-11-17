@@ -3,6 +3,5 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <!-- Les ressources globales peuvent être ajoutées ici si nécessaire -->
     </Application.Resources>
 </Application>
