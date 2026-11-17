@@ -30,47 +30,89 @@ jobs:
           import os, re, json, subprocess
 
           repo = os.environ["LOCAL"]
+          cmd = ["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]
+          releases = json.loads(subprocess.check_output(cmd).decode())
 
-          # Récupère toutes les releases via l'API GitHub
-          raw = subprocess.check_output(["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]).decode()
-          releases = json.loads(raw)
-
-          # Regex pour tes versions : v<officiel>.<build> ou nightly-v<officiel>.<build>
           pattern = re.compile(r'^(nightly-v|v)([^.]+)\.(\d+)$')
-
           grouped = {}
           to_delete = []
 
           for r in releases:
               tag = r["tag_name"]
-              
-              # 1. On ne touche jamais aux versions manuelles
               if tag.startswith("manual-"):
                   print(f"[CONSERVÉ - Manuel] {tag}")
                   continue
 
               match = pattern.match(tag)
               if not match:
-                  # 2. Tout ce qui ne correspond pas à ton format (ex: 3496620, 20261031...) est un miroir -> suppression
-                  print(f"[À SUPPRIMER - Miroir/Non-conforme] {tag}")
+                  print(f"[À SUPPRIMER - Miroir] {tag}")
                   to_delete.append(tag)
               else:
                   prefix, base_ver, build_str = match.groups()
-                  build_num = int(build_str)
-                  key = f"{prefix}{base_ver}" # Ex: "v20261031" ou "nightly-v20261101"
-                  grouped.setdefault(key, []).append((build_num, tag))
+                  key = f"{prefix}{base_ver}"
+                  grouped.setdefault(key, []).append((int(build_str), tag))
 
-          # 3. Pour chaque version officielle, on ne garde que le build le plus élevé
           for key, items in grouped.items():
-              items.sort(key=lambda x: x[0], reverse=True) # Trie du plus grand build au plus petit
-              best_build, best_tag = items[0]
-              print(f"[CONSERVÉ - Dernier build de {key}] {best_tag}")
-              
-              for old_build, old_tag in items[1:]:
-                  print(f"[À SUPPRIMER - Ancien build de {key}] {old_tag}")
+              items.sort(key=lambda x: x[0], reverse=True)
+              print(f"[CONSERVÉ - Dernier de {key}] {items[0][1]}")
+              for _, old_tag in items[1:]:
+                  print(f"[À SUPPRIMER - Ancien de {key}] {old_tag}")
                   to_delete.append(old_tag)
 
-          # Exécution des suppressions
           for tag in to_delete:
-              print(f"Suppression définitive de {tag}...")
-              subprocess.run(["gh", "release", "delete", tag, "--repo", repo, "--yes", "--cleanup-
+              print(f"Suppression de {tag}...")
+              del_cmd = ["gh", "release", "delete", tag, "--repo", repo, "--yes", "--cleanup-tag"]
+              subprocess.run(del_cmd, check=False)
+          EOF
+
+  update-html:
+    needs: cleanup-releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch releases & Vérification HTML
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
+          python3 generate_html.py
+
+          if [ ! -s index.html ]; then
+            echo "❌ Erreur : index.html est vide ou introuvable !"
+            exit 1
+          fi
+          if ! grep -qi "<html" index.html || ! grep -qi "</html>" index.html; then
+            echo "❌ Erreur : index.html semble corrompu !"
+            exit 1
+          fi
+          echo "✅ Vérification HTML réussie !"
+
+      - name: Commit index.html
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --staged --quiet; then
+            echo "Aucun changement sur index.html"
+          else
+            git commit -m "chore: update index.html [skip ci]"
+            git push || true
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
