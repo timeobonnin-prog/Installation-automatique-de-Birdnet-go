@@ -30,28 +30,25 @@ if ([string]::IsNullOrWhiteSpace($InstallDir)) {
 $InstallDir  = $InstallDir.TrimEnd('\')
 $ExePath     = Join-Path $InstallDir "birdnet-go.exe"
 $UiExePath   = Join-Path $InstallDir "BirdNET-Go-Control.exe"
-$UiVersionFile = Join-Path $InstallDir "UI_VERSION.txt" # Nouveau fichier
+$UiVersionFile = Join-Path $InstallDir "UI_VERSION.txt"
 $VersionFile = Join-Path $InstallDir "VERSION.txt"
 $LogDir      = Join-Path $env:LOCALAPPDATA "BirdNET-Go"
 $LogFile     = Join-Path $LogDir "tray.log"
 
-# Création du dossier de logs s'il n'existe pas
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
 
-# Fonction de log
 function Write-Log {
     param([string]$Message)
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $line = "[$timestamp] $Message"
-    try { Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue } catch {}
+    try { Add-Content -Path $LogFile -Value "[$timestamp] $Message" -ErrorAction SilentlyContinue } catch {}
 }
 
 Write-Log "Démarrage de l'interface BirdNET-Go."
 
-# Variables pour la surveillance des crashs et Telegram
 $script:crashCount = 0
 $script:wasRunning = $false
 $script:lastTelegramTime = [DateTime]::MinValue
+$script:updateAvailable = $false
 
 # --- 4. Interface XAML ---
 $xaml = @"
@@ -204,13 +201,11 @@ $LinkReleases  = $window.FindName("LinkReleases")
 [void]$TitleBar.Add_MouseLeftButtonDown({ $window.DragMove() })
 [void]$BtnMinimize.Add_Click({ $window.WindowState = 'Minimized' })
 
-# --- 5. FERMETURE ---
 [void]$BtnClose.Add_Click({
     $window.Hide()
     [void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "L'application continue de tourner en arrière-plan.", [System.Windows.Forms.ToolTipIcon]::Info)
 })
 
-# --- 6. LIENS ---
 [void]$LinkGitHub.Add_MouseLeftButtonUp({ Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go" })
 [void]$LinkReleases.Add_MouseLeftButtonUp({ Start-Process "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" })
 [void]$BtnOpen.Add_Click({ Start-Process "http://localhost:8080" })
@@ -218,73 +213,38 @@ $LinkReleases  = $window.FindName("LinkReleases")
 # --- 7. NOTIFICATION TELEGRAM (Anti-Spam) ---
 function Send-TelegramNotification {
     param([string]$Message)
-    
-    if ((Get-Date).Subtract($script:lastTelegramTime).TotalMinutes -lt 5) {
-        Write-Log "Notification Telegram ignorée (anti-spam)."
-        return
-    }
+    if ((Get-Date).Subtract($script:lastTelegramTime).TotalMinutes -lt 5) { return }
 
-    # ⚠️ REMPLACE CES VALEURS PAR TES VRAIS SECRETS TELEGRAM
-    $botToken = "TON_BOT_TOKEN"
-    $chatId = "TON_CHAT_ID"
+    $botToken = "TON_BOT_TOKEN" # À REMPLACER
+    $chatId = "TON_CHAT_ID"   # À REMPLACER
     
     try {
         $url = "https://api.telegram.org/bot$botToken/sendMessage"
         $body = @{ chat_id = $chatId; text = $Message; parse_mode = "Markdown" } | ConvertTo-Json
-        Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType "application/json" | Out-Null
+        Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType "application/json" -TimeoutSec 5 | Out-Null
         $script:lastTelegramTime = Get-Date
-        Write-Log "Notification Telegram envoyée."
-    } catch {
-        Write-Log "Échec de l'envoi de la notification Telegram : $_"
-    }
+    } catch {}
 }
 
-# --- 8. SPINNER ANIMÉ ---
-$script:spinnerFrames = @('⟳', '⟲')
-$script:spinnerIndex = 0
-$spinnerTimer = New-Object System.Windows.Threading.DispatcherTimer
-$spinnerTimer.Interval = [TimeSpan]::FromMilliseconds(300)
-[void]$spinnerTimer.Add_Tick({
-    $script:spinnerIndex = ($script:spinnerIndex + 1) % 2
-    $frame = $script:spinnerFrames[$script:spinnerIndex]
-    
-    if ($BtnUpdate.Tag -eq 'loading') {
-        $BtnUpdate.Content = "$frame MISE À JOUR EN COURS..."
-        $BtnUpdate.Background = "#10B981"
-    }
-})
-$spinnerTimer.Start()
-
-# --- 9. MISE À JOUR GLOBALE ---
+# --- 8. MISE À JOUR GLOBALE ---
 function Update-All {
     $ProgressPreference = 'SilentlyContinue'
-    
     try {
-        $apiUrl  = "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest"
-        $headers = @{ "User-Agent" = "PowerShell" }
-        $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
-        
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" -Headers @{ "User-Agent" = "PowerShell" } -TimeoutSec 5
         $asset = $release.assets | Where-Object { $_.name -eq "BirdNET-Go-Windows.exe" } | Select-Object -First 1
         if (-not $asset) { throw "Installateur introuvable" }
 
         $tempInstaller = Join-Path $env:TEMP "BirdNET-Go-Update.exe"
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempInstaller
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempInstaller -TimeoutSec 300
 
         $msg = "Une nouvelle version est disponible. L'application va se fermer (y compris l'icône dans la barre des tâches) pour lancer l'installateur. Voulez-vous continuer ?"
         $result = [System.Windows.MessageBox]::Show($msg, "Mise à jour disponible", "YesNo", "Question")
         
-        if ($result -eq "No") {
-            $BtnUpdate.Tag = ''
-            $BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO"
-            $BtnUpdate.Background = "#8B5CF6"
-            $BtnUpdate.IsEnabled = $true
-            return
-        }
+        if ($result -eq "No") { return }
 
-        $BtnUpdate.Tag = 'loading'
+        $BtnUpdate.Content = "MISE À JOUR..."
         $BtnUpdate.IsEnabled = $false
-        
-        Write-Log "Lancement de l'installateur de mise à jour."
+        $BtnUpdate.Background = "#10B981"
         
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
         $trayIcon.Visible = $false
@@ -294,85 +254,62 @@ function Update-All {
         [System.Windows.Application]::Current.Shutdown()
     }
     catch {
-        Write-Log "Erreur mise à jour : $_"
-        $BtnUpdate.Tag = ''
-        $BtnUpdate.Content = "ERREUR DE MISE À JOUR"
+        $BtnUpdate.Content = "ERREUR MISE À JOUR"
         $BtnUpdate.Background = "#EF4444"
-        $TxtUpdateStatus.Text = "Erreur : impossible de contacter GitHub"
-        $TxtUpdateStatus.Foreground = "#EF4444"
         Start-Sleep -Seconds 3
         $BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO"
         $BtnUpdate.Background = "#8B5CF6"
         $BtnUpdate.IsEnabled = $true
     }
-    finally {
-        $ProgressPreference = 'Continue'
-    }
 }
 [void]$BtnUpdate.Add_Click({ Update-All })
 
-# --- 10. LOGIQUE DÉMARRAGE / ARRÊT & SURVEILLANCE DES CRASHS ---
+# --- 9. LOGIQUE DÉMARRAGE / ARRÊT & CRASHS ---
 function Update-UI {
     $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
     
     if ($script:wasRunning -and -not $isRunning) {
         $script:crashCount++
-        Write-Log "⚠️ Le serveur a planté ! (Fois : $script:crashCount)"
-        
         if ($script:crashCount -le 3) {
-            Write-Log "Redémarrage automatique du serveur ($($script:crashCount)/3)..."
             Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
-            Send-TelegramNotification "⚠️ *BirdNET-Go a planté !*`nRedémarrage automatique en cours ($($script:crashCount)/3)."
+            Send-TelegramNotification "⚠️ *BirdNET-Go a planté !* Redémarrage ($($script:crashCount)/3)."
         } else {
-            Write-Log "❌ Le serveur a planté 3 fois. Arrêt des tentatives."
-            Send-TelegramNotification "❌ *BirdNET-Go a planté 3 fois de suite.*`nArrêt des redémarrages automatiques."
+            Send-TelegramNotification "❌ *BirdNET-Go a planté 3 fois.* Arrêt des redémarrages."
         }
     }
-    
     if ($isRunning) { $script:crashCount = 0 }
     $script:wasRunning = $isRunning
 
     if ($isRunning) {
-        $TxtStatus.Text       = "EN LIGNE"
-        $TxtStatus.Foreground = "#10B981"
-        $StatusDot.Fill       = "#10B981"
-        $BtnToggle.Content    = "ARRÊTER LE SERVEUR"
-        $BtnToggle.Background = "#E11D48"
-        $BtnOpen.IsEnabled    = $true
-        $BtnOpen.Opacity      = 1
+        $TxtStatus.Text = "EN LIGNE"; $TxtStatus.Foreground = "#10B981"
+        $StatusDot.Fill = "#10B981"
+        $BtnToggle.Content = "ARRÊTER LE SERVEUR"; $BtnToggle.Background = "#E11D48"
+        $BtnOpen.IsEnabled = $true; $BtnOpen.Opacity = 1
     }
     else {
-        $TxtStatus.Text       = "HORS LIGNE"
-        $TxtStatus.Foreground = "#EF4444"
-        $StatusDot.Fill       = "#EF4444"
-        $BtnToggle.Content    = "DÉMARRER LE SERVEUR"
-        $BtnToggle.Background = "#10B981"
-        $BtnOpen.IsEnabled    = $false
-        $BtnOpen.Opacity      = 0.5
+        $TxtStatus.Text = "HORS LIGNE"; $TxtStatus.Foreground = "#EF4444"
+        $StatusDot.Fill = "#EF4444"
+        $BtnToggle.Content = "DÉMARRER LE SERVEUR"; $BtnToggle.Background = "#10B981"
+        $BtnOpen.IsEnabled = $false; $BtnOpen.Opacity = 0.5
     }
 }
 
 [void]$BtnToggle.Add_Click({
-    $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
-    if ($isRunning) {
+    if ($null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
-        Write-Log "Serveur arrêté manuellement."
-    }
-    else {
+    } else {
         if (Test-Path $ExePath) {
             Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
-            Write-Log "Serveur démarré manuellement."
             Start-Sleep -Seconds 2
         }
     }
     Update-UI
 })
 
-# --- 11. SYSTEM TRAY ---
+# --- 10. SYSTEM TRAY ---
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
 $IconPath = Join-Path $InstallDir "icon.ico"
-if (Test-Path $IconPath) { $trayIcon.Icon = New-Object System.Drawing.Icon($IconPath) }
-else { $trayIcon.Icon = [System.Drawing.SystemIcons]::Application }
+if (Test-Path $IconPath) { $trayIcon.Icon = New-Object System.Drawing.Icon($IconPath) } else { $trayIcon.Icon = [System.Drawing.SystemIcons]::Application }
 $trayIcon.Text = "BirdNET-Go Control Center"
 $trayIcon.Visible = $true
 
@@ -382,7 +319,6 @@ $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
 [void]$trayMenu.Items.Add("❌ Quitter complètement").Add_Click({
     Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
     $trayIcon.Visible = $false
-    Write-Log "Application quittée par l'utilisateur."
     try { $mutex.ReleaseMutex() } catch { }
     [System.Windows.Forms.Application]::Exit()
 })
@@ -392,77 +328,90 @@ $trayIcon.ContextMenuStrip = $trayMenu
 [void]$window.Add_Closing({
     param($sender, $e)
     if ($e.CloseReason -eq 'UserClosing') {
-        $e.Cancel = $true
-        $window.Hide()
+        $e.Cancel = $true; $window.Hide()
         [void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "L'application est réduite dans la barre des tâches.", [System.Windows.Forms.ToolTipIcon]::Info)
     }
 })
 
-# --- 12. TIMER DU STATUT ---
+# --- 11. TIMER DU STATUT (Léger) ---
 $timer = New-Object System.Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromMilliseconds(500)
+$timer.Interval = [TimeSpan]::FromSeconds(2)
 [void]$timer.Add_Tick({ Update-UI })
 $timer.Start()
 
-# --- 13. VÉRIFICATION AUTOMATIQUE (Corrigé avec UI_VERSION.txt) ---
+# --- 12. VÉRIFICATION ASYNCHRONE (Ne fige pas l'UI) ---
 $script:lastUpdateCheck = [DateTime]::MinValue
 
-function Check-ForUpdates {
-    $headers = @{ "User-Agent" = "PowerShell" }
-    try {
-        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" -Headers $headers
-        $latestTag = $release.tag_name
-        
-        # On lit la version de l'interface dans le fichier
-        $localUiVersion = if (Test-Path $UiVersionFile) { (Get-Content $UiVersionFile -Raw).Trim() } else { "0.0.0" }
-        
-        if ($localUiVersion -ne $latestTag) {
-            $BtnUpdate.Content = "⚡ NOUVELLE VERSION DISPO !"
-            $BtnUpdate.Background = "#10B981"
-            $TxtUpdateStatus.Text = "Mise à jour disponible : $latestTag"
-            $TxtUpdateStatus.Foreground = "#F59E0B"
-        } else {
-            $BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO"
-            $BtnUpdate.Background = "#8B5CF6"
-            $TxtUpdateStatus.Text = "Application à jour ($localUiVersion)"
-            $TxtUpdateStatus.Foreground = "#10B981"
+function Check-ForUpdatesAsync {
+    # On lance la vérification dans un thread séparé pour ne pas figer l'UI
+    $job = Start-ThreadJob -ScriptBlock {
+        try {
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" -Headers @{ "User-Agent" = "PowerShell" } -TimeoutSec 3
+            return $release.tag_name
+        } catch {
+            return $null
         }
-    } catch {
-        $TxtUpdateStatus.Text = "Vérification impossible (hors ligne)"
-        $TxtUpdateStatus.Foreground = "#EF4444"
     }
-    $script:lastUpdateCheck = Get-Date
+    
+    # On vérifie le résultat toutes les 500ms
+    $checkTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $checkTimer.Interval = [TimeSpan]::FromMilliseconds(500)
+    $checkTimer.Add_Tick({
+        if ($job.State -eq 'Completed') {
+            $checkTimer.Stop()
+            $latestTag = $job | Receive-Job
+            $job | Remove-Job -Force
+            
+            if ($latestTag) {
+                $localUiVersion = if (Test-Path $UiVersionFile) { [System.IO.File]::ReadAllText($UiVersionFile).Trim() } else { "0.0.0" }
+                
+                if ($localUiVersion -ne $latestTag) {
+                    $BtnUpdate.Content = "⚡ NOUVELLE VERSION DISPO !"
+                    $BtnUpdate.Background = "#10B981"
+                    $TxtUpdateStatus.Text = "Mise à jour disponible : $latestTag"
+                    $TxtUpdateStatus.Foreground = "#F59E0B"
+                } else {
+                    $BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO"
+                    $BtnUpdate.Background = "#8B5CF6"
+                    $TxtUpdateStatus.Text = "Application à jour ($localUiVersion)"
+                    $TxtUpdateStatus.Foreground = "#10B981"
+                }
+            } else {
+                $TxtUpdateStatus.Text = "Vérification impossible (hors ligne)"
+                $TxtUpdateStatus.Foreground = "#EF4444"
+            }
+        }
+    })
+    $checkTimer.Start()
 }
 
+# Vérification au démarrage
 $startupTimer = New-Object System.Windows.Threading.DispatcherTimer
-$startupTimer.Interval = [TimeSpan]::FromSeconds(3)
+$startupTimer.Interval = [TimeSpan]::FromSeconds(2)
 $startupTimer.Add_Tick({
     $startupTimer.Stop()
-    Check-ForUpdates
+    Check-ForUpdatesAsync
 })
 $startupTimer.Start()
 
+# Vérification quotidienne à 15h
 $dailyTimer = New-Object System.Windows.Threading.DispatcherTimer
 $dailyTimer.Interval = [TimeSpan]::FromMinutes(1)
 $dailyTimer.Add_Tick({
     $now = Get-Date
-    if ($now.Hour -eq 15 -and $now.Minute -eq 0) {
-        if (($now - $script:lastUpdateCheck).TotalHours -gt 23) {
-            Check-ForUpdates
-        }
+    if ($now.Hour -eq 15 -and $now.Minute -eq 0 -and (($now - $script:lastUpdateCheck).TotalHours -gt 23)) {
+        Check-ForUpdatesAsync
+        $script:lastUpdateCheck = Get-Date
     }
 })
 $dailyTimer.Start()
 
-# --- 14. DÉMARRAGE INITIAL ---
-if (-not (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
+# --- 13. DÉMARRAGE INITIAL ---
+if ($null -eq (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)) {
     if (Test-Path $ExePath) {
         Start-Process -FilePath $ExePath -ArgumentList "serve" -WorkingDirectory $InstallDir -WindowStyle Hidden
-        Write-Log "Serveur démarré au lancement de l'application."
         Start-Sleep -Seconds 2
     }
 }
 Update-UI
-
-[void]$trayIcon.ShowBalloonTip(3000, "BirdNET-Go", "Le panneau de contrôle est prêt.", [System.Windows.Forms.ToolTipIcon]::Info)
 [void]$window.ShowDialog()
