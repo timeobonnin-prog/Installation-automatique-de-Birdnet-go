@@ -14,16 +14,14 @@ if not os.path.exists(RELEASES_FILE):
 with open(RELEASES_FILE, 'r', encoding='utf-8') as f:
     releases = json.load(f)
 
-# Filtrage STRICT :
-# - Stable : commence par 'v' et suivi de chiffres (ex: v20261031.37)
-# - Nightly : commence par 'nightly-v' (ex: nightly-v20260615.24)
+# Filtrage mis à jour pour accepter les tags avec -1, -2, etc. (ex: v20261031.102-1)
 stable_releases = [
     r for r in releases 
-    if re.match(r'^v\d+\.\d+$', r['tag_name']) and not r.get('prerelease') and not r.get('draft')
+    if re.match(r'^v\d+\.\d+(?:-\d+)?$', r['tag_name']) and not r.get('prerelease') and not r.get('draft')
 ]
 nightly_releases = [
     r for r in releases 
-    if re.match(r'^nightly-v\d+\.\d+$', r['tag_name']) and not r.get('draft')
+    if re.match(r'^nightly-v\d+\.\d+(?:-\d+)?$', r['tag_name']) and not r.get('draft')
 ]
 
 # Tri par date (le plus récent en premier)
