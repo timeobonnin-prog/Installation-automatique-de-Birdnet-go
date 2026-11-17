@@ -30,6 +30,7 @@ if ([string]::IsNullOrWhiteSpace($InstallDir)) {
 $InstallDir  = $InstallDir.TrimEnd('\')
 $ExePath     = Join-Path $InstallDir "birdnet-go.exe"
 $UiExePath   = Join-Path $InstallDir "BirdNET-Go-Control.exe"
+$UiVersionFile = Join-Path $InstallDir "UI_VERSION.txt" # Nouveau fichier
 $VersionFile = Join-Path $InstallDir "VERSION.txt"
 $LogDir      = Join-Path $env:LOCALAPPDATA "BirdNET-Go"
 $LogFile     = Join-Path $LogDir "tray.log"
@@ -218,7 +219,6 @@ $LinkReleases  = $window.FindName("LinkReleases")
 function Send-TelegramNotification {
     param([string]$Message)
     
-    # Vérifier si au moins 5 minutes se sont écoulées depuis la dernière notif (Anti-Spam)
     if ((Get-Date).Subtract($script:lastTelegramTime).TotalMinutes -lt 5) {
         Write-Log "Notification Telegram ignorée (anti-spam)."
         return
@@ -230,12 +230,7 @@ function Send-TelegramNotification {
     
     try {
         $url = "https://api.telegram.org/bot$botToken/sendMessage"
-        $body = @{
-            chat_id = $chatId
-            text = $Message
-            parse_mode = "Markdown"
-        } | ConvertTo-Json
-        
+        $body = @{ chat_id = $chatId; text = $Message; parse_mode = "Markdown" } | ConvertTo-Json
         Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType "application/json" | Out-Null
         $script:lastTelegramTime = Get-Date
         Write-Log "Notification Telegram envoyée."
@@ -275,7 +270,6 @@ function Update-All {
         $tempInstaller = Join-Path $env:TEMP "BirdNET-Go-Update.exe"
         Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempInstaller
 
-        # Demande de fermeture explicite
         $msg = "Une nouvelle version est disponible. L'application va se fermer (y compris l'icône dans la barre des tâches) pour lancer l'installateur. Voulez-vous continuer ?"
         $result = [System.Windows.MessageBox]::Show($msg, "Mise à jour disponible", "YesNo", "Question")
         
@@ -292,14 +286,11 @@ function Update-All {
         
         Write-Log "Lancement de l'installateur de mise à jour."
         
-        # Fermeture du serveur et de l'icône Tray AVANT l'installation
         Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue | Stop-Process -Force
         $trayIcon.Visible = $false
         
-        # Lancement de l'installateur
         Start-Process -FilePath $tempInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
         
-        # Fermeture de l'application actuelle
         [System.Windows.Application]::Current.Shutdown()
     }
     catch {
@@ -324,7 +315,6 @@ function Update-All {
 function Update-UI {
     $isRunning = $null -ne (Get-Process -Name "birdnet-go" -ErrorAction SilentlyContinue)
     
-    # Détection du crash
     if ($script:wasRunning -and -not $isRunning) {
         $script:crashCount++
         Write-Log "⚠️ Le serveur a planté ! (Fois : $script:crashCount)"
@@ -335,15 +325,11 @@ function Update-UI {
             Send-TelegramNotification "⚠️ *BirdNET-Go a planté !*`nRedémarrage automatique en cours ($($script:crashCount)/3)."
         } else {
             Write-Log "❌ Le serveur a planté 3 fois. Arrêt des tentatives."
-            Send-TelegramNotification "❌ *BirdNET-Go a planté 3 fois de suite.*`nArrêt des redémarrages automatiques. Une intervention manuelle est requise."
+            Send-TelegramNotification "❌ *BirdNET-Go a planté 3 fois de suite.*`nArrêt des redémarrages automatiques."
         }
     }
     
-    # Si le serveur tourne, on remet le compteur à 0
-    if ($isRunning) {
-        $script:crashCount = 0
-    }
-    
+    if ($isRunning) { $script:crashCount = 0 }
     $script:wasRunning = $isRunning
 
     if ($isRunning) {
@@ -418,27 +404,28 @@ $timer.Interval = [TimeSpan]::FromMilliseconds(500)
 [void]$timer.Add_Tick({ Update-UI })
 $timer.Start()
 
-# --- 13. VÉRIFICATION AUTOMATIQUE ---
+# --- 13. VÉRIFICATION AUTOMATIQUE (Corrigé avec UI_VERSION.txt) ---
 $script:lastUpdateCheck = [DateTime]::MinValue
 
 function Check-ForUpdates {
     $headers = @{ "User-Agent" = "PowerShell" }
     try {
         $release = Invoke-RestMethod -Uri "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest" -Headers $headers
-        $latestDate = [DateTime]$release.published_at
         $latestTag = $release.tag_name
         
-        if (Test-Path $UiExePath) {
-            $localDate = (Get-Item $UiExePath).LastWriteTime
-            if ($latestDate -gt $localDate.AddMinutes(5)) {
-                $BtnUpdate.Content = "⚡ NOUVELLE VERSION DISPO !"
-                $BtnUpdate.Background = "#10B981"
-                $TxtUpdateStatus.Text = "Mise à jour disponible : $latestTag"
-                $TxtUpdateStatus.Foreground = "#F59E0B"
-            } else {
-                $TxtUpdateStatus.Text = "Application à jour"
-                $TxtUpdateStatus.Foreground = "#10B981"
-            }
+        # On lit la version de l'interface dans le fichier
+        $localUiVersion = if (Test-Path $UiVersionFile) { (Get-Content $UiVersionFile -Raw).Trim() } else { "0.0.0" }
+        
+        if ($localUiVersion -ne $latestTag) {
+            $BtnUpdate.Content = "⚡ NOUVELLE VERSION DISPO !"
+            $BtnUpdate.Background = "#10B981"
+            $TxtUpdateStatus.Text = "Mise à jour disponible : $latestTag"
+            $TxtUpdateStatus.Foreground = "#F59E0B"
+        } else {
+            $BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO"
+            $BtnUpdate.Background = "#8B5CF6"
+            $TxtUpdateStatus.Text = "Application à jour ($localUiVersion)"
+            $TxtUpdateStatus.Foreground = "#10B981"
         }
     } catch {
         $TxtUpdateStatus.Text = "Vérification impossible (hors ligne)"
