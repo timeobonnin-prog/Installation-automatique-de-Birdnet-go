@@ -33,7 +33,8 @@ jobs:
           cmd = ["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]
           releases = json.loads(subprocess.check_output(cmd).decode())
 
-          pattern = re.compile(r'^(nightly-v|v)([^.]+)\.(\d+)$')
+          # Regex adaptée pour ton format : v20261031.102-1 (avec ou sans -patch à la fin)
+          pattern = re.compile(r'^(nightly-v|v)(\d+)\.(\d+)(?:-(\d+))?$')
           grouped = {}
           to_delete = []
 
@@ -45,16 +46,20 @@ jobs:
 
               match = pattern.match(tag)
               if not match:
-                  print(f"[À SUPPRIMER - Miroir] {tag}")
+                  print(f"[À SUPPRIMER - Miroir / Inconnu] {tag}")
                   to_delete.append(tag)
               else:
-                  prefix, base_ver, build_str = match.groups()
-                  key = f"{prefix}{base_ver}"
-                  grouped.setdefault(key, []).append((int(build_str), tag))
+                  prefix, base_ver, build_str, patch_str = match.groups()
+                  build_num = int(build_str)
+                  patch_num = int(patch_str) if patch_str else 0
+                  
+                  key = f"{prefix}{base_ver}" # Ex: "v20261031"
+                  grouped.setdefault(key, []).append(((build_num, patch_num), tag))
 
+          # Pour chaque version officielle, on ne garde que la plus récente (plus grand build et patch)
           for key, items in grouped.items():
               items.sort(key=lambda x: x[0], reverse=True)
-              print(f"[CONSERVÉ - Dernier de {key}] {items[0][1]}")
+              print(f"[CONSERVÉ - Plus récent de {key}] {items[0][1]}")
               for _, old_tag in items[1:]:
                   print(f"[À SUPPRIMER - Ancien de {key}] {old_tag}")
                   to_delete.append(old_tag)
