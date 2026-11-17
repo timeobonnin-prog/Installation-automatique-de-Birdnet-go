@@ -22,15 +22,26 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      # 🔧 CORRECTION : Synchroniser avec la branche distante avant de modifier
+      - name: Sync with remote main
+        run: |
+          git pull --rebase origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
       - run: |
           npm install --no-save prettier
           sudo apt-get install -y shfmt
+
       - run: |
           npx prettier --write "**/*.{md,yml,yaml,json}" --ignore-path .gitignore || true
           find . -name "*.sh" -exec shfmt -w -i 2 -ci {} \; || true
+
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: auto-format [skip ci]"
@@ -154,10 +165,10 @@ jobs:
             const { owner, repo } = context.repo;
             const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo });
             const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open' });
-
+            
             const prot = ['main', 'master', 'gh-pages'];
             const prB = prs.map(p => p.head.ref);
-
+            
             for (const b of branches) {
               if (prot.includes(b.name) || prB.includes(b.name)) continue;
               try {
