@@ -1,36 +1,39 @@
+using System;
 using System.IO;
 using System.Windows;
-using Application = System.Windows.Application; // Ajout de l'alias pour lever l'ambiguïté
 
 namespace BirdNETGoControl;
 
 public partial class App : Application
 {
-    public static string LogFile { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "BirdNET-Go", "tray.log");
-
-    protected override void OnStartup(StartupEventArgs e)
+    /// <summary>
+    /// Méthode de journalisation centralisée pour l'application.
+    /// </summary>
+    public static void Log(string message)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(LogFile)!);
-        
-        AppDomain.CurrentDomain.UnhandledException += (s, ex) =>
-            Log($"[FATAL] {ex.ExceptionObject}");
-            
-        DispatcherUnhandledException += (s, ex) =>
+        try
         {
-            Log($"[UI-CRASH] {ex.Exception}");
-            ex.Handled = true; // Empêche l'application de se fermer brutalement
-        };
-        
-        Log("Application démarrée.");
-        base.OnStartup(e);
-    }
-
-    public static void Log(string msg)
-    {
-        try {
-            File.AppendAllText(LogFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {msg}\n");
-        } catch { }
+            // Détermine le répertoire de l'application
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            string logDir = Path.Combine(appDir, "logs");
+            
+            // Crée le dossier logs s'il n'existe pas
+            if (!Directory.Exists(logDir))
+            {
+                Directory.CreateDirectory(logDir);
+            }
+            
+            // Nom du fichier de log basé sur la date du jour
+            string logFile = Path.Combine(logDir, $"app_{DateTime.Now:yyyyMMdd}.log");
+            string logEntry = $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}";
+            
+            // Ajoute le message au fichier
+            File.AppendAllText(logFile, logEntry);
+        }
+        catch
+        {
+            // En cas d'échec d'écriture (ex: permissions), on ignore silencieusement 
+            // pour éviter de faire planter l'application à cause du système de log.
+        }
     }
 }
