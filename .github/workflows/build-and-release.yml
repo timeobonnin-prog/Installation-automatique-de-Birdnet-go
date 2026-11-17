@@ -399,7 +399,7 @@ jobs:
         run: |
           echo "📦 Fichiers stables téléchargés :"
           ls -la all-files/ || true
-          
+
           if [ -f "all-files/BirdNET-Go-Windows.exe" ] && [ -f "all-files/BirdNET-Go-Linux-x64.deb" ] && [ -f "all-files/BirdNET-Go-macOS.pkg" ]; then
             echo "is_complete=true" >> $GITHUB_OUTPUT
             echo "release_body=🎉 Publication complète et stable de toutes les plateformes (Windows, Linux, macOS)." >> $GITHUB_OUTPUT
@@ -441,7 +441,7 @@ jobs:
         run: |
           echo "📦 Fichiers nightly téléchargés :"
           ls -la all-files-nightly/ || true
-          
+
           if [ -f "all-files-nightly/BirdNET-Go-Windows.exe" ]; then
             echo "is_complete=true" >> $GITHUB_OUTPUT
             echo "release_name=Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}" >> $GITHUB_OUTPUT
