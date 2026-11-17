@@ -1,5 +1,6 @@
-using System.Windows;
 using System.IO;
+using System.Windows;
+using Application = System.Windows.Application; // Ajout de l'alias pour lever l'ambiguïté
 
 namespace BirdNETGoControl;
 
@@ -12,13 +13,16 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(LogFile)!);
+        
         AppDomain.CurrentDomain.UnhandledException += (s, ex) =>
             Log($"[FATAL] {ex.ExceptionObject}");
+            
         DispatcherUnhandledException += (s, ex) =>
         {
             Log($"[UI-CRASH] {ex.Exception}");
-            ex.Handled = true; // Empêche le crash
+            ex.Handled = true; // Empêche l'application de se fermer brutalement
         };
+        
         Log("Application démarrée.");
         base.OnStartup(e);
     }
