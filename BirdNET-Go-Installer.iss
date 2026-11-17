@@ -1,4 +1,4 @@
-﻿[Setup]
+[Setup]
 AppName=BirdNET-Go (Community Installer)
 AppVersion=1.0.0
 AppPublisher=timeobonnin-prog
@@ -29,6 +29,7 @@ Source: "dist\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\BirdNET-Go-Control.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\UI_VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
