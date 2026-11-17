@@ -33,7 +33,6 @@ jobs:
           cmd = ["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]
           releases = json.loads(subprocess.check_output(cmd).decode())
 
-          # Regex adaptée pour ton format : v20261031.102-1 (avec ou sans -patch à la fin)
           pattern = re.compile(r'^(nightly-v|v)(\d+)\.(\d+)(?:-(\d+))?$')
           grouped = {}
           to_delete = []
@@ -53,10 +52,9 @@ jobs:
                   build_num = int(build_str)
                   patch_num = int(patch_str) if patch_str else 0
                   
-                  key = f"{prefix}{base_ver}" # Ex: "v20261031"
+                  key = f"{prefix}{base_ver}"
                   grouped.setdefault(key, []).append(((build_num, patch_num), tag))
 
-          # Pour chaque version officielle, on ne garde que la plus récente (plus grand build et patch)
           for key, items in grouped.items():
               items.sort(key=lambda x: x[0], reverse=True)
               print(f"[CONSERVÉ - Plus récent de {key}] {items[0][1]}")
@@ -112,6 +110,9 @@ jobs:
             git commit -m "chore: update index.html [skip ci]"
             git push || true
           fi
+
+      - name: Créer le fichier .nojekyll pour désactiver Jekyll
+        run: touch .nojekyll
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
