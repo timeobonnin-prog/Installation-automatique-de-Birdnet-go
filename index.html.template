@@ -120,7 +120,7 @@
         </div>
         <div class="version-field">
           <label for="customVersion">Ou saisir un tag précis</label>
-          <input type="text" id="customVersion" placeholder="ex: v20261031.37">
+          <input type="text" id="customVersion" placeholder="ex: v20261031.102-1">
         </div>
       </div>
       <div class="version-actions">
@@ -204,11 +204,9 @@
   }
 
   function assetUrl(platform, version) {
-    // Pour "latest", on redirige vers la page des releases
     if (!version || version === 'latest') {
       return `https://github.com/${REPO}/releases/latest`;
     }
-    // Noms d'assets standard de birdnet-go
     const map = {
       windows: `BirdNET-Go-Windows.exe`,
       linux: `BirdNET-Go-Linux-x64.deb`,
