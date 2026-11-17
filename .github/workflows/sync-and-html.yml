@@ -38,7 +38,7 @@ jobs:
 
           # Supprime vos anciennes releases (sauf les manuelles, la dernière stable et la dernière nightly)
           ALL_LOCAL_TAGS=$(gh api "repos/$LOCAL/releases?per_page=100" --jq '.[].tag_name' | grep -vE '^manual-' || echo "")
-          
+
           for tag in $ALL_LOCAL_TAGS; do
             if ! echo "$KEEP" | tr ' ' '\n' | grep -qx "$tag"; then
               echo "Suppression de l'ancienne release : $tag"
@@ -55,20 +55,20 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Fetch releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
-          
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          
+
       - name: Generate index.html
         run: python3 generate_html.py
-        
+
       - name: Commit index.html
         run: |
           git config user.name "github-actions[bot]"
@@ -80,12 +80,12 @@ jobs:
             git commit -m "chore: update index.html [skip ci]"
             git push || true
           fi
-          
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: "."
-          
+
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
