@@ -11,14 +11,14 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 
-// Alias explicites pour éviter les conflits entre WPF et WinForms
-using Application = System.Windows.Application;
-using MessageBox = System.Windows.MessageBox;
-using Color = System.Windows.Media.Color;
+// Alias stricts pour éviter TOUTE ambiguïté avec WinForms
+using WpfApplication = System.Windows.Application;
+using WpfMessageBox = System.Windows.MessageBox;
+using WpfColor = System.Windows.Media.Color;
 
 namespace BirdNETGoControl;
 
-public partial class MainWindow : Window
+public partial class MainWindow : System.Windows.Window
 {
     private readonly string _installDir;
     private readonly string _exePath;
@@ -27,29 +27,27 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _statusTimer;
     private readonly DispatcherTimer _updateTimer;
     
-    // Separate HTTP clients: one for quick API calls (5s), one for large downloads (5min)
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
     private readonly HttpClient _downloadHttp = new() { Timeout = TimeSpan.FromMinutes(5) };
     
     private int _crashCount = 0;
     private bool _wasRunning = false;
-    private bool _shouldServerBeRunning = false; // Tracks intended state to prevent restart after explicit stop
+    private bool _shouldServerBeRunning = false;
     private DateTime _lastUpdateCheck = DateTime.MinValue;
     private bool _isQuitting = false;
 
     public MainWindow()
     {
         InitializeComponent();
-        _installDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
-        _exePath = Path.Combine(_installDir, "birdnet-go.exe");
-        _uiVersionFile = Path.Combine(_installDir, "UI_VERSION.txt");
+        _installDir = System.AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+        _exePath = System.IO.Path.Combine(_installDir, "birdnet-go.exe");
+        _uiVersionFile = System.IO.Path.Combine(_installDir, "UI_VERSION.txt");
 
         TitleBar.MouseLeftButtonDown += (_, _) => DragMove();
 
-        // Tray icon is now always visible while the app runs, preventing user lockout
         _tray = new WinForms.NotifyIcon { Text = "BirdNET-Go", Visible = true };
-        var iconPath = Path.Combine(_installDir, "icon.ico");
-        _tray.Icon = File.Exists(iconPath)
+        var iconPath = System.IO.Path.Combine(_installDir, "icon.ico");
+        _tray.Icon = System.IO.File.Exists(iconPath)
             ? new System.Drawing.Icon(iconPath)
             : System.Drawing.SystemIcons.Application;
 
@@ -60,7 +58,6 @@ public partial class MainWindow : Window
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += (_, _) => ShowWindow();
 
-        // FIX: Set User-Agent to prevent GitHub API 403 Forbidden errors
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("BirdNET-Go-UI/1.0");
         _downloadHttp.DefaultRequestHeaders.UserAgent.ParseAdd("BirdNET-Go-UI/1.0");
 
@@ -78,7 +75,7 @@ public partial class MainWindow : Window
             if (!_isQuitting) { e.Cancel = true; Hide(); ShowTrayTip(); }
         };
 
-        if (File.Exists(_exePath))
+        if (System.IO.File.Exists(_exePath))
         {
             _shouldServerBeRunning = true;
             StartServer();
@@ -108,7 +105,7 @@ public partial class MainWindow : Window
     private void StopServer()
     {
         try {
-            _shouldServerBeRunning = false; // FIX: Explicit stop, prevents auto-restart loop
+            _shouldServerBeRunning = false;
             foreach (var p in Process.GetProcessesByName("birdnet-go")) p.Kill();
             App.Log("Serveur arrêté.");
         } catch (Exception ex) { App.Log($"Erreur arrêt : {ex.Message}"); }
@@ -118,10 +115,9 @@ public partial class MainWindow : Window
     {
         var isRunning = IsServerRunning();
 
-        // FIX: Advanced crash recovery logic
         if (!isRunning && _shouldServerBeRunning)
         {
-            if (_wasRunning) // It was running and now it's not -> genuine crash
+            if (_wasRunning)
             {
                 _crashCount++;
                 App.Log($"⚠️ Crash détecté ({_crashCount}/3)");
@@ -130,7 +126,7 @@ public partial class MainWindow : Window
             if (_crashCount <= 3)
             {
                 StartServer();
-                _wasRunning = true; // Expect it to run next tick; if it fails instantly, it counts as another crash attempt
+                _wasRunning = true;
             }
             else
             {
@@ -140,7 +136,7 @@ public partial class MainWindow : Window
         }
         else if (isRunning)
         {
-            _crashCount = 0; // FIX: Reset count ONLY when stably running
+            _crashCount = 0;
             _wasRunning = true;
         }
         else
@@ -151,24 +147,23 @@ public partial class MainWindow : Window
         if (isRunning)
         {
             TxtStatus.Text = "EN LIGNE";
-            TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(16, 185, 129));
-            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+            TxtStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
+            StatusDot.Fill = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
             BtnToggle.Content = "ARRÊTER LE SERVEUR";
-            BtnToggle.Background = new SolidColorBrush(Color.FromRgb(225, 29, 72));
+            BtnToggle.Background = new SolidColorBrush(WpfColor.FromRgb(225, 29, 72));
             BtnOpen.IsEnabled = true;
             _tray.Text = "BirdNET-Go - En ligne";
         }
         else
         {
             TxtStatus.Text = "HORS LIGNE";
-            TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68));
-            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+            TxtStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
+            StatusDot.Fill = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
             BtnToggle.Content = "DÉMARRER LE SERVEUR";
-            BtnToggle.Background = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+            BtnToggle.Background = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
             BtnOpen.IsEnabled = false;
             _tray.Text = "BirdNET-Go - Hors ligne";
         }
-        // FIX: Removed _tray.Visible = false here. Tray stays accessible.
     }
 
     private async Task CheckUpdatesAsync()
@@ -181,27 +176,27 @@ public partial class MainWindow : Window
             var release = await _http.GetFromJsonAsync<GitHubRelease>(
                 "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
             var latestTag = release?.tag_name ?? "";
-            var localVersion = File.Exists(_uiVersionFile) ? File.ReadAllText(_uiVersionFile).Trim() : "0.0.0";
+            var localVersion = System.IO.File.Exists(_uiVersionFile) ? System.IO.File.ReadAllText(_uiVersionFile).Trim() : "0.0.0";
 
             if (localVersion != latestTag && !string.IsNullOrEmpty(latestTag))
             {
                 BtnUpdate.Content = "⚡ NOUVELLE VERSION DISPO !";
-                BtnUpdate.Background = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+                BtnUpdate.Background = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
                 TxtUpdateStatus.Text = $"Mise à jour : {latestTag}";
-                TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(245, 158, 11));
+                TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(245, 158, 11));
             }
             else
             {
                 BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO";
-                BtnUpdate.Background = new SolidColorBrush(Color.FromRgb(139, 92, 246));
+                BtnUpdate.Background = new SolidColorBrush(WpfColor.FromRgb(139, 92, 246));
                 TxtUpdateStatus.Text = $"À jour ({localVersion})";
-                TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+                TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
             }
         }
         catch
         {
             TxtUpdateStatus.Text = "Vérification impossible";
-            TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+            TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
         }
     }
 
@@ -230,21 +225,20 @@ public partial class MainWindow : Window
             var asset = release?.assets?.FirstOrDefault(a => a.name == "BirdNET-Go-Windows.exe");
             if (asset is null) throw new Exception("Installateur introuvable");
 
-            var installer = Path.Combine(Path.GetTempPath(), "BirdNET-Go-Update.exe");
+            var installer = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "BirdNET-Go-Update.exe");
             
-            // FIX: Use dedicated download client with 5-minute timeout
             using (var dl = await _downloadHttp.GetAsync(asset.browser_download_url))
             {
                 dl.EnsureSuccessStatusCode();
-                await using var fs = File.Create(installer);
+                await using var fs = System.IO.File.Create(installer);
                 await dl.Content.CopyToAsync(fs);
             }
 
-            var result = MessageBox.Show(
+            var result = WpfMessageBox.Show(
                 "L'application va se fermer pour installer la mise à jour. Continuer ?",
                 "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
-            if (result != MessageBoxResult.Yes) return; // User cancelled
+            if (result != MessageBoxResult.Yes) return;
 
             StopServer();
             _tray.Visible = false;
@@ -256,7 +250,7 @@ public partial class MainWindow : Window
             });
 
             _isQuitting = true;
-            Application.Current.Shutdown();
+            WpfApplication.Current.Shutdown();
         }
         catch (Exception ex)
         {
@@ -266,7 +260,6 @@ public partial class MainWindow : Window
         }
         finally
         {
-            // FIX: Always restore button state if we are not quitting
             if (!_isQuitting)
             {
                 BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO";
@@ -283,7 +276,7 @@ public partial class MainWindow : Window
         _isQuitting = true;
         StopServer();
         _tray.Visible = false;
-        Application.Current.Shutdown();
+        WpfApplication.Current.Shutdown();
     }
 }
 
