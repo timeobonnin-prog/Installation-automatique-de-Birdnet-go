@@ -1,7 +1,6 @@
 name: Build & Release
 
 on:
-  # Tous les jours à 16h55 (Heure de Paris : 15h55 UTC)
   schedule:
     - cron: "55 15 * * *"
   workflow_dispatch:
@@ -16,15 +15,15 @@ on:
         default: false
   push:
     paths:
-      - "BirdNET-Go-Tray.ps1"
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "icon.ico"
-      - "logo.png"
-      - "start_birdnet.bat"
-      - "install-birdnet.sh"
-      - "scripts/**"
-      - ".github/workflows/build-and-release.yml"
+      - 'BirdNET-Go-Tray.ps1'
+      - 'BirdNET-Go-Installer.iss'
+      - 'nfpm.yaml'
+      - 'icon.ico'
+      - 'logo.png'
+      - 'start_birdnet.bat'
+      - 'install-birdnet.sh'
+      - 'scripts/**'
+      - '.github/workflows/build-and-release.yml'
 
 permissions:
   contents: write
@@ -34,9 +33,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ============================================================
-  # JOB 1 : VÉRIFICATION DES VERSIONS
-  # ============================================================
   check-version:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -52,20 +48,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. Vérifier la Stable
           STABLE=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
           echo "stable=$STABLE" >> $GITHUB_OUTPUT
           HAS_STABLE=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
-
+          
           if [ -z "$HAS_STABLE" ] || [ "${{ github.event.inputs.force_build }}" == "true" ] || [ "${{ github.event_name }}" == "push" ]; then
             echo "build_stable=true" >> $GITHUB_OUTPUT
           else
             echo "build_stable=false" >> $GITHUB_OUTPUT
           fi
-
-          # 2. Vérifier la Nightly
+          
           NIGHTLY_RAW=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --pre-releases --limit 50 --json tagName -q '.[].tagName' | grep -E '^nightly-[0-9]{8}$' | head -n 1 || true)
-
+          
           if [ -n "$NIGHTLY_RAW" ]; then
             CLEAN_NIGHTLY="${NIGHTLY_RAW#nightly-}"
             echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
@@ -81,9 +75,6 @@ jobs:
             echo "build_nightly=false" >> $GITHUB_OUTPUT
           fi
 
-  # ============================================================
-  # JOB 2A : COMPILATION WINDOWS STABLE
-  # ============================================================
   build-windows-stable:
     needs: check-version
     if: needs.check-version.outputs.build_stable == 'true'
@@ -135,9 +126,6 @@ jobs:
           name: stable-windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
-  # ============================================================
-  # JOB 2B : COMPILATION WINDOWS NIGHTLY
-  # ============================================================
   build-windows-nightly:
     needs: check-version
     if: needs.check-version.outputs.build_nightly == 'true'
@@ -189,9 +177,6 @@ jobs:
           name: nightly-windows-installer
           path: Output/BirdNET-Go-Windows.exe
 
-  # ============================================================
-  # JOB 3A : COMPILATION LINUX / MAC STABLE
-  # ============================================================
   build-linux-mac-stable:
     needs: check-version
     if: needs.check-version.outputs.build_stable == 'true'
@@ -222,7 +207,7 @@ jobs:
           fi
           curl -fsSL -o birdnet.tar.gz -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "$ASSET_URL"
           tar -xzf birdnet.tar.gz -C dist
-
+      
       - name: Download FFmpeg & FFprobe (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -268,9 +253,6 @@ jobs:
             *.deb
             *.pkg
 
-  # ============================================================
-  # JOB 3B : COMPILATION LINUX / MAC NIGHTLY
-  # ============================================================
   build-linux-mac-nightly:
     needs: check-version
     if: needs.check-version.outputs.build_nightly == 'true'
@@ -301,7 +283,7 @@ jobs:
           fi
           curl -fsSL -o birdnet.tar.gz -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" "$ASSET_URL"
           tar -xzf birdnet.tar.gz -C dist
-
+      
       - name: Download FFmpeg & FFprobe (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -347,18 +329,8 @@ jobs:
             *.deb
             *.pkg
 
-  # ============================================================
-  # JOB 4 : PUBLICATION DES RELEASES
-  # ============================================================
   publish-release:
-    needs:
-      [
-        check-version,
-        build-windows-stable,
-        build-windows-nightly,
-        build-linux-mac-stable,
-        build-linux-mac-nightly,
-      ]
+    needs: [check-version, build-windows-stable, build-windows-nightly, build-linux-mac-stable, build-linux-mac-nightly]
     if: |
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true') &&
       always()
@@ -366,7 +338,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
@@ -374,18 +346,15 @@ jobs:
           path: all-files
           pattern: stable-*
           merge-multiple: true
-
       - name: Publish Stable Release
         if: needs.check-version.outputs.build_stable == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          # Ajout de run_attempt pour contourner l'erreur "Tag immutable"
           tag_name: v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
           name: "Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}"
           files: all-files/*
           make_latest: true
         env:
-          # Utilisation du GH_PAT pour contourner les règles de protection des tags
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Download Nightly artifacts
@@ -395,12 +364,10 @@ jobs:
           path: all-files-nightly
           pattern: nightly-*
           merge-multiple: true
-
       - name: Publish Nightly Release
         if: needs.check-version.outputs.build_nightly == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          # Ajout de run_attempt pour les nightlies aussi
           tag_name: nightly-v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
           name: "Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}"
           files: all-files-nightly/*
