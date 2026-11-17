@@ -94,12 +94,12 @@ jobs:
           $tag = "${{ needs.check-version.outputs.stable_tag }}"
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/tags/$tag" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
-          
+
           if ($null -eq $asset) {
             Write-Error "Aucun asset Windows amd64 (.tar.gz) trouvé pour le tag $tag sur le dépôt upstream."
             exit 1
           }
-          
+
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
           if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
@@ -163,12 +163,12 @@ jobs:
           $tag = "nightly-${{ needs.check-version.outputs.nightly_tag }}"
           $release = Invoke-RestMethod -Uri "https://api.github.com/repos/tphakala/birdnet-go/releases/tags/$tag" -Headers @{ "User-Agent" = "PowerShell"; "Authorization" = "Bearer $env:GITHUB_TOKEN" }
           $asset = $release.assets | Where-Object { $_.name -match "windows.*amd64.*\.tar\.gz" } | Select-Object -First 1
-          
+
           if ($null -eq $asset) {
             Write-Error "Aucun asset Windows amd64 (.tar.gz) trouvé pour le tag $tag sur le dépôt upstream."
             exit 1
           }
-          
+
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "birdnet.tar.gz"
           if (Test-Path "dist") { Remove-Item "dist" -Recurse -Force }
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
@@ -374,7 +374,7 @@ jobs:
         build-linux-mac-stable,
         build-linux-mac-nightly,
       ]
-    # CORRECTION MAJEURE : Suppression de "always()". 
+    # CORRECTION MAJEURE : Suppression de "always()".
     # Si un build (ex: Windows) échoue, la publication est annulée pour éviter les releases partielles.
     if: |
       !cancelled() && 
