@@ -30,7 +30,7 @@ jobs:
           import os, re, json, subprocess
 
           repo = os.environ["LOCAL"]
-          
+
           # Récupère toutes les releases via l'API GitHub
           raw = subprocess.check_output(["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]).decode()
           releases = json.loads(raw)
