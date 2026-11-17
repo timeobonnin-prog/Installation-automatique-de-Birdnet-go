@@ -1,0 +1,263 @@
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+using WinForms = System.Windows.Forms;
+
+namespace BirdNETGoControl;
+
+public partial class MainWindow : Window
+{
+    private readonly string _installDir;
+    private readonly string _exePath;
+    private readonly string _uiVersionFile;
+    private readonly string _versionFile;
+    private readonly WinForms.NotifyIcon _tray;
+    private readonly DispatcherTimer _statusTimer;
+    private readonly DispatcherTimer _updateTimer;
+    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
+    private int _crashCount = 0;
+    private bool _wasRunning = false;
+    private DateTime _lastUpdateCheck = DateTime.MinValue;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        _installDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+        _exePath = Path.Combine(_installDir, "birdnet-go.exe");
+        _uiVersionFile = Path.Combine(_installDir, "UI_VERSION.txt");
+        _versionFile = Path.Combine(_installDir, "VERSION.txt");
+
+        // Drag de la fenêtre
+        TitleBar.MouseLeftButtonDown += (_, _) => DragMove();
+
+        // Icône tray
+        _tray = new WinForms.NotifyIcon { Text = "BirdNET-Go", Visible = false };
+        var iconPath = Path.Combine(_installDir, "icon.ico");
+        _tray.Icon = File.Exists(iconPath)
+            ? new System.Drawing.Icon(iconPath)
+            : System.Drawing.SystemIcons.Application;
+
+        var menu = new WinForms.ContextMenuStrip();
+        menu.Items.Add("🌐 Ouvrir l'interface web", null, (_, _) => OpenWeb());
+        menu.Items.Add("⚙️ Afficher le panneau", null, (_, _) => ShowWindow());
+        menu.Items.Add("❌ Quitter", null, (_, _) => QuitAll());
+        _tray.ContextMenuStrip = menu;
+        _tray.DoubleClick += (_, _) => ShowWindow();
+
+        // Timer statut (500ms)
+        _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _statusTimer.Tick += (_, _) => UpdateUI();
+        _statusTimer.Start();
+
+        // Timer update (toutes les heures + au démarrage)
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(60) };
+        _updateTimer.Tick += async (_, _) => await CheckUpdatesAsync();
+        _updateTimer.Start();
+        _ = CheckUpdatesAsync();
+
+        Closing += (_, e) => { e.Cancel = true; Hide(); ShowTrayTip(); };
+
+        // Démarrage initial
+        if (!IsServerRunning() && File.Exists(_exePath))
+            StartServer();
+
+        UpdateUI();
+    }
+
+    private bool IsServerRunning() =>
+        Process.GetProcessesByName("birdnet-go").Length > 0;
+
+    private void StartServer()
+    {
+        try {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _exePath,
+                Arguments = "serve",
+                WorkingDirectory = _installDir,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true
+            });
+            App.Log("Serveur démarré.");
+            Thread.Sleep(1500);
+        } catch (Exception ex) { App.Log($"Erreur démarrage : {ex.Message}"); }
+    }
+
+    private void StopServer()
+    {
+        try {
+            foreach (var p in Process.GetProcessesByName("birdnet-go"))
+                p.Kill();
+            App.Log("Serveur arrêté.");
+        } catch (Exception ex) { App.Log($"Erreur arrêt : {ex.Message}"); }
+    }
+
+    private void UpdateUI()
+    {
+        var isRunning = IsServerRunning();
+
+        // Détection crash (auto-restart max 3 fois)
+        if (_wasRunning && !isRunning)
+        {
+            _crashCount++;
+            App.Log($"⚠️ Crash détecté ({_crashCount}/3)");
+            if (_crashCount <= 3) StartServer();
+            else App.Log("❌ 3 crashs consécutifs, arrêt des redémarrages.");
+        }
+        if (isRunning) _crashCount = 0;
+        _wasRunning = isRunning;
+
+        if (isRunning)
+        {
+            TxtStatus.Text = "EN LIGNE";
+            TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+            BtnToggle.Content = "ARRÊTER LE SERVEUR";
+            BtnToggle.Background = new SolidColorBrush(Color.FromRgb(225, 29, 72));
+            BtnOpen.IsEnabled = true;
+            _tray.Visible = true;   // ✅ Badge visible
+            _tray.Text = "BirdNET-Go - En ligne";
+        }
+        else
+        {
+            TxtStatus.Text = "HORS LIGNE";
+            TxtStatus.Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+            BtnToggle.Content = "DÉMARRER LE SERVEUR";
+            BtnToggle.Background = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+            BtnOpen.IsEnabled = false;
+            _tray.Visible = false;  // ❌ Badge caché si serveur arrêté
+            _tray.Text = "BirdNET-Go - Hors ligne";
+        }
+    }
+
+    private async Task CheckUpdatesAsync()
+    {
+        if ((DateTime.Now - _lastUpdateCheck).TotalMinutes < 30) return;
+        _lastUpdateCheck = DateTime.Now;
+
+        try
+        {
+            var release = await _http.GetFromJsonAsync<GitHubRelease>(
+                "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
+            var latestTag = release?.tag_name ?? "";
+
+            var localVersion = File.Exists(_uiVersionFile)
+                ? File.ReadAllText(_uiVersionFile).Trim()
+                : "0.0.0";
+
+            if (localVersion != latestTag && !string.IsNullOrEmpty(latestTag))
+            {
+                BtnUpdate.Content = "⚡ NOUVELLE VERSION DISPO !";
+                BtnUpdate.Background = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+                TxtUpdateStatus.Text = $"Mise à jour : {latestTag}";
+                TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(245, 158, 11));
+            }
+            else
+            {
+                BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO";
+                BtnUpdate.Background = new SolidColorBrush(Color.FromRgb(139, 92, 246));
+                TxtUpdateStatus.Text = $"À jour ({localVersion})";
+                TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+            }
+        }
+        catch
+        {
+            TxtUpdateStatus.Text = "Vérification impossible";
+            TxtUpdateStatus.Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+        }
+    }
+
+    // ===== Handlers UI =====
+    private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void OnClose(object sender, RoutedEventArgs e) { Hide(); ShowTrayTip(); }
+    private void OnOpen(object sender, RoutedEventArgs e) => OpenWeb();
+    private void OpenWeb() => Process.Start(new ProcessStartInfo("http://localhost:8080") { UseShellExecute = true });
+
+    private void OnToggle(object sender, RoutedEventArgs e)
+    {
+        if (IsServerRunning()) StopServer();
+        else StartServer();
+        UpdateUI();
+    }
+
+    private async void OnUpdate(object sender, RoutedEventArgs e)
+    {
+        BtnUpdate.IsEnabled = false;
+        BtnUpdate.Content = "MISE À JOUR...";
+        try
+        {
+            var release = await _http.GetFromJsonAsync<GitHubRelease>(
+                "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
+
+            var asset = release?.assets?.FirstOrDefault(a => a.name == "BirdNET-Go-Windows.exe");
+            if (asset is null) throw new Exception("Installateur introuvable");
+
+            var installer = Path.Combine(Path.GetTempPath(), "BirdNET-Go-Update.exe");
+            using (var dl = await _http.GetAsync(asset.browser_download_url))
+            {
+                dl.EnsureSuccessStatusCode();
+                await using var fs = File.Create(installer);
+                await dl.Content.CopyToAsync(fs);
+            }
+
+            var result = MessageBox.Show(
+                "L'application va se fermer pour installer la mise à jour. Continuer ?",
+                "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes) return;
+
+            StopServer();
+            _tray.Visible = false;
+
+            Process.Start(new ProcessStartInfo(installer)
+            {
+                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
+                UseShellExecute = true
+            });
+
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            App.Log($"Update error: {ex.Message}");
+            BtnUpdate.Content = "ERREUR";
+            await Task.Delay(2000);
+            BtnUpdate.Content = "METTRE À JOUR BIRDNET-GO";
+            BtnUpdate.IsEnabled = true;
+        }
+    }
+
+    private void ShowWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ShowTrayTip() =>
+        _tray.ShowBalloonTip(3000, "BirdNET-Go", "L'app tourne en arrière-plan.", WinForms.ToolTipIcon.Info);
+
+    private void QuitAll()
+    {
+        StopServer();
+        _tray.Visible = false;
+        Application.Current.Shutdown();
+    }
+}
+
+public class GitHubRelease
+{
+    public string? tag_name { get; set; }
+    public List<GitHubAsset>? assets { get; set; }
+}
+public class GitHubAsset
+{
+    public string? name { get; set; }
+    public string? browser_download_url { get; set; }
+}
