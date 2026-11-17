@@ -365,7 +365,7 @@ jobs:
             *.deb
             *.pkg
 
-    publish-release:
+  publish-release:
     needs:
       [
         check-version,
