@@ -1,7 +1,7 @@
 <Window x:Class="BirdNETGoControl.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="BirdNET-Go Control" Height="480" Width="380"
+        Title="BirdNET-Go" Height="480" Width="380"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" WindowStartupLocation="CenterScreen">
     
@@ -19,9 +19,9 @@
             </Border>
 
             <!-- Main Content -->
-            <StackPanel Margin="24" Spacing="16">
+            <StackPanel Margin="24">
                 <!-- Status Indicator -->
-                <Border Background="#313244" CornerRadius="8" Padding="16">
+                <Border Background="#313244" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse x:Name="StatusDot" Width="12" Height="12" Fill="#F38BA8" Margin="0,0,12,0"/>
                         <TextBlock x:Name="TxtStatus" Text="HORS LIGNE" Foreground="#F38BA8" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
@@ -29,13 +29,13 @@
                 </Border>
 
                 <!-- Server Controls -->
-                <Button x:Name="BtnToggle" Content="DÉMARRER LE SERVEUR" Background="#10B981" Foreground="White" FontWeight="Bold" Padding="16" CornerRadius="8" Click="OnToggle" Cursor="Hand"/>
-                <Button x:Name="BtnOpen" Content="🌐 Ouvrir l'interface web" Background="#45475A" Foreground="#CDD6F4" Padding="16" CornerRadius="8" Click="OnOpen" IsEnabled="False" Cursor="Hand"/>
+                <Button x:Name="BtnToggle" Content="DÉMARRER LE SERVEUR" Background="#10B981" Foreground="White" FontWeight="Bold" Padding="16" CornerRadius="8" Click="OnToggle" Cursor="Hand" Margin="0,0,0,16"/>
+                <Button x:Name="BtnOpen" Content="🌐 Ouvrir l'interface web" Background="#45475A" Foreground="#CDD6F4" Padding="16" CornerRadius="8" Click="OnOpen" IsEnabled="False" Cursor="Hand" Margin="0,0,0,24"/>
 
                 <!-- Update Section -->
-                <Border Background="#313244" CornerRadius="8" Padding="16" Margin="0,8,0,0">
-                    <StackPanel Spacing="12">
-                        <TextBlock x:Name="TxtUpdateStatus" Text="Vérification des mises à jour..." Foreground="#A6ADC8" HorizontalAlignment="Center" FontSize="13"/>
+                <Border Background="#313244" CornerRadius="8" Padding="16">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtUpdateStatus" Text="Vérification des mises à jour..." Foreground="#A6ADC8" HorizontalAlignment="Center" FontSize="13" Margin="0,0,0,12"/>
                         <Button x:Name="BtnUpdate" Content="METTRE À JOUR BIRDNET-GO" Background="#8B5CF6" Foreground="White" FontWeight="Bold" Padding="16" CornerRadius="8" Click="OnUpdate" Cursor="Hand"/>
                     </StackPanel>
                 </Border>
