@@ -68,6 +68,8 @@ var
 begin
   Result := True;
   IsUpdate := False;
+  
+  // Tuer le serveur BirdNET-Go
   if Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq birdnet-go.exe" | find /I "birdnet-go.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
     if ResultCode = 0 then
@@ -75,6 +77,16 @@ begin
       Exec('taskkill.exe', '/F /IM birdnet-go.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     end;
   end;
+
+  // Tuer l'interface de contrôle (CRUCIAL POUR LA MISE A JOUR)
+  if Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq BirdNET-Go-Control.exe" | find /I "BirdNET-Go-Control.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    if ResultCode = 0 then
+    begin
+      Exec('taskkill.exe', '/F /IM BirdNET-Go-Control.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    end;
+  end;
+
   if RegKeyExists(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\BirdNET-Go_is1') then
     IsUpdate := True;
 end;
