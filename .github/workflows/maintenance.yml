@@ -38,9 +38,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
-  # ============================================================
-  # 1. SUPPRIME LES RELEASES INCOMPLÈTES ET LES MIROIRS
-  # ============================================================
   cleanup-incomplete-releases:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -54,10 +51,9 @@ jobs:
             const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
 
             for (const r of releases) {
-              const isBuild = r.tag_name.match(/^(?:manual-|nightly-)?v\d+\.\d+$/);
-              const isMirror = /^\d{8}$/.test(r.tag_name); // Ex: 20261031
+              const isBuild = r.tag_name.match(/^(?:manual-|nightly-)?v\d+\.\d+/);
+              const isMirror = /^\d{8}$/.test(r.tag_name);
 
-              // Si c'est un miroir (que des chiffres) OU un build avec moins de 4 fichiers
               if (isMirror || (isBuild && r.assets.length < 4)) {
                 try {
                   await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id });
@@ -69,9 +65,6 @@ jobs:
               }
             }
 
-  # ============================================================
-  # 2. GARDE LA DERNIÈRE VERSION DE CHAQUE BUILD
-  # ============================================================
   cleanup-releases:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: cleanup-incomplete-releases
@@ -85,7 +78,6 @@ jobs:
             const { owner, repo } = context.repo;
             const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
 
-            // 1. Tuer toutes les releases "manifest" ou "maintenance"
             for (const r of releases) {
               if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) {
                 try {
@@ -98,12 +90,11 @@ jobs:
               }
             }
 
-            // 2. Nettoyer les anciennes versions (garde le build le plus récent)
             const byVersion = {};
             for (const r of releases) {
               if (r.tag_name.toLowerCase().includes('manifest') || r.tag_name.toLowerCase().includes('maintenance')) continue;
               
-              const m = r.tag_name.match(/^(?:manual-|nightly-)?v?(\d+)\.(\d+)$/);
+              const m = r.tag_name.match(/^(?:manual-|nightly-)?v?(\d+)\.(\d+)/);
               if (m) {
                 const v = m[1];
                 if (!byVersion[v]) byVersion[v] = [];
@@ -124,9 +115,6 @@ jobs:
               }
             }
 
-  # ============================================================
-  # 3. NETTOYAGE DES TAGS ORPHELINS
-  # ============================================================
   cleanup-tags:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: cleanup-releases
@@ -154,9 +142,6 @@ jobs:
               }
             }
 
-  # ============================================================
-  # 4. NETTOYAGE DES BRANCHES INUTILES
-  # ============================================================
   cleanup-branches:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -169,10 +154,10 @@ jobs:
             const { owner, repo } = context.repo;
             const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo });
             const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open' });
-
+            
             const prot = ['main', 'master', 'gh-pages'];
             const prB = prs.map(p => p.head.ref);
-
+            
             for (const b of branches) {
               if (prot.includes(b.name) || prB.includes(b.name)) continue;
               try {
