@@ -1,21 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings> <!-- ON DÉSACTIVE POUR ÉVITER LES CONFLITS -->
+    <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>..\icon.ico</ApplicationIcon>
     <AssemblyName>BirdNET-Go-Control</AssemblyName>
     <RootNamespace>BirdNETGoControl</RootNamespace>
-    
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>false</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <PublishReadyToRun>true</PublishReadyToRun>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <DebugType>embedded</DebugType>
-    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
+
 </Project>
