@@ -374,7 +374,6 @@ jobs:
         build-linux-mac-stable,
         build-linux-mac-nightly,
       ]
-    # Tourne même si un build a échoué : on publie ce qui a réussi, en prerelease si incomplet
     if: |
       !cancelled() &&
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true')
@@ -383,7 +382,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ---------- STABLE ----------
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
@@ -410,12 +408,10 @@ jobs:
             echo "is_complete=true" >> $GITHUB_OUTPUT
             echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ✅" >> $GITHUB_OUTPUT
             echo "release_body=🎉 Publication complète : Windows, Linux x64, Raspberry Pi, macOS." >> $GITHUB_OUTPUT
-            echo "✅ Complet → latest."
           else
             echo "is_complete=false" >> $GITHUB_OUTPUT
             echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ⚠️ INCOMPLET" >> $GITHUB_OUTPUT
             echo "release_body=⚠️ Publication incomplète (un ou plusieurs fichiers manquent). Marquée en prerelease pour protéger la dernière version stable. Vérifiez les jobs de build." >> $GITHUB_OUTPUT
-            echo "⚠️ Incomplet → prerelease."
           fi
 
       - name: Publish Stable Release
@@ -432,7 +428,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
-      # ---------- NIGHTLY ----------
       - name: Download Nightly artifacts
         if: needs.check-version.outputs.build_nightly == 'true'
         uses: actions/download-artifact@v4
