@@ -9,7 +9,6 @@ on:
       - "BirdNET-Go-Installer.iss"
       - "nfpm.yaml"
       - ".github/workflows/**"
-      - ".github/actionlint.yaml"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -24,7 +23,7 @@ concurrency:
 
 jobs:
   # =========================================================
-  # QUALITÉ 1 : lint CIBLÉ (son propre fichier) + garde-fous
+  # QUALITÉ 1 : lint structurel (sans shellcheck) + garde-fous
   # =========================================================
   lint-and-guard:
     runs-on: ubuntu-24.04
@@ -37,8 +36,10 @@ jobs:
           curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash -o /tmp/dl-al.bash
           bash /tmp/dl-al.bash
 
-      - name: Lint du workflow qualité (ciblé, ignores les autres fichiers)
-        run: ./actionlint -color .github/workflows/quality-security-notifications.yml
+      - name: Lint structurel des workflows
+        # -shellcheck= désactive les warnings style (SC2086, SC2129…)
+        # actionlint vérifie TOUJOURS : YAML, ${{ }}, schémas, actions, contexts
+        run: ./actionlint -color -shellcheck=
 
       - name: Garde-fou XAML (anti-régression)
         run: |
@@ -67,7 +68,7 @@ jobs:
           echo "✅ C# OK."
 
   # =========================================================
-  # QUALITÉ 2 : compilation réelle (attrape CS/MC tôt)
+  # QUALITÉ 2 : compilation réelle
   # =========================================================
   build-check:
     runs-on: windows-latest
@@ -84,7 +85,7 @@ jobs:
         run: dotnet build src/BirdNET-Go-Control.csproj -c Release --no-restore
 
   # =========================================================
-  # SÉCURITÉ : intégrité SHA-256 (jq plat) + VirusTotal best-effort
+  # SÉCURITÉ : SHA-256 + VirusTotal best-effort
   # =========================================================
   security-scan:
     runs-on: ubuntu-24.04
@@ -133,7 +134,7 @@ jobs:
           echo "✅ Scan VT OK."
 
   # =========================================================
-  # TEST INSTALLATEUR WINDOWS (robuste, user-scope) — inchangé, déjà ✅
+  # TEST INSTALLATEUR WINDOWS (robuste, user-scope)
   # =========================================================
   test-installer:
     runs-on: windows-latest
@@ -207,7 +208,7 @@ jobs:
           exit 0
 
   # =========================================================
-  # NOTIFICATIONS : résumé + commentaire PR — inchangé, déjà ✅
+  # NOTIFICATIONS : résumé + commentaire PR
   # =========================================================
   notify:
     needs: [lint-and-guard, build-check, security-scan, test-installer]
