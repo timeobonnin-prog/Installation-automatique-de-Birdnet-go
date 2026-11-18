@@ -86,7 +86,6 @@ namespace BirdNETGoControl
             UpdateUI();
         }
 
-        // ---------------- Serveur ----------------
         private bool IsServerRunning() => Process.GetProcessesByName("birdnet-go").Length > 0;
 
         private void StartServer()
@@ -170,7 +169,6 @@ namespace BirdNETGoControl
             }
         }
 
-        // ---------------- Réglages ----------------
         private void ApplySettings()
         {
             var s = AppSettings.Current;
@@ -197,7 +195,7 @@ namespace BirdNETGoControl
             {
                 int days = AppSettings.Current.PurgeLogsOlderThanDays;
                 if (days <= 0) return;
-                var dir = App.LogDir; // %APPDATA%\BirdNETGoControl\logs
+                var dir = App.LogDir;
                 if (!Directory.Exists(dir)) return;
                 foreach (var f in Directory.GetFiles(dir, "app_*.log"))
                     if (File.GetLastWriteTime(f) < DateTime.Now.AddDays(-days)) File.Delete(f);
@@ -205,7 +203,6 @@ namespace BirdNETGoControl
             catch { }
         }
 
-        // ---------------- Mises à jour ----------------
         private async Task<GitHubRelease?> GetTargetReleaseAsync()
         {
             var s = AppSettings.Current;
@@ -316,7 +313,6 @@ namespace BirdNETGoControl
             }
         }
 
-        // ---------------- UI / tray ----------------
         private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void OnClose(object sender, RoutedEventArgs e) { Hide(); ShowTrayTip(); }
         private void OnOpen(object sender, RoutedEventArgs e) => OpenWeb();
