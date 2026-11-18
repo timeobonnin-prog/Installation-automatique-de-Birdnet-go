@@ -1,6 +1,5 @@
 ; ---------------------------------------------------------------
 ;  BirdNET-Go - Installateur Windows (Inno Setup 6)
-;  Embarque : moteur birdnet-go.exe + contrôleurs WPF + FFmpeg
 ; ---------------------------------------------------------------
 
 #define MyAppName "BirdNET-Go"
@@ -36,7 +35,7 @@ VersionInfoCompany={#MyAppPublisher}
 VersionInfoProductName={#MyAppName}
 VersionInfoDescription=Installateur {#MyAppName}
 
-; --- Single-instance : ferme proprement le contrôleur pendant l'install/MAJ ---
+; Single-instance : ferme proprement le contrôleur pendant l'install/MAJ
 AppMutex=BirdNETGoControl_SingleInstance_Mutex
 CloseApplications=yes
 RestartApplications=no
@@ -49,11 +48,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"; Flags: unchecked
 
 [Files]
-; Tout le dossier dist (moteur + UI + dll + ffmpeg + VERSION.txt + UI_VERSION.txt)
 Source: "dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Icône utilisée par le contrôleur et le tray (à la racine du repo)
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
-; Lanceur de secours (optionnel, ne casse pas le build si absent)
 Source: "start_birdnet.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
@@ -62,21 +58,16 @@ Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Registry]
-; Nettoie la clé "Lancer au démarrage de Windows" à la désinstallation
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "BirdNETGoControl"; Flags: uninsdeletevalue
 
 [UninstallRun]
-; Tue le moteur pour ne pas laisser de processus orphelin
 Filename: "{cmd}"; Parameters: "/C taskkill /F /IM birdnet-go.exe"; Flags: runhidden; RunOnceId: "KillBirdnetServer"
 Filename: "{cmd}"; Parameters: "/C taskkill /F /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "KillBirdnetControl"
 
 [UninstallDelete]
-; Réglages + logs (AppData) et anciens logs locaux
 Type: filesandordirs; Name: "{userappdata}\BirdNETGoControl"
 Type: filesandordirs; Name: "{app}\logs"
 
 [Run]
-; Install interactive : case "Lancer" en fin d'assistant
 Filename: "{app}\{#MyAppExeName}"; Description: "Lancer {#MyAppName}"; Flags: postinstall nowait skipifsilent runascurrentuser
-; MAJ /VERYSILENT : relance automatiquement l'app
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait runascurrentuser; Check: WizardSilent
