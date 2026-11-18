@@ -1,132 +1,78 @@
-<Window x:Class="BirdNETGoControl.SettingsWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Réglages" Height="660" Width="420"
-        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
-    <Window.Resources>
-        <Style x:Key="Check" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="#CDD6F4"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-        <Style x:Key="GroupTitle" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#89B4FA"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
-        </Style>
-        <Style x:Key="Label" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#A6ADC8"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-    </Window.Resources>
+using System;
+using System.Diagnostics;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 
-    <Border Background="#1E1E2E" CornerRadius="12" BorderBrush="#313244" BorderThickness="1">
-        <DockPanel>
+namespace BirdNETGoControl
+{
+    public partial class SettingsWindow : System.Windows.Window
+    {
+        public SettingsWindow()
+        {
+            InitializeComponent();
+            var s = AppSettings.Current;
 
-            <Border DockPanel.Dock="Top" Background="#313244" CornerRadius="12,12,0,0" Padding="14,10" MouseLeftButtonDown="OnDrag">
-                <Grid>
-                    <TextBlock Text="⚙️ Réglages du contrôleur" Foreground="#CDD6F4" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <Button Content="✕" Width="32" Height="28" HorizontalAlignment="Right" Click="OnCancel" Style="{StaticResource TitleButton}" Foreground="#F38BA8"/>
-                </Grid>
-            </Border>
+            ChkStartup.IsChecked = s.LaunchAtStartup;
+            ChkAutoStart.IsChecked = s.AutoStartServer;
+            ChkMinimize.IsChecked = s.MinimizeToTrayOnLaunch;
+            ChkAutoRestart.IsChecked = s.AutoRestartOnCrash;
+            ChkStopOnExit.IsChecked = s.StopServerOnExit;
+            ChkNightly.IsChecked = s.AllowNightlyUpdates;
+            ChkBalloon.IsChecked = s.ShowBalloonNotifications;
+            TxtPort.Text = s.ServerPort.ToString();
 
-            <Border DockPanel.Dock="Bottom" Padding="16,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" Content="Annuler" Background="#45475A" Margin="0,0,8,0" Click="OnCancel" Style="{StaticResource RoundedButton}"/>
-                    <Button Grid.Column="1" Content="💾 Enregistrer" Background="#10B981" Margin="8,0,0,0" Click="OnSave" Style="{StaticResource RoundedButton}"/>
-                </Grid>
-            </Border>
+            SelectByTag(CmbAttempts, s.MaxRestartAttempts);
+            SelectByTag(CmbDelay, s.RestartDelaySeconds);
+            SelectByTag(CmbUpdateFreq, s.UpdateCheckIntervalHours);
+            SelectByTag(CmbPurge, s.PurgeLogsOlderThanDays);
+        }
 
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
-                <StackPanel>
-                    <TextBlock Text="Ces options concernent uniquement l'application de contrôle." Foreground="#6C7086" FontSize="12" Margin="0,0,0,14" TextWrapping="Wrap"/>
+        private static void SelectByTag(ComboBox cmb, int value)
+        {
+            foreach (ComboBoxItem item in cmb.Items)
+                if (item.Tag?.ToString() == value.ToString()) { cmb.SelectedItem = item; return; }
+            cmb.SelectedIndex = 0;
+        }
 
-                    <Border Background="#313244" CornerRadius="8" Padding="14" Margin="0,0,0,12">
-                        <StackPanel>
-                            <TextBlock Text="DÉMARRAGE" Style="{StaticResource GroupTitle}"/>
-                            <CheckBox x:Name="ChkStartup" Content="Lancer au démarrage de Windows" Style="{StaticResource Check}"/>
-                            <CheckBox x:Name="ChkAutoStart" Content="Démarrer le serveur auto à l'ouverture" Style="{StaticResource Check}"/>
-                            <CheckBox x:Name="ChkMinimize" Content="Minimiser dans le tray au lancement" Style="{StaticResource Check}" Margin="0"/>
-                        </StackPanel>
-                    </Border>
+        private static int ReadTag(ComboBox cmb, int fallback)
+            => cmb.SelectedItem is ComboBoxItem item && int.TryParse(item.Tag?.ToString(), out int v) ? v : fallback;
 
-                    <Border Background="#313244" CornerRadius="8" Padding="14" Margin="0,0,0,12">
-                        <StackPanel>
-                            <TextBlock Text="SERVEUR (birdnet-go.exe)" Style="{StaticResource GroupTitle}"/>
-                            <CheckBox x:Name="ChkAutoRestart" Content="Relancer automatiquement en cas de crash" Style="{StaticResource Check}"/>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Tentatives max" Style="{StaticResource Label}"/>
-                                <ComboBox x:Name="CmbAttempts" Grid.Column="1">
-                                    <ComboBoxItem Content="1" Tag="1"/><ComboBoxItem Content="2" Tag="2"/>
-                                    <ComboBoxItem Content="3" Tag="3"/><ComboBoxItem Content="5" Tag="5"/>
-                                </ComboBox>
-                            </Grid>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Délai avant relance" Style="{StaticResource Label}"/>
-                                <ComboBox x:Name="CmbDelay" Grid.Column="1">
-                                    <ComboBoxItem Content="1 s" Tag="1"/><ComboBoxItem Content="2 s" Tag="2"/>
-                                    <ComboBoxItem Content="5 s" Tag="5"/><ComboBoxItem Content="10 s" Tag="10"/>
-                                </ComboBox>
-                            </Grid>
-                            <CheckBox x:Name="ChkStopOnExit" Content="Arrêter le serveur en quittant l'app" Style="{StaticResource Check}" Margin="0"/>
-                        </StackPanel>
-                    </Border>
+        private void OnDrag(object sender, MouseButtonEventArgs e) => DragMove();
 
-                    <Border Background="#313244" CornerRadius="8" Padding="14" Margin="0,0,0,12">
-                        <StackPanel>
-                            <TextBlock Text="MISES À JOUR" Style="{StaticResource GroupTitle}"/>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Vérification" Style="{StaticResource Label}"/>
-                                <ComboBox x:Name="CmbUpdateFreq" Grid.Column="1">
-                                    <ComboBoxItem Content="Jamais" Tag="0"/><ComboBoxItem Content="6 h" Tag="6"/>
-                                    <ComboBoxItem Content="24 h" Tag="24"/><ComboBoxItem Content="7 j" Tag="168"/>
-                                </ComboBox>
-                            </Grid>
-                            <CheckBox x:Name="ChkNightly" Content="Autoriser les versions Nightly (bêta)" Style="{StaticResource Check}" Margin="0"/>
-                        </StackPanel>
-                    </Border>
+        private void OnOpenWeb(object sender, RoutedEventArgs e)
+        {
+            int port = int.TryParse(TxtPort.Text, out int p) ? p : 8080;
+            Process.Start(new ProcessStartInfo($"http://localhost:{port}") { UseShellExecute = true });
+        }
 
-                    <Border Background="#313244" CornerRadius="8" Padding="14" Margin="0,0,0,12">
-                        <StackPanel>
-                            <TextBlock Text="INTERFACE &amp; MAINTENANCE" Style="{StaticResource GroupTitle}"/>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Port de l'interface web" Style="{StaticResource Label}"/>
-                                <TextBox x:Name="TxtPort" Grid.Column="1" Background="#1E1E2E" Foreground="#CDD6F4" BorderBrush="#45475A" Padding="6"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
-                                <TextBlock Text="Purge des logs" Style="{StaticResource Label}"/>
-                                <ComboBox x:Name="CmbPurge" Grid.Column="1">
-                                    <ComboBoxItem Content="Jamais" Tag="0"/><ComboBoxItem Content="7 j" Tag="7"/>
-                                    <ComboBoxItem Content="30 j" Tag="30"/><ComboBoxItem Content="90 j" Tag="90"/>
-                                </ComboBox>
-                            </Grid>
-                            <CheckBox x:Name="ChkBalloon" Content="Notifications (bulles tray)" Style="{StaticResource Check}" Margin="0"/>
-                        </StackPanel>
-                    </Border>
+        private void OnCancel(object sender, RoutedEventArgs e) { DialogResult = false; Close(); }
 
-                    <Border Background="#292537" CornerRadius="8" Padding="14" BorderBrush="#89B4FA" BorderThickness="1">
-                        <StackPanel>
-                            <TextBlock Text="🐦 RÉGLAGES DE DÉTECTION" Style="{StaticResource GroupTitle}"/>
-                            <TextBlock Text="Sensibilité, seuil de confiance, espèces… se configurent dans l'interface web du moteur, pas ici."
-                                       Foreground="#A6ADC8" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                            <Button Content="🌐 Ouvrir l'interface web du moteur" Background="#45475A" Click="OnOpenWeb" Style="{StaticResource RoundedButton}"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-        </DockPanel>
-    </Border>
-</Window>
+        private void OnSave(object sender, RoutedEventArgs e)
+        {
+            if (!int.TryParse(TxtPort.Text, out int port) || port < 1 || port > 65535)
+            {
+                System.Windows.MessageBox.Show("Port invalide (1–65535).", "Réglages", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var s = AppSettings.Current;
+            s.LaunchAtStartup = ChkStartup.IsChecked == true;
+            s.AutoStartServer = ChkAutoStart.IsChecked == true;
+            s.MinimizeToTrayOnLaunch = ChkMinimize.IsChecked == true;
+            s.AutoRestartOnCrash = ChkAutoRestart.IsChecked == true;
+            s.MaxRestartAttempts = ReadTag(CmbAttempts, 3);
+            s.RestartDelaySeconds = ReadTag(CmbDelay, 2);
+            s.StopServerOnExit = ChkStopOnExit.IsChecked == true;
+            s.UpdateCheckIntervalHours = ReadTag(CmbUpdateFreq, 24);
+            s.AllowNightlyUpdates = ChkNightly.IsChecked == true;
+            s.ServerPort = port;
+            s.ShowBalloonNotifications = ChkBalloon.IsChecked == true;
+            s.PurgeLogsOlderThanDays = ReadTag(CmbPurge, 30);
+            s.Save();
+
+            DialogResult = true;
+            Close();
+        }
+    }
+}
