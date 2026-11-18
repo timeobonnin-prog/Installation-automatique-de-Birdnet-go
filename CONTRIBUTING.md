@@ -6,9 +6,9 @@ Merci de votre intérêt pour ce projet. Voici comment vous pouvez contribuer.
 
 Avant de créer un rapport de bug, vérifiez si le problème n'a pas déjà été signalé dans les **Issues**. Si ce n'est pas le cas, ouvrez une nouvelle issue en incluant :
 
-* Un titre clair et descriptif.
-* Les étapes exactes pour reproduire le bug.
-* Le comportement attendu et le comportement observé.
+- Un titre clair et descriptif.
+- Les étapes exactes pour reproduire le bug.
+- Le comportement attendu et le comportement observé.
 
 ## Proposer une amélioration
 
@@ -26,5 +26,5 @@ Les suggestions sont les bienvenues. Ouvrez une **Issue** avec l'étiquette `enh
 
 ## Règles de base
 
-* Ajoutez des tests si vous introduisez une nouvelle fonctionnalité.
-* Soyez respectueux et constructif dans tous les échanges.
+- Ajoutez des tests si vous introduisez une nouvelle fonctionnalité.
+- Soyez respectueux et constructif dans tous les échanges.
