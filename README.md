@@ -81,3 +81,4 @@ Free code signing provided by [SignPath.io](https://signpath.io/), certificate b
 ---
 
 _Projet open source sous licence MIT. Non affilié officiellement au projet BirdNET-Go._
+
