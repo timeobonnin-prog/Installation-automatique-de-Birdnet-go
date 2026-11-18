@@ -11,9 +11,8 @@ namespace BirdNETGoControl
         private const string MutexName = "BirdNETGoControl_SingleInstance_Mutex";
         private const string PipeName = "BirdNETGoControl_SingleInstance_Pipe";
 
-        private Mutex _mutex;
+        private Mutex? _mutex;
 
-        // Dossier commun réglages + logs (inscriptible même sans admin)
         public static string DataDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "BirdNETGoControl");
