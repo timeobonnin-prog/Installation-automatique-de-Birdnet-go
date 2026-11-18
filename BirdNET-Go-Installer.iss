@@ -1,5 +1,5 @@
 ; ---------------------------------------------------------------
-;  BirdNET-Go - Installateur Windows (Inno Setup 6)
+;  BirdNET-Go - Installateur Windows (Inno Setup 6) - USER SCOPE (sans admin)
 ; ---------------------------------------------------------------
 
 #define MyAppName "BirdNET-Go"
@@ -16,7 +16,11 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
-DefaultDirName={autopf}\BirdNET-Go
+
+; --- USER SCOPE : pas d'UAC, install dans AppData (CI + prod fiables) ---
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=commandline
+DefaultDirName={localappdata}\Programs\BirdNET-Go
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 UninstallDisplayName={#MyAppName}
@@ -29,7 +33,6 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=admin
 VersionInfoVersion=1.0.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoProductName={#MyAppName}
@@ -69,5 +72,5 @@ Type: filesandordirs; Name: "{userappdata}\BirdNETGoControl"
 Type: filesandordirs; Name: "{app}\logs"
 
 [Run]
+; Relance seulement en install INTERACTIVE (pas de mutex résiduel en CI silent)
 Filename: "{app}\{#MyAppExeName}"; Description: "Lancer {#MyAppName}"; Flags: postinstall nowait skipifsilent runascurrentuser
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait runascurrentuser; Check: WizardSilent
