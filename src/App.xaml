@@ -16,9 +16,6 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5">
-                            <Grid.RenderTransform>
-                                <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1"/>
-                            </Grid.RenderTransform>
 
                             <!-- Fond coloré (Background du bouton) -->
                             <Border Background="{TemplateBinding Background}" CornerRadius="8"/>
@@ -38,17 +35,23 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Glow" Property="Opacity" Value="0.14"/>
                             </Trigger>
-                            <!-- CLIC : assombrit + léger enfoncement -->
+
+                            <!-- CLIC : assombrit + léger enfoncement (on cible Root, pas le transform) -->
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Glow" Property="Background" Value="Black"/>
                                 <Setter TargetName="Glow" Property="Opacity" Value="0.22"/>
-                                <Setter TargetName="Scale" Property="ScaleX" Value="0.97"/>
-                                <Setter TargetName="Scale" Property="ScaleY" Value="0.97"/>
+                                <Setter TargetName="Root" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
+
                             <!-- FOCUS clavier (Tab) -->
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="FocusRing" Property="Opacity" Value="0.6"/>
                             </Trigger>
+
                             <!-- DÉSACTIVÉ : grisé + curseur normal -->
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Root" Property="Opacity" Value="0.4"/>
