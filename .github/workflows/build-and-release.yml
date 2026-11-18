@@ -295,7 +295,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
+    matrix:
         include:
           - os: ubuntu-latest
             platform: linux-amd64
@@ -468,3 +468,38 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+  # =========================================================
+  # POST-RELEASE : enchaîne Maintenance + Clean + Update HTML
+  # Ne se lance QUE si la publication a réussi (success()).
+  # continue-on-error: un dispatch refusé ne rougit PAS le build.
+  # =========================================================
+  post-release:
+    name: Trigger Maintenance + Clean + HTML
+    needs: publish-release
+    if: success()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Lancer "Maintenance"
+        run: |
+          if gh workflow run "Maintenance" --repo "$GITHUB_REPOSITORY" 2>/tmp/m.err; then
+            echo "✅ Maintenance déclenchée."
+          else
+            echo "::warning::Dispatch 'Maintenance' refusé. Vérifie que son 'on:' contient 'workflow_dispatch'. Détail : $(cat /tmp/m.err)"
+            exit 1
+          fi
+
+      - name: Lancer "Clean Releases + Update HTML"
+        run: |
+          if gh workflow run "Clean Releases + Update HTML" --repo "$GITHUB_REPOSITORY" 2>/tmp/c.err; then
+            echo "✅ Clean Releases + Update HTML déclenchés."
+          else
+            echo "::warning::Dispatch 'Clean Releases + Update HTML' refusé. Vérifie que son 'on:' contient 'workflow_dispatch'. Détail : $(cat /tmp/c.err)"
+            exit 1
+          fi
