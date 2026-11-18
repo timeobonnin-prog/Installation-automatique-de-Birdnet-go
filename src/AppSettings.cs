@@ -4,9 +4,10 @@ using System.Text.Json;
 
 namespace BirdNETGoControl
 {
-    // Options du CONTRÔLEUR uniquement. Aucun réglage moteur (config.yaml) ici.
     public class AppSettings
     {
+        public string Language { get; set; } = "auto";   // auto | fr | en | de | es
+
         public bool LaunchAtStartup { get; set; } = false;
         public bool AutoStartServer { get; set; } = true;
         public bool MinimizeToTrayOnLaunch { get; set; } = false;
@@ -23,7 +24,7 @@ namespace BirdNETGoControl
         public bool ShowBalloonNotifications { get; set; } = true;
         public int PurgeLogsOlderThanDays { get; set; } = 30;
 
-        private static AppSettings? _current;
+        private static AppSettings _current;
         public static AppSettings Current => _current ??= Load();
 
         private static string SettingsPath => Path.Combine(
@@ -46,7 +47,7 @@ namespace BirdNETGoControl
             try
             {
                 var dir = Path.GetDirectoryName(SettingsPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
             }
             catch (Exception ex) { App.Log($"Erreur sauvegarde réglages : {ex.Message}"); }
