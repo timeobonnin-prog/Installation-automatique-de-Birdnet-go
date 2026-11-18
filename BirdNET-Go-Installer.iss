@@ -1,118 +1,82 @@
+; ---------------------------------------------------------------
+;  BirdNET-Go - Installateur Windows (Inno Setup 6)
+;  Embarque : moteur birdnet-go.exe + contrôleurs WPF + FFmpeg
+; ---------------------------------------------------------------
+
+#define MyAppName "BirdNET-Go"
+#define MyAppExeName "BirdNET-Go-Control.exe"
+#define MyAppPublisher "timeobonnin-prog"
+#define MyAppURL "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go"
+
 [Setup]
-AppName=BirdNET-Go (Community Installer)
-AppVersion=1.0.0
-AppPublisher=timeobonnin-prog
-DefaultDirName={localappdata}\BirdNET-Go
-DefaultGroupName=BirdNET-Go
+; ⚠️ Garde ton AppId existant si tu en as un !
+AppId=BirdNETGo
+AppName={#MyAppName}
+AppVersion=1.0
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}/releases
+DefaultDirName={autopf}\BirdNET-Go
+DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\{#MyAppExeName}
 OutputDir=Output
 OutputBaseFilename=BirdNET-Go-Windows
-Compression=lzma2
-SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64compatible
-WizardStyle=modern
-PrivilegesRequired=lowest
-ChangesEnvironment=yes
 SetupIconFile=icon.ico
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=admin
+VersionInfoVersion=1.0.0.0
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoProductName={#MyAppName}
+VersionInfoDescription=Installateur {#MyAppName}
+
+; --- Single-instance : ferme proprement le contrôleur pendant l'install/MAJ ---
+AppMutex=BirdNETGoControl_SingleInstance_Mutex
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "firewall"; Description: "{cm:FirewallTask}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"; Flags: unchecked
 
 [Files]
-Source: "dist\birdnet-go.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\*.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\BirdNET-Go-Control.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\UI_VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
+; Tout le dossier dist (moteur + UI + dll + ffmpeg + VERSION.txt + UI_VERSION.txt)
+Source: "dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Icône utilisée par le contrôleur et le tray (à la racine du repo)
 Source: "icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+; Lanceur de secours (optionnel, ne casse pas le build si absent)
+Source: "start_birdnet.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
-Name: "{autodesktop}\BirdNET-Go"; Filename: "{app}\BirdNET-Go-Control.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
-Name: "{group}\Lancer BirdNET-Go"; Filename: "{app}\BirdNET-Go-Control.exe"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
-Name: "{group}\Désinstaller BirdNET-Go"; Filename: "{uninstallexe}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
+Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath('{app}')
-
-[Run]
-Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""BirdNET-Go Server"" dir=in action=allow protocol=TCP localport=8080"; Flags: runhidden; Tasks: firewall
+; Nettoie la clé "Lancer au démarrage de Windows" à la désinstallation
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "BirdNETGoControl"; Flags: uninsdeletevalue
 
 [UninstallRun]
-Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""BirdNET-Go Server"""; Flags: runhidden
+; Tue le moteur pour ne pas laisser de processus orphelin
+Filename: "{cmd}"; Parameters: "/C taskkill /F /IM birdnet-go.exe"; Flags: runhidden; RunOnceId: "KillBirdnetServer"
+Filename: "{cmd}"; Parameters: "/C taskkill /F /IM {#MyAppExeName}"; Flags: runhidden; RunOnceId: "KillBirdnetControl"
 
-[Code]
-var
-  IsUpdate: Boolean;
+[UninstallDelete]
+; Réglages + logs (AppData) et anciens logs locaux
+Type: filesandordirs; Name: "{userappdata}\BirdNETGoControl"
+Type: filesandordirs; Name: "{app}\logs"
 
-function NeedsAddPath(Param: string): boolean;
-var
-  OrigPath: string;
-begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath)
-  then begin
-    Result := True;
-    exit;
-  end;
-  Result := Pos(';' + Param + ';', ';' + OrigPath + ';') = 0;
-end;
-
-function InitializeSetup(): Boolean;
-var
-  ResultCode: Integer;
-begin
-  Result := True;
-  IsUpdate := False;
-  
-  // Tuer le serveur BirdNET-Go
-  if Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq birdnet-go.exe" | find /I "birdnet-go.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-  begin
-    if ResultCode = 0 then
-    begin
-      Exec('taskkill.exe', '/F /IM birdnet-go.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    end;
-  end;
-
-  // Tuer l'interface de contrôle (CRUCIAL POUR LA MISE A JOUR)
-  if Exec('cmd.exe', '/c tasklist /FI "IMAGENAME eq BirdNET-Go-Control.exe" | find /I "BirdNET-Go-Control.exe"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-  begin
-    if ResultCode = 0 then
-    begin
-      Exec('taskkill.exe', '/F /IM BirdNET-Go-Control.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    end;
-  end;
-
-  if RegKeyExists(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\BirdNET-Go_is1') then
-    IsUpdate := True;
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  MsgText: String;
-begin
-  if CurStep = ssPostInstall then
-  begin
-    if ActiveLanguage = 'french' then
-    begin
-      if IsUpdate then MsgText := 'Mise à jour terminée avec succès !' else MsgText := 'Installation terminée avec succès !';
-      MsgText := MsgText + #13#10 + #13#10 + 'Vos réglages et vos sons ont été conservés.';
-    end
-    else
-    begin
-      if IsUpdate then MsgText := 'Update completed successfully!' else MsgText := 'Installation completed successfully!';
-      MsgText := MsgText + #13#10 + #13#10 + 'Your settings and clips have been preserved.';
-    end;
-    MsgBox(MsgText, mbInformation, MB_OK);
-  end;
-end;
-
-[CustomMessages]
-french.FirewallTask=Autoriser BirdNET-Go dans le Pare-feu Windows (Port 8080)
-french.AdditionalIcons=Options supplémentaires :
-english.FirewallTask=Allow BirdNET-Go in Windows Firewall (Port 8080)
-english.AdditionalIcons=Additional options:
+[Run]
+; Install interactive : case "Lancer" en fin d'assistant
+Filename: "{app}\{#MyAppExeName}"; Description: "Lancer {#MyAppName}"; Flags: postinstall nowait skipifsilent runascurrentuser
+; MAJ /VERYSILENT : relance automatiquement l'app
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runascurrentuser; Check: WizardSilent
