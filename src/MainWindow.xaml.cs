@@ -72,6 +72,7 @@ namespace BirdNETGoControl
 
             PurgeOldLogs();
             ApplySettings();
+            RefreshLocalVersions();
             _ = CheckUpdatesAsync();
 
             Closing += (_, e) =>
@@ -86,6 +87,7 @@ namespace BirdNETGoControl
             UpdateUI();
         }
 
+        // ---------------- Serveur (birdnet-go.exe) ----------------
         private bool IsServerRunning() => Process.GetProcessesByName("birdnet-go").Length > 0;
 
         private void StartServer()
@@ -169,6 +171,7 @@ namespace BirdNETGoControl
             }
         }
 
+        // ---------------- Réglages ----------------
         private void ApplySettings()
         {
             var s = AppSettings.Current;
@@ -203,6 +206,28 @@ namespace BirdNETGoControl
             catch { }
         }
 
+        // ---------------- Versions ----------------
+        // Normalise : "v20261031.140-1" ou "20261031.140-1" -> "v20261031.140-1" (un seul v)
+        private static string FormatVersion(string raw)
+        {
+            var v = (raw ?? "").Trim().TrimStart('v', 'V');
+            return string.IsNullOrEmpty(v) ? "v0.0.0" : "v" + v;
+        }
+
+        // Affiche les versions locales même sans réseau / vérif désactivée
+        private void RefreshLocalVersions()
+        {
+            try
+            {
+                var ui = File.Exists(_uiVersionFile) ? File.ReadAllText(_uiVersionFile) : "";
+                var eng = File.Exists(_engineVersionFile) ? File.ReadAllText(_engineVersionFile) : "";
+                TxtUiVersion.Text = FormatVersion(ui);
+                TxtEngineVersion.Text = FormatVersion(eng);
+            }
+            catch { }
+        }
+
+        // ---------------- Mises à jour ----------------
         private async Task<GitHubRelease?> GetTargetReleaseAsync()
         {
             var s = AppSettings.Current;
@@ -219,6 +244,8 @@ namespace BirdNETGoControl
 
         private async Task CheckUpdatesAsync()
         {
+            RefreshLocalVersions();
+
             var s = AppSettings.Current;
             if (s.UpdateCheckIntervalHours <= 0)
             {
@@ -233,22 +260,22 @@ namespace BirdNETGoControl
             {
                 var release = await GetTargetReleaseAsync();
                 var latestTag = release?.tag_name ?? "";
-
                 var uiVersion = File.Exists(_uiVersionFile) ? File.ReadAllText(_uiVersionFile).Trim() : "0.0.0";
-                var engineVersion = File.Exists(_engineVersionFile) ? File.ReadAllText(_engineVersionFile).Trim() : "0.0.0";
-                TxtUiVersion.Text = $"v{uiVersion}";
-                TxtEngineVersion.Text = $"v{engineVersion}";
 
-                if (!string.IsNullOrEmpty(latestTag) && uiVersion != latestTag)
+                // Comparaison normalisée : ignore le préfixe "v" des deux côtés
+                bool upToDate = string.IsNullOrEmpty(latestTag) ||
+                                FormatVersion(uiVersion) == FormatVersion(latestTag);
+
+                if (!upToDate)
                 {
-                    BtnUpdate.Content = "⚡ MISE À JOUR DISPO";
+                    BtnUpdate.Content = "MAJ DISPONIBLE";
                     BtnUpdate.Background = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
-                    TxtUpdateStatus.Text = $"Nouveau : {latestTag}";
+                    TxtUpdateStatus.Text = $"Nouveau : {FormatVersion(latestTag)}";
                     TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(245, 158, 11));
                 }
                 else
                 {
-                    BtnUpdate.Content = "⬇️ MISE À JOUR COMPLÈTE (UI + MOTEUR)";
+                    BtnUpdate.Content = "METTRE À JOUR";
                     BtnUpdate.Background = new SolidColorBrush(WpfColor.FromRgb(139, 92, 246));
                     TxtUpdateStatus.Text = "Aucune mise à jour";
                     TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
@@ -281,7 +308,7 @@ namespace BirdNETGoControl
                 }
 
                 var result = WpfMessageBox.Show(
-                    "L'application va se fermer pour installer la mise à jour. Continuer ?",
+                    "L'application va se fermer pour installer la mise à jour (contrôleur + moteur). Continuer ?",
                     "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (result != MessageBoxResult.Yes) return;
 
@@ -307,12 +334,13 @@ namespace BirdNETGoControl
             {
                 if (!_isQuitting)
                 {
-                    BtnUpdate.Content = "⬇️ MISE À JOUR COMPLÈTE (UI + MOTEUR)";
+                    BtnUpdate.Content = "METTRE À JOUR";
                     BtnUpdate.IsEnabled = true;
                 }
             }
         }
 
+        // ---------------- UI / tray ----------------
         private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void OnClose(object sender, RoutedEventArgs e) { Hide(); ShowTrayTip(); }
         private void OnOpen(object sender, RoutedEventArgs e) => OpenWeb();
@@ -324,6 +352,7 @@ namespace BirdNETGoControl
             UpdateUI();
         }
 
+        // PUBLIC : appelé par App.xaml.cs quand une 2e instance demande "affiche-toi"
         public void ShowWindow()
         {
             Show();
