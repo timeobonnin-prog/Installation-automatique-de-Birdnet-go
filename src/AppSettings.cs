@@ -7,27 +7,23 @@ namespace BirdNETGoControl
     // Options du CONTRÔLEUR uniquement. Aucun réglage moteur (config.yaml) ici.
     public class AppSettings
     {
-        // Démarrage
         public bool LaunchAtStartup { get; set; } = false;
         public bool AutoStartServer { get; set; } = true;
         public bool MinimizeToTrayOnLaunch { get; set; } = false;
 
-        // Gestion du processus birdnet-go.exe
         public bool AutoRestartOnCrash { get; set; } = true;
         public int MaxRestartAttempts { get; set; } = 3;
         public int RestartDelaySeconds { get; set; } = 2;
         public bool StopServerOnExit { get; set; } = true;
 
-        // Mises à jour
         public int UpdateCheckIntervalHours { get; set; } = 24;
         public bool AllowNightlyUpdates { get; set; } = false;
 
-        // Interface / confort
         public int ServerPort { get; set; } = 8080;
         public bool ShowBalloonNotifications { get; set; } = true;
         public int PurgeLogsOlderThanDays { get; set; } = 30;
 
-        private static AppSettings _current;
+        private static AppSettings? _current;
         public static AppSettings Current => _current ??= Load();
 
         private static string SettingsPath => Path.Combine(
@@ -50,7 +46,7 @@ namespace BirdNETGoControl
             try
             {
                 var dir = Path.GetDirectoryName(SettingsPath);
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
             }
             catch (Exception ex) { App.Log($"Erreur sauvegarde réglages : {ex.Message}"); }
