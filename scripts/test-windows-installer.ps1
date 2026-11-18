@@ -1,4 +1,3 @@
-# Test complet : download -> SHA256 -> install -> vérif -> kill -> uninstall
 $ErrorActionPreference = "Stop"
 $repo      = "timeobonnin-prog/Installation-automatique-de-Birdnet-go"
 $assetName = "BirdNET-Go-Windows.exe"
@@ -10,7 +9,6 @@ function Stop-BirdNetApps {
     }
 }
 
-# --- 1. Trouver une release qui contient vraiment le .exe ---
 Write-Host "🔎 Recherche d'une release contenant $assetName..."
 $releases = gh api "repos/$repo/releases?per_page=20" | ConvertFrom-Json
 $target = $null; $asset = $null
@@ -21,12 +19,10 @@ foreach ($r in $releases) {
 if (-not $target) { Write-Host "::warning::Aucune release ne contient $assetName. Test ignoré."; exit 0 }
 Write-Host "✅ Release trouvée : $($target.tag_name)"
 
-# --- 2. Téléchargement ---
 New-Item -ItemType Directory -Path "dist" -Force | Out-Null
 gh release download $target.tag_name --repo $repo --pattern $assetName --dir "dist" --clobber
 $installer = "dist\$assetName"
 
-# --- 3. SHA-256 ---
 if ($asset.digest -and $asset.digest.StartsWith("sha256:")) {
     $expected = $asset.digest.Substring(7).ToLower()
     $actual   = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
@@ -34,8 +30,7 @@ if ($asset.digest -and $asset.digest.StartsWith("sha256:")) {
     Write-Host "🔐 SHA-256 vérifié."
 }
 
-# --- 4. Installation silencieuse (avec timeout 5 min) ---
-Stop-BirdNetApps   # au cas où une instance traîne
+Stop-BirdNetApps
 Write-Host "📦 Installation silencieuse dans $testDir..."
 $p = Start-Process -FilePath $installer -PassThru -ArgumentList `
     "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$testDir"
@@ -43,24 +38,20 @@ if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Error "Installation trop lon
 if ($p.ExitCode -ne 0) { Write-Error "Échec installation (code $($p.ExitCode))."; exit 1 }
 Write-Host "✅ Installation terminée."
 
-# --- 5. Vérification des fichiers ---
 $required = @("birdnet-go.exe","BirdNET-Go-Control.exe","ffmpeg.exe","ffprobe.exe",
               "onnxruntime.dll","tensorflowlite_c.dll","VERSION.txt","UI_VERSION.txt","icon.ico")
 $missing = $required | Where-Object { -not (Test-Path "$testDir\$_") }
 if ($missing) { Write-Error "Fichiers manquants : $($missing -join ', ')"; exit 1 }
 Write-Host "✅ Tous les fichiers sont installés."
 
-# --- 6. Fermer l'app (l'installateur l'a relancée en mode silent) ---
 Stop-BirdNetApps
 Start-Sleep -Seconds 2
 
-# --- 7. Désinstallation ---
 Write-Host "🧹 Désinstallation..."
 $unins = "$testDir\unins000.exe"
 if (Test-Path $unins) {
     $u = Start-Process -FilePath $unins -PassThru -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
     $u.WaitForExit(120000) | Out-Null
-    # Inno copie l'uninstaller en temp : on attend la disparition du dossier
     for ($i = 0; $i -lt 30; $i++) {
         if (-not (Test-Path "$testDir\BirdNET-Go-Control.exe")) { break }
         Start-Sleep -Seconds 2
