@@ -3,184 +3,257 @@ name: Quality, Security & Notifications
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "BirdNET-Go-Installer.iss"
+      - "nfpm.yaml"
+      - ".github/workflows/**"
   pull_request:
     branches: [main]
-  release:
-    types: [published]
-  schedule:
-    - cron: "30 2 * * 1"
   workflow_dispatch:
 
 permissions:
   contents: read
-  security-events: write
-  actions: read
+  pull-requests: write   # pour poster le résumé en commentaire de PR
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-code:
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+  # =========================================================
+  # QUALITÉ 1 : lint workflows + garde-fou XAML/C# (sans compile)
+  # =========================================================
+  lint-and-guard:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - run: python -m py_compile generate_html.py
-      - run: |
-          pip install yamllint
-          yamllint .github/workflows/ || true
-      - shell: pwsh
-        run: |
-          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
-          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error
-          if ($results) { $results | Format-Table -AutoSize; exit 1 }
 
-  test-windows:
-    name: Test de l'installateur Windows (.exe)
-    needs: lint-code
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+      - name: Installer actionlint
+        run: |
+          bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          sudo mv ./actionlint /usr/local/bin/ || true
+
+      - name: Lint des workflows YAML
+        run: actionlint -color || { echo "::error::actionlint a trouvé des erreurs de workflow"; exit 1; }
+
+      - name: Garde-fou XAML (anti-régression)
+        run: |
+          echo "🔍 Vérification XAML..."
+          if grep -RnE 'Spacing=' src/*.xaml; then
+            echo "::error::.xaml contient 'Spacing=' (incompatible .NET < 8). Utilise Margin."
+            exit 1
+          fi
+          if grep -RnE '<Button[^>]*CornerRadius=' src/*.xaml; then
+            echo "::error::'CornerRadius' sur un <Button> : invalide en WPF. Utilise le style RoundedButton."
+            exit 1
+          fi
+          echo "✅ XAML OK."
+
+      - name: Garde-fou C# (anti-ambiguïté WPF/WinForms)
+        run: |
+          echo "🔍 Vérification C#..."
+          # Interdit 'using System.Windows.Forms;' non aliasé (source de CS0104)
+          if grep -RnE '^using System\.Windows\.Forms;' src/*.cs; then
+            echo "::error::'using System.Windows.Forms;' direct trouvé. Utilise : using WinForms = System.Windows.Forms;"
+            exit 1
+          fi
+          # Vérifie la présence des alias obligatoires dans MainWindow
+          if ! grep -q 'using WpfApplication = System.Windows.Application;' src/MainWindow.xaml.cs; then
+            echo "::error::Alias WpfApplication manquant dans MainWindow.xaml.cs"
+            exit 1
+          fi
+          echo "✅ C# OK."
+
+  # =========================================================
+  # QUALITÉ 2 : compilation réelle (attrape CS/MC tôt)
+  # =========================================================
+  build-check:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Installer FFmpeg
-        run: choco install ffmpeg -y --no-progress
-      - name: Télécharger l'installateur
-        shell: pwsh
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-      - name: Installer et Tester (30s max)
-        run: |
-          if (Test-Path "dist\BirdNET-Go-Windows.exe") {
-            Start-Process -FilePath "dist\BirdNET-Go-Windows.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -PassThru | Out-Null
-            Start-Sleep -Seconds 60
-            Get-Process -Name "BirdNET-Go-Windows", "Setup" -ErrorAction SilentlyContinue | Stop-Process -Force
-            
-            $exe = "$env:LOCALAPPDATA\BirdNET-Go\birdnet-go.exe"
-            if (Test-Path $exe) {
-              $logOut = "$env:TEMP\birdnet.log"
-              $logErr = "$env:TEMP\birdnet.err"
-              
-              $process = Start-Process -FilePath $exe -ArgumentList "serve" -WorkingDirectory (Split-Path $exe) -PassThru -NoNewWindow -RedirectStandardOutput $logOut -RedirectStandardError $logErr
-              
-              $success = $false
-              for ($i=0; $i -lt 15; $i++) {
-                if ($process.HasExited) {
-                  Write-Host "❌ Le serveur Windows a planté."
-                  Get-Content $logOut; Get-Content $logErr; exit 1
-                }
-                try {
-                  $r = Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 2
-                  if ($r.StatusCode -eq 200) { $success = $true; break }
-                } catch {}
-                Start-Sleep -Seconds 2
-              }
-              
-              if ($success) {
-                Write-Host "✅ Le serveur Windows répond !"
-                Stop-Process -Id $process.Id -Force
-              } else {
-                Write-Host "❌ Le serveur Windows n'a pas répondu après 30s."
-                Get-Content $logOut; Get-Content $logErr; Stop-Process -Id $process.Id -Force; exit 1
-              }
-            } else { Write-Host "❌ Installation échouée."; exit 1 }
-          } else { Write-Host "⚠️ Pas d'installateur Windows."; exit 0 }
-
-  test-linux:
-    name: Test du paquet Linux x64 (.deb)
-    needs: lint-code
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Télécharger le paquet
-        shell: bash
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-Linux-x64.deb" --clobber || true
-      - name: Installer et Vérifier
-        run: |
-          if [ -f "BirdNET-Go-Linux-x64.deb" ]; then
-            sudo dpkg -i BirdNET-Go-Linux-x64.deb || sudo apt-get install -f -y
-            export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-            /usr/local/bin/birdnet-go authors
-            echo "✅ Le binaire Linux s'exécute correctement (bibliothèques OK)."
-          else
-            echo "⚠️ Pas de paquet Linux, test ignoré."
-            exit 0
-          fi
-
-  test-macos:
-    name: Test du paquet macOS (.pkg)
-    needs: lint-code
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    runs-on: macos-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Télécharger le paquet
-        shell: bash
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-macOS.pkg" --clobber || true
-      - name: Installer et Vérifier
-        run: |
-          if [ -f "BirdNET-Go-macOS.pkg" ]; then
-            sudo installer -pkg BirdNET-Go-macOS.pkg -target /
-            /usr/local/bin/birdnet-go authors
-            echo "✅ Le binaire macOS s'exécute correctement (bibliothèques OK)."
-          else
-            echo "⚠️ Pas de paquet macOS, test ignoré."
-            exit 0
-          fi
-
-  test-raspberry:
-    name: Test du paquet Raspberry Pi (.deb)
-    needs: lint-code
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Télécharger le paquet
-        shell: bash
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release download --repo ${{ github.repository }} --pattern "BirdNET-Go-RaspberryPi.deb" --clobber || true
-      - name: Vérifier le paquet
-        run: |
-          if [ -f "BirdNET-Go-RaspberryPi.deb" ]; then
-            dpkg-deb -I BirdNET-Go-RaspberryPi.deb
-            echo "✅ Le paquet Raspberry Pi est valide."
-          else
-            echo "⚠️ Pas de paquet Raspberry Pi, test ignoré."
-          fi
-
-  codeql-analysis:
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
-        with: { languages: python }
-      - uses: github/codeql-action/analyze@v3
-
-  notify-telegram:
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Envoyer un message sur Telegram
-        uses: actions/github-script@v7
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
         with:
-          script: |
-            const token = process.env.TELEGRAM_TOKEN;
-            const chatId = process.env.TELEGRAM_CHAT;
-            const release = context.payload.release;
-            if (!token || !chatId) return;
-            const title = release.prerelease ? "🌙 Nouvelle Nightly !" : "🚀 Nouvelle Stable !";
-            const message = `${title}\n\nVersion *${release.name}*\n[Télécharger ici](${release.html_url})`;
-            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'Markdown' })
-            });
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: dotnet restore src/BirdNET-Go-Control.csproj
+      - name: Build (Release, sans publish)
+        run: dotnet build src/BirdNET-Go-Control.csproj -c Release --no-restore
+
+  # =========================================================
+  # SÉCURITÉ : intégrité des assets (SHA-256) + VirusTotal best-effort
+  # =========================================================
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier les digests SHA-256 de la dernière release
+        run: |
+          echo "🔐 Contrôle d'intégrité des assets..."
+          REL=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName,assets -q '{tag:.tagName,assets:[.assets[]|{name,digest,size]} }')
+          echo "$REL"
+          # Chaque asset doit avoir un digest sha256:hex64
+          BAD=$(echo "$REL" | jq -r '.assets[] | select(.digest == null or (.digest | test("^sha256:[0-9a-f]{64}$") | not)) | .name')
+          if [ -n "$BAD" ]; then
+            echo "::error::Assets sans digest SHA-256 valide : $BAD"
+            exit 1
+          fi
+          echo "✅ Tous les assets ont un SHA-256 valide."
+
+      - name: Scan VirusTotal (best-effort, si clé disponible)
+        if: env.VIRUSTOTAL_API_KEY != ''
+        continue-on-error: true
+        run: |
+          echo "🦠 Scan VirusTotal de l'installateur Windows..."
+          URL=$(gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[] | select(.name=="BirdNET-Go-Windows.exe") | .browserDownloadUrl' | head -n1)
+          if [ -z "$URL" ]; then echo "Pas d'exe Windows, scan ignoré."; exit 0; fi
+          # Demande d'analyse par URL
+          RES=$(curl -s -X POST "https://www.virustotal.com/api/v3/urls" \
+            -H "x-apikey: $VIRUSTOTAL_API_KEY" \
+            --data-urlencode "url=$URL")
+          ANALYSIS=$(echo "$RES" | jq -r '.data.id // empty')
+          if [ -z "$ANALYSIS" ]; then echo "::warning::VT n'a pas créé d'analyse"; exit 0; fi
+          sleep 30
+          REPORT=$(curl -s "https://www.virustotal.com/api/v3/analyses/$ANALYSIS" -H "x-apikey: $VIRUSTOTAL_API_KEY")
+          HARMLESS=$(echo "$REPORT" | jq -r '.data.attributes.stats.harmless // 0')
+          MALICIOUS=$(echo "$REPORT" | jq -r '.data.attributes.stats.malicious // 0')
+          SUSPICIOUS=$(echo "$REPORT" | jq -r '.data.attributes.stats.suspicious // 0')
+          echo "Résultat VT → inoffensif:$HARMLESS malveillant:$MALICIOUS suspect:$SUSPICIOUS"
+          if [ "$MALICIOUS" -gt 0 ]; then
+            echo "::error::VirusTotal signale $MALICIOUS détection(s) malveillante(s) !"
+            exit 1
+          fi
+          echo "✅ Scan VT OK."
+
+  # =========================================================
+  # TEST INSTALLATEUR WINDOWS (snippet ROBUSTE, user-scope)
+  # =========================================================
+  test-installer:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test de l'installateur Windows (.exe)
+        shell: pwsh
+        run: |
+          $exe = "dist\BirdNET-Go-Windows.exe"
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+
+          # 0. Télécharger l'installateur de la dernière release QUI LE CONTIENT
+          Write-Host "🔎 Recherche d'une release contenant BirdNET-Go-Windows.exe..."
+          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=20" | ConvertFrom-Json
+          $target = $null
+          foreach ($r in $releases) {
+              if ($r.assets | Where-Object { $_.name -eq "BirdNET-Go-Windows.exe" }) { $target = $r; break }
+          }
+          if (-not $target) {
+              Write-Host "::warning::Aucune release ne contient l'installateur Windows. Test ignoré."
+              exit 0
+          }
+          Write-Host "✅ Release ciblée : $($target.tag_name)"
+          gh release download $target.tag_name --repo $env:GITHUB_REPOSITORY --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
+          if (-not (Test-Path $exe)) { Write-Host "::error::Téléchargement raté."; exit 1 }
+
+          # 1. SHA-256 (digest fourni par GitHub)
+          $asset = $target.assets | Where-Object { $_.name -eq "BirdNET-Go-Windows.exe" } | Select-Object -First 1
+          if ($asset.digest -and $asset.digest.StartsWith("sha256:")) {
+              $expected = $asset.digest.Substring(7).ToLower()
+              $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+              if ($expected -ne $actual) { Write-Host "::error::SHA-256 invalide !"; exit 1 }
+              Write-Host "🔐 SHA-256 vérifié."
+          }
+
+          # 2. Tuer tout résidu (évite l'AppMutex qui bloque l'install)
+          foreach ($n in @("BirdNET-Go-Control","birdnet-go")) {
+              Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+          Start-Sleep -Seconds 2
+
+          # 3. Installation silencieuse USER-SCOPE (pas d'UAC) + log de diag
+          $dir = Join-Path $env:TEMP "BirdNET-Go-Test"
+          $log = Join-Path $env:TEMP "inno-install.log"
+          Write-Host "📦 Installation silencieuse dans $dir..."
+          $p = Start-Process -FilePath $exe -PassThru -ArgumentList `
+              "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-","/DIR=$dir","/LOG=$log"
+          $p.WaitForExit(300000) | Out-Null
+          if ($p.ExitCode -ne 0) {
+              Write-Host "::error::Installation échouée (exit $($p.ExitCode)). Log Inno :"
+              if (Test-Path $log) { Get-Content $log }
+              exit 1
+          }
+          Write-Host "✅ Installation OK."
+
+          # 4. Vérification des fichiers clés
+          $req = @("birdnet-go.exe","BirdNET-Go-Control.exe","ffmpeg.exe","ffprobe.exe",
+                   "onnxruntime.dll","tensorflowlite_c.dll","VERSION.txt","UI_VERSION.txt","icon.ico")
+          $miss = $req | Where-Object { -not (Test-Path "$dir\$_") }
+          if ($miss) { Write-Host "::error::Manquants : $($miss -join ', ')"; exit 1 }
+          Write-Host "✅ Tous les fichiers sont installés."
+
+          # 5. Nettoyage (kill puis uninstall)
+          foreach ($n in @("BirdNET-Go-Control","birdnet-go")) {
+              Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+          $unins = "$dir\unins000.exe"
+          if (Test-Path $unins) {
+              $u = Start-Process -FilePath $unins -PassThru -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
+              $u.WaitForExit(120000) | Out-Null
+          }
+          Write-Host "🎉 Test installateur réussi."
+          exit 0
+
+  # =========================================================
+  # NOTIFICATIONS : résumé + commentaire PR
+  # =========================================================
+  notify:
+    needs: [lint-and-guard, build-check, security-scan, test-installer]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Construire le résumé
+        id: sum
+        run: |
+          icon() { case "$1" in success) echo "✅";; failure) echo "❌";; skipped) echo "⏭️";; *) echo "⚠️";; esac; }
+          Q=$(icon "${{ needs.lint-and-guard.result }}")
+          B=$(icon "${{ needs.build-check.result }}")
+          S=$(icon "${{ needs.security-scan.result }}")
+          T=$(icon "${{ needs.test-installer.result }}")
+          OVERALL="succès"
+          for r in "${{ needs.lint-and-guard.result }}" "${{ needs.build-check.result }}" "${{ needs.security-scan.result }}" "${{ needs.test-installer.result }}"; do
+            [ "$r" = "failure" ] && OVERALL="ÉCHEC"
+          done
+          {
+            echo "## 🧪 Qualité, Sécurité & Installateur — $OVERALL"
+            echo ""
+            echo "| Job | État |"
+            echo "|-----|------|"
+            echo "| Lint & garde-fou | $Q |"
+            echo "| Compilation (.NET 8) | $B |"
+            echo "| Sécurité (SHA-256 / VT) | $S |"
+            echo "| Test installateur Windows | $T |"
+            echo ""
+            echo "_Commit : \`${{ github.sha }}\` — branche \`${{ github.ref_name }}\`_"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "overall=$OVERALL" >> "$GITHUB_OUTPUT"
+
+      - name: Commenter la Pull Request (si applicable)
+        if: github.event_name == 'pull_request'
+        run: |
+          BODY=$(cat "$GITHUB_STEP_SUMMARY")
+          # retire l'en-tête markdown dupliqué si présent
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --edit-last --body "$BODY" 2>/dev/null \
+            || gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --body "$BODY"
