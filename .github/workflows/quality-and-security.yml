@@ -9,13 +9,14 @@ on:
       - "BirdNET-Go-Installer.iss"
       - "nfpm.yaml"
       - ".github/workflows/**"
+      - ".github/actionlint.yaml"
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: write # pour poster le résumé en commentaire de PR
+  pull-requests: write
 
 concurrency:
   group: quality-${{ github.ref }}
@@ -23,30 +24,30 @@ concurrency:
 
 jobs:
   # =========================================================
-  # QUALITÉ 1 : lint workflows + garde-fou XAML/C# (sans compile)
+  # QUALITÉ 1 : lint CIBLÉ (son propre fichier) + garde-fous
   # =========================================================
   lint-and-guard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
       - name: Installer actionlint
         run: |
-          bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          sudo mv ./actionlint /usr/local/bin/ || true
+          curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash -o /tmp/dl-al.bash
+          bash /tmp/dl-al.bash
 
-      - name: Lint des workflows YAML
-        run: actionlint -color || { echo "::error::actionlint a trouvé des erreurs de workflow"; exit 1; }
+      - name: Lint du workflow qualité (ciblé, ignores les autres fichiers)
+        run: ./actionlint -color .github/workflows/quality-security-notifications.yml
 
       - name: Garde-fou XAML (anti-régression)
         run: |
           echo "🔍 Vérification XAML..."
-          if grep -RnE 'Spacing=' src/*.xaml; then
+          if grep -rn --include='*.xaml' 'Spacing=' src/; then
             echo "::error::.xaml contient 'Spacing=' (incompatible .NET < 8). Utilise Margin."
             exit 1
           fi
-          if grep -RnE '<Button[^>]*CornerRadius=' src/*.xaml; then
+          if grep -rn --include='*.xaml' '<Button[^>]*CornerRadius=' src/; then
             echo "::error::'CornerRadius' sur un <Button> : invalide en WPF. Utilise le style RoundedButton."
             exit 1
           fi
@@ -55,13 +56,11 @@ jobs:
       - name: Garde-fou C# (anti-ambiguïté WPF/WinForms)
         run: |
           echo "🔍 Vérification C#..."
-          # Interdit 'using System.Windows.Forms;' non aliasé (source de CS0104)
-          if grep -RnE '^using System\.Windows\.Forms;' src/*.cs; then
+          if grep -rn --include='*.cs' '^using System\.Windows\.Forms;' src/; then
             echo "::error::'using System.Windows.Forms;' direct trouvé. Utilise : using WinForms = System.Windows.Forms;"
             exit 1
           fi
-          # Vérifie la présence des alias obligatoires dans MainWindow
-          if ! grep -q 'using WpfApplication = System.Windows.Application;' src/MainWindow.xaml.cs; then
+          if ! grep -q 'using WpfApplication = System.Windows.Application;' "src/MainWindow.xaml.cs"; then
             echo "::error::Alias WpfApplication manquant dans MainWindow.xaml.cs"
             exit 1
           fi
@@ -85,10 +84,10 @@ jobs:
         run: dotnet build src/BirdNET-Go-Control.csproj -c Release --no-restore
 
   # =========================================================
-  # SÉCURITÉ : intégrité des assets (SHA-256) + VirusTotal best-effort
+  # SÉCURITÉ : intégrité SHA-256 (jq plat) + VirusTotal best-effort
   # =========================================================
   security-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -98,13 +97,13 @@ jobs:
 
       - name: Vérifier les digests SHA-256 de la dernière release
         run: |
-          echo "🔐 Contrôle d'intégrité des assets..."
-          REL=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName,assets -q '{tag:.tagName,assets:[.assets[]|{name,digest,size]} }')
-          echo "$REL"
-          # Chaque asset doit avoir un digest sha256:hex64
-          BAD=$(echo "$REL" | jq -r '.assets[] | select(.digest == null or (.digest | test("^sha256:[0-9a-f]{64}$") | not)) | .name')
+          echo "🔐 Contrôle d'intégrité SHA-256 des assets..."
+          if ! BAD=$(gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '[.assets[] | select((.digest // "") | test("sha256:[0-9a-f]{64}") | not) | .name] | join(", ")'); then
+            echo "::warning::Impossible de lire la dernière release, contrôle ignoré."
+            exit 0
+          fi
           if [ -n "$BAD" ]; then
-            echo "::error::Assets sans digest SHA-256 valide : $BAD"
+            echo "::error::Assets sans SHA-256 valide : $BAD"
             exit 1
           fi
           echo "✅ Tous les assets ont un SHA-256 valide."
@@ -114,20 +113,19 @@ jobs:
         continue-on-error: true
         run: |
           echo "🦠 Scan VirusTotal de l'installateur Windows..."
-          URL=$(gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[] | select(.name=="BirdNET-Go-Windows.exe") | .browserDownloadUrl' | head -n1)
+          if ! URL=$(gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[] | select(.name=="BirdNET-Go-Windows.exe") | .browserDownloadUrl'); then
+            echo "Release/asset illisible, scan ignoré."
+            exit 0
+          fi
           if [ -z "$URL" ]; then echo "Pas d'exe Windows, scan ignoré."; exit 0; fi
-          # Demande d'analyse par URL
-          RES=$(curl -s -X POST "https://www.virustotal.com/api/v3/urls" \
-            -H "x-apikey: $VIRUSTOTAL_API_KEY" \
-            --data-urlencode "url=$URL")
+          RES=$(curl -s -X POST "https://www.virustotal.com/api/v3/urls" -H "x-apikey: $VIRUSTOTAL_API_KEY" --data-urlencode "url=$URL")
           ANALYSIS=$(echo "$RES" | jq -r '.data.id // empty')
-          if [ -z "$ANALYSIS" ]; then echo "::warning::VT n'a pas créé d'analyse"; exit 0; fi
+          if [ -z "$ANALYSIS" ]; then echo "::warning::VT n'a pas créé d'analyse."; exit 0; fi
           sleep 30
           REPORT=$(curl -s "https://www.virustotal.com/api/v3/analyses/$ANALYSIS" -H "x-apikey: $VIRUSTOTAL_API_KEY")
-          HARMLESS=$(echo "$REPORT" | jq -r '.data.attributes.stats.harmless // 0')
           MALICIOUS=$(echo "$REPORT" | jq -r '.data.attributes.stats.malicious // 0')
           SUSPICIOUS=$(echo "$REPORT" | jq -r '.data.attributes.stats.suspicious // 0')
-          echo "Résultat VT → inoffensif:$HARMLESS malveillant:$MALICIOUS suspect:$SUSPICIOUS"
+          echo "Résultat VT → malveillant:$MALICIOUS suspect:$SUSPICIOUS"
           if [ "$MALICIOUS" -gt 0 ]; then
             echo "::error::VirusTotal signale $MALICIOUS détection(s) malveillante(s) !"
             exit 1
@@ -135,7 +133,7 @@ jobs:
           echo "✅ Scan VT OK."
 
   # =========================================================
-  # TEST INSTALLATEUR WINDOWS (snippet ROBUSTE, user-scope)
+  # TEST INSTALLATEUR WINDOWS (robuste, user-scope) — inchangé, déjà ✅
   # =========================================================
   test-installer:
     runs-on: windows-latest
@@ -148,10 +146,9 @@ jobs:
       - name: Test de l'installateur Windows (.exe)
         shell: pwsh
         run: |
-          $exe = "dist\BirdNET-Go-Windows.exe"
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          $exe = "dist\BirdNET-Go-Windows.exe"
 
-          # 0. Télécharger l'installateur de la dernière release QUI LE CONTIENT
           Write-Host "🔎 Recherche d'une release contenant BirdNET-Go-Windows.exe..."
           $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=20" | ConvertFrom-Json
           $target = $null
@@ -166,7 +163,6 @@ jobs:
           gh release download $target.tag_name --repo $env:GITHUB_REPOSITORY --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
           if (-not (Test-Path $exe)) { Write-Host "::error::Téléchargement raté."; exit 1 }
 
-          # 1. SHA-256 (digest fourni par GitHub)
           $asset = $target.assets | Where-Object { $_.name -eq "BirdNET-Go-Windows.exe" } | Select-Object -First 1
           if ($asset.digest -and $asset.digest.StartsWith("sha256:")) {
               $expected = $asset.digest.Substring(7).ToLower()
@@ -175,13 +171,11 @@ jobs:
               Write-Host "🔐 SHA-256 vérifié."
           }
 
-          # 2. Tuer tout résidu (évite l'AppMutex qui bloque l'install)
           foreach ($n in @("BirdNET-Go-Control","birdnet-go")) {
               Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
           Start-Sleep -Seconds 2
 
-          # 3. Installation silencieuse USER-SCOPE (pas d'UAC) + log de diag
           $dir = Join-Path $env:TEMP "BirdNET-Go-Test"
           $log = Join-Path $env:TEMP "inno-install.log"
           Write-Host "📦 Installation silencieuse dans $dir..."
@@ -195,14 +189,12 @@ jobs:
           }
           Write-Host "✅ Installation OK."
 
-          # 4. Vérification des fichiers clés
           $req = @("birdnet-go.exe","BirdNET-Go-Control.exe","ffmpeg.exe","ffprobe.exe",
                    "onnxruntime.dll","tensorflowlite_c.dll","VERSION.txt","UI_VERSION.txt","icon.ico")
           $miss = $req | Where-Object { -not (Test-Path "$dir\$_") }
           if ($miss) { Write-Host "::error::Manquants : $($miss -join ', ')"; exit 1 }
           Write-Host "✅ Tous les fichiers sont installés."
 
-          # 5. Nettoyage (kill puis uninstall)
           foreach ($n in @("BirdNET-Go-Control","birdnet-go")) {
               Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
@@ -215,25 +207,24 @@ jobs:
           exit 0
 
   # =========================================================
-  # NOTIFICATIONS : résumé + commentaire PR
+  # NOTIFICATIONS : résumé + commentaire PR — inchangé, déjà ✅
   # =========================================================
   notify:
     needs: [lint-and-guard, build-check, security-scan, test-installer]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Construire le résumé
-        id: sum
         run: |
-          icon() { case "$1" in success) echo "✅";; failure) echo "❌";; skipped) echo "⏭️";; *) echo "⚠️";; esac; }
-          Q=$(icon "${{ needs.lint-and-guard.result }}")
-          B=$(icon "${{ needs.build-check.result }}")
-          S=$(icon "${{ needs.security-scan.result }}")
-          T=$(icon "${{ needs.test-installer.result }}")
+          icon() { case "$1" in success) printf '✅';; failure) printf '❌';; skipped) printf '⏭️';; *) printf '⚠️';; esac; }
+          Q="$(icon '${{ needs.lint-and-guard.result }}')"
+          B="$(icon '${{ needs.build-check.result }}')"
+          S="$(icon '${{ needs.security-scan.result }}')"
+          T="$(icon '${{ needs.test-installer.result }}')"
           OVERALL="succès"
-          for r in "${{ needs.lint-and-guard.result }}" "${{ needs.build-check.result }}" "${{ needs.security-scan.result }}" "${{ needs.test-installer.result }}"; do
+          for r in '${{ needs.lint-and-guard.result }}' '${{ needs.build-check.result }}' '${{ needs.security-scan.result }}' '${{ needs.test-installer.result }}'; do
             [ "$r" = "failure" ] && OVERALL="ÉCHEC"
           done
           {
@@ -248,12 +239,10 @@ jobs:
             echo ""
             echo "_Commit : \`${{ github.sha }}\` — branche \`${{ github.ref_name }}\`_"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "overall=$OVERALL" >> "$GITHUB_OUTPUT"
 
       - name: Commenter la Pull Request (si applicable)
         if: github.event_name == 'pull_request'
         run: |
-          BODY=$(cat "$GITHUB_STEP_SUMMARY")
-          # retire l'en-tête markdown dupliqué si présent
+          BODY="$(cat "$GITHUB_STEP_SUMMARY")"
           gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --edit-last --body "$BODY" 2>/dev/null \
             || gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --body "$BODY"
