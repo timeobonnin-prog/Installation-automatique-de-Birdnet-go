@@ -11,11 +11,10 @@ permissions:
 
 concurrency:
   group: test-windows-installer
-  cancel-in-progress: true
+  cancel-in-progress: false   # ✅ ne plus tuer un test en cours
 
 jobs:
   test-installer:
-    # Se lance après un Build & Release réussi, ou manuellement
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: windows-latest
     timeout-minutes: 20
