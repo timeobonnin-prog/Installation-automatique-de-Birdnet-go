@@ -4,7 +4,6 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
 
-        <!-- Bouton arrondi principal -->
         <Style x:Key="RoundedButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="Bold"/>
@@ -22,7 +21,6 @@
             </Setter>
         </Style>
 
-        <!-- Petit bouton de barre de titre -->
         <Style x:Key="TitleButton" TargetType="Button">
             <Setter Property="Foreground" Value="#CDD6F4"/>
             <Setter Property="FontSize" Value="14"/>
