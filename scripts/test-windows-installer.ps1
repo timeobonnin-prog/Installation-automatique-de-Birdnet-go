@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $repo      = "timeobonnin-prog/Installation-automatique-de-Birdnet-go"
 $assetName = "BirdNET-Go-Windows.exe"
-$testDir   = "C:\BirdNET-Go-Test"
+$testDir = Join-Path $env:TEMP "BirdNET-Go-Test"
 
 function Stop-BirdNetApps {
     foreach ($n in @("BirdNET-Go-Control", "birdnet-go")) {
