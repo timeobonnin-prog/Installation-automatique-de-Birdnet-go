@@ -64,7 +64,7 @@ jobs:
             CLEAN_NIGHTLY="${NIGHTLY_RAW#nightly-}"
             echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
             HAS_NIGHTLY=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"nightly-v$CLEAN_NIGHTLY\")) | .tagName" || true)
-            
+
             if [ -z "$HAS_NIGHTLY" ] || [ "${{ github.event.inputs.force_build }}" == "true" ] || [ "${{ github.event.inputs.build_nightly }}" == "true" ]; then
               echo "build_nightly=true" >> $GITHUB_OUTPUT
             else
@@ -374,17 +374,16 @@ jobs:
         build-linux-mac-stable,
         build-linux-mac-nightly,
       ]
+    # Tourne même si un build a échoué : on publie ce qui a réussi, en prerelease si incomplet
     if: |
-      !cancelled() && 
+      !cancelled() &&
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      # ==========================================
-      # GESTION DE LA VERSION STABLE
-      # ==========================================
+      # ---------- STABLE ----------
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         uses: actions/download-artifact@v4
@@ -393,40 +392,47 @@ jobs:
           pattern: stable-*
           merge-multiple: true
 
-      - name: Verify Stable Artifacts Completeness
+      - name: Verify Stable Artifacts
         if: needs.check-version.outputs.build_stable == 'true'
         id: verify_stable
         run: |
           echo "📦 Fichiers stables téléchargés :"
           ls -la all-files/ || true
 
+          if [ -d all-files ] && [ -n "$(ls -A all-files 2>/dev/null)" ]; then
+            echo "has_files=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_files=false" >> $GITHUB_OUTPUT
+            echo "::warning::Aucun artefact stable, publication ignorée."
+          fi
+
           if [ -f "all-files/BirdNET-Go-Windows.exe" ] && [ -f "all-files/BirdNET-Go-Linux-x64.deb" ] && [ -f "all-files/BirdNET-Go-macOS.pkg" ]; then
             echo "is_complete=true" >> $GITHUB_OUTPUT
-            echo "release_body=🎉 Publication complète et stable de toutes les plateformes (Windows, Linux, macOS)." >> $GITHUB_OUTPUT
             echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ✅" >> $GITHUB_OUTPUT
+            echo "release_body=🎉 Publication complète : Windows, Linux x64, Raspberry Pi, macOS." >> $GITHUB_OUTPUT
+            echo "✅ Complet → latest."
           else
             echo "is_complete=false" >> $GITHUB_OUTPUT
-            echo "release_body=⚠️ **ATTENTION** : Cette publication est incomplète (fichier Windows manquant). Elle est marquée comme prerelease pour protéger la dernière version stable fonctionnelle. Vérifiez le job \`build-windows-stable\`." >> $GITHUB_OUTPUT
-            echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ⚠️ INCOMPLET (PRERELEASE)" >> $GITHUB_OUTPUT
+            echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ⚠️ INCOMPLET" >> $GITHUB_OUTPUT
+            echo "release_body=⚠️ Publication incomplète (un ou plusieurs fichiers manquent). Marquée en prerelease pour protéger la dernière version stable. Vérifiez les jobs de build." >> $GITHUB_OUTPUT
+            echo "⚠️ Incomplet → prerelease."
           fi
 
       - name: Publish Stable Release
-        if: needs.check-version.outputs.build_stable == 'true'
+        if: needs.check-version.outputs.build_stable == 'true' && steps.verify_stable.outputs.has_files == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
           name: ${{ steps.verify_stable.outputs.release_name }}
+          body: ${{ steps.verify_stable.outputs.release_body }}
           files: all-files/*
           make_latest: ${{ steps.verify_stable.outputs.is_complete == 'true' }}
           prerelease: ${{ steps.verify_stable.outputs.is_complete == 'false' }}
           generate_release_notes: true
-          body: ${{ steps.verify_stable.outputs.release_body }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
-      # ==========================================
-      # GESTION DE LA VERSION NIGHTLY
-      # ==========================================
+      # ---------- NIGHTLY ----------
       - name: Download Nightly artifacts
         if: needs.check-version.outputs.build_nightly == 'true'
         uses: actions/download-artifact@v4
@@ -435,23 +441,28 @@ jobs:
           pattern: nightly-*
           merge-multiple: true
 
-      - name: Verify Nightly Artifacts Completeness
+      - name: Verify Nightly Artifacts
         if: needs.check-version.outputs.build_nightly == 'true'
         id: verify_nightly
         run: |
           echo "📦 Fichiers nightly téléchargés :"
           ls -la all-files-nightly/ || true
 
+          if [ -d all-files-nightly ] && [ -n "$(ls -A all-files-nightly 2>/dev/null)" ]; then
+            echo "has_files=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_files=false" >> $GITHUB_OUTPUT
+            echo "::warning::Aucun artefact nightly, publication ignorée."
+          fi
+
           if [ -f "all-files-nightly/BirdNET-Go-Windows.exe" ]; then
-            echo "is_complete=true" >> $GITHUB_OUTPUT
             echo "release_name=Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}" >> $GITHUB_OUTPUT
           else
-            echo "is_complete=false" >> $GITHUB_OUTPUT
             echo "release_name=Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }} ⚠️ INCOMPLET" >> $GITHUB_OUTPUT
           fi
 
       - name: Publish Nightly Release
-        if: needs.check-version.outputs.build_nightly == 'true'
+        if: needs.check-version.outputs.build_nightly == 'true' && steps.verify_nightly.outputs.has_files == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly-v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
