@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace BirdNETGoControl
 {
-    // Options du CONTRÔLEUR uniquement (jamais de config moteur ici)
+    // Options du CONTRÔLEUR uniquement. Aucun réglage moteur (config.yaml) ici.
     public class AppSettings
     {
         // Démarrage
@@ -30,7 +30,7 @@ namespace BirdNETGoControl
         private static AppSettings _current;
         public static AppSettings Current => _current ??= Load();
 
-        private static string SettingsPath => System.IO.Path.Combine(
+        private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "BirdNETGoControl", "settings.json");
 
@@ -38,8 +38,8 @@ namespace BirdNETGoControl
         {
             try
             {
-                if (System.IO.File.Exists(SettingsPath))
-                    return JsonSerializer.Deserialize<AppSettings>(System.IO.File.ReadAllText(SettingsPath)) ?? new AppSettings();
+                if (File.Exists(SettingsPath))
+                    return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
             }
             catch { }
             return new AppSettings();
@@ -49,16 +49,15 @@ namespace BirdNETGoControl
         {
             try
             {
-                var dir = System.IO.Path.GetDirectoryName(SettingsPath);
+                var dir = Path.GetDirectoryName(SettingsPath);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                System.IO.File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+                File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
             }
             catch (Exception ex) { App.Log($"Erreur sauvegarde réglages : {ex.Message}"); }
 
             ApplyStartupRegistration();
         }
 
-        // Ajoute / retire l'app dans HKCU\...\Run (aucun droit admin requis)
         private void ApplyStartupRegistration()
         {
             try
