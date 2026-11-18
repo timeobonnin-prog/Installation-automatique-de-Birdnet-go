@@ -13,16 +13,22 @@ namespace BirdNETGoControl
 
         private Mutex _mutex;
 
+        // Dossier commun réglages + logs (inscriptible même sans admin)
+        public static string DataDir => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "BirdNETGoControl");
+
+        public static string LogDir => Path.Combine(DataDir, "logs");
+
         protected override void OnStartup(System.Windows.StartupEventArgs e)
         {
             _mutex = new Mutex(true, MutexName, out bool createdNew);
 
             if (!createdNew)
             {
-                // Une instance existe déjà : on lui demande de s'afficher, puis on quitte.
                 _ = NotifyExistingInstanceToShowAsync();
                 Shutdown();
-                return; // pas de base.OnStartup => aucune fenêtre créée
+                return;
             }
 
             StartShowListener();
@@ -73,10 +79,8 @@ namespace BirdNETGoControl
         {
             try
             {
-                string appDir = AppDomain.CurrentDomain.BaseDirectory;
-                string logDir = Path.Combine(appDir, "logs");
-                if (!Directory.Exists(logDir)) Directory.CreateDirectory(logDir);
-                string logFile = Path.Combine(logDir, $"app_{DateTime.Now:yyyyMMdd}.log");
+                if (!Directory.Exists(LogDir)) Directory.CreateDirectory(LogDir);
+                string logFile = Path.Combine(LogDir, $"app_{DateTime.Now:yyyyMMdd}.log");
                 File.AppendAllText(logFile, $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
             }
             catch { }
