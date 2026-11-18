@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: test-windows-installer
-  cancel-in-progress: false   # ✅ ne plus tuer un test en cours
+  cancel-in-progress: false # ✅ ne plus tuer un test en cours
 
 jobs:
   test-installer:
