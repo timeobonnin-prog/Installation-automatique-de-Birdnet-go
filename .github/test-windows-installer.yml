@@ -1,0 +1,29 @@
+name: Test installateur Windows
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build & Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-windows-installer
+  cancel-in-progress: true
+
+jobs:
+  test-installer:
+    # Se lance après un Build & Release réussi, ou manuellement
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test de l'installateur Windows
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/test-windows-installer.ps1
