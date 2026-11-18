@@ -4,23 +4,63 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
 
+        <!-- Bouton principal : survol, clic, désactivé, focus clavier -->
         <Style x:Key="RoundedButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Padding" Value="14,12"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid x:Name="Root" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1"/>
+                            </Grid.RenderTransform>
+
+                            <!-- Fond coloré (Background du bouton) -->
+                            <Border Background="{TemplateBinding Background}" CornerRadius="8"/>
+                            <!-- Voile de survol / clic -->
+                            <Border x:Name="Glow" Background="White" Opacity="0" CornerRadius="8"/>
+                            <!-- Anneau de focus clavier -->
+                            <Border x:Name="FocusRing" CornerRadius="8" BorderBrush="#CDD6F4" BorderThickness="2" Opacity="0"/>
+
+                            <!-- Viewbox : si le texte est trop long, il rétrécit au lieu d'être coupé -->
+                            <Viewbox Margin="{TemplateBinding Padding}" Stretch="Uniform" StretchDirection="DownOnly">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Viewbox>
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <!-- SURVOL : éclaircit -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Glow" Property="Opacity" Value="0.14"/>
+                            </Trigger>
+                            <!-- CLIC : assombrit + léger enfoncement -->
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Glow" Property="Background" Value="Black"/>
+                                <Setter TargetName="Glow" Property="Opacity" Value="0.22"/>
+                                <Setter TargetName="Scale" Property="ScaleX" Value="0.97"/>
+                                <Setter TargetName="Scale" Property="ScaleY" Value="0.97"/>
+                            </Trigger>
+                            <!-- FOCUS clavier (Tab) -->
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                            <!-- DÉSACTIVÉ : grisé + curseur normal -->
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.4"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
+        <!-- Petit bouton de barre de titre (⚙ ─ ✕) -->
         <Style x:Key="TitleButton" TargetType="Button">
             <Setter Property="Foreground" Value="#CDD6F4"/>
             <Setter Property="FontSize" Value="14"/>
@@ -36,6 +76,13 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="#45475A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#585B70"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.4"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
