@@ -1,0 +1,20 @@
+   name: CI Tests
+
+   on:
+     push:
+       branches: [ "main" ]
+     pull_request:
+       branches: [ "main" ]
+
+   jobs:
+     validate-scripts:
+       name: Validation des scripts
+       runs-on: ubuntu-latest
+       steps:
+         - name: Checkout du code
+           uses: actions/checkout@v4
+         
+         - name: Exécuter ShellCheck
+           uses: ludeeus/action-shellcheck@master
+           with:
+             severity: warning
