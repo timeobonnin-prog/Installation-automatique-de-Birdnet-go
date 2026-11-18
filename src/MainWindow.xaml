@@ -8,7 +8,6 @@
     <Border Background="#1E1E2E" CornerRadius="12" BorderBrush="#313244" BorderThickness="1">
         <DockPanel>
 
-            <!-- Barre de titre -->
             <Border x:Name="TitleBar" DockPanel.Dock="Top" Background="#313244" CornerRadius="12,12,0,0" Padding="14,8">
                 <Grid>
                     <TextBlock Text="BirdNET-Go" Foreground="#CDD6F4" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
@@ -20,10 +19,8 @@
                 </Grid>
             </Border>
 
-            <!-- Contenu -->
             <StackPanel Margin="24">
 
-                <!-- Statut -->
                 <Border Background="#313244" CornerRadius="8" Padding="16" Margin="0,0,0,16">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse x:Name="StatusDot" Width="12" Height="12" Fill="#F38BA8" Margin="0,0,12,0"/>
@@ -31,11 +28,9 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Contrôles serveur -->
                 <Button x:Name="BtnToggle" Content="DÉMARRER LE SERVEUR" Background="#10B981" Click="OnToggle" Style="{StaticResource RoundedButton}" Margin="0,0,0,12"/>
                 <Button x:Name="BtnOpen" Content="🌐 Ouvrir l'interface web" Background="#45475A" Foreground="#CDD6F4" Click="OnOpen" IsEnabled="False" Style="{StaticResource RoundedButton}" Margin="0,0,0,20"/>
 
-                <!-- Mise à jour : deux versions bien distinctes -->
                 <Border Background="#313244" CornerRadius="8" Padding="16">
                     <StackPanel>
                         <Grid Margin="0,0,0,12">
