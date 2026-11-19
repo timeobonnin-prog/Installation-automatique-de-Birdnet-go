@@ -9,6 +9,7 @@ namespace BirdNETGoControl
     public partial class SettingsWindow : System.Windows.Window
     {
         private bool _loading = true;
+        private bool _suppressLang = false;   // anti-récursion SelectionChanged
 
         public SettingsWindow()
         {
@@ -33,8 +34,8 @@ namespace BirdNETGoControl
 
         private void FillLanguageCombo(string selected)
         {
-            // CORRECTIF : un ComboBoxItem fourni à la main ne reçoit PAS ItemTemplate.
-            // On pose donc ContentTemplate explicitement sur chaque élément.
+            // Un ComboBoxItem fourni à la main ne reçoit PAS ItemTemplate :
+            // on pose ContentTemplate explicitement sur chaque élément.
             var tpl = (DataTemplate)FindResource("LangFull");
 
             CmbLanguage.Items.Clear();
@@ -118,12 +119,21 @@ namespace BirdNETGoControl
 
         private void OnLanguageChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_loading) return;
-            string code = (CmbLanguage.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "auto";
-            Loc.Init(code);
-            ApplyLanguage();
-            FillNumericCombos(AppSettings.Current);
-            FillLanguageCombo(code);
+            if (_loading || _suppressLang) return;
+
+            _suppressLang = true;
+            try
+            {
+                string code = (CmbLanguage.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "auto";
+                Loc.Init(code);
+                ApplyLanguage();
+                FillNumericCombos(AppSettings.Current);
+                FillLanguageCombo(code);   // rafraîchit le libellé « Auto (système) »
+            }
+            finally
+            {
+                _suppressLang = false;
+            }
         }
 
         private static void SelectByTag(ComboBox cmb, int value)
