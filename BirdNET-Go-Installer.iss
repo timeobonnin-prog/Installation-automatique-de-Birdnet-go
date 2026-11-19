@@ -1,5 +1,6 @@
 ; ---------------------------------------------------------------
 ;  BirdNET-Go - Installateur Windows (Inno Setup 6) - USER SCOPE
+;  Multilingue FR / EN / DE / ES + écrit LANGUAGE.txt pour l'app
 ; ---------------------------------------------------------------
 
 #define MyAppName "BirdNET-Go"
@@ -17,7 +18,6 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
 
-; --- USER SCOPE : pas d'UAC pour l'installation elle-même ---
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
 DefaultDirName={localappdata}\Programs\BirdNET-Go
@@ -38,19 +38,53 @@ VersionInfoCompany={#MyAppPublisher}
 VersionInfoProductName={#MyAppName}
 VersionInfoDescription=Installateur {#MyAppName}
 
-; Single-instance : ferme proprement le contrôleur pendant l'install/MAJ
+; Affiche le choix de la langue à l'installation
+ShowLanguageDialog=yes
+
 AppMutex=BirdNETGoControl_SingleInstance_Mutex
 CloseApplications=yes
 RestartApplications=no
 
 [Languages]
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+
+[CustomMessages]
+fr.TaskDesktop=Créer un raccourci sur le Bureau
+en.TaskDesktop=Create a desktop shortcut
+de.TaskDesktop=Desktop-Verknüpfung erstellen
+es.TaskDesktop=Crear acceso directo en el escritorio
+
+fr.TaskFirewall=Autoriser l'accès réseau (LAN) au port 8080 - demande les droits administrateur
+en.TaskFirewall=Allow network (LAN) access on port 8080 - requires administrator rights
+de.TaskFirewall=Netzwerkzugriff (LAN) auf Port 8080 erlauben - erfordert Administratorrechte
+es.TaskFirewall=Permitir acceso de red (LAN) al puerto 8080 - requiere derechos de administrador
+
+fr.GroupShortcuts=Raccourcis :
+en.GroupShortcuts=Shortcuts:
+de.GroupShortcuts=Verknüpfungen:
+es.GroupShortcuts=Accesos directos:
+
+fr.GroupNetwork=Réseau :
+en.GroupNetwork=Network:
+de.GroupNetwork=Netzwerk:
+es.GroupNetwork=Red:
+
+fr.LaunchApp=Lancer BirdNET-Go
+en.LaunchApp=Launch BirdNET-Go
+de.LaunchApp=BirdNET-Go starten
+es.LaunchApp=Iniciar BirdNET-Go
+
+fr.RemoveFirewall=Supprimer la règle de pare-feu "%1" ?
+en.RemoveFirewall=Remove the firewall rule "%1"?
+de.RemoveFirewall=Firewall-Regel "%1" entfernen?
+es.RemoveFirewall=¿Eliminar la regla de firewall "%1"?
 
 [Tasks]
-Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"; Flags: unchecked
-; Règle pare-feu : OPTIONNELLE, décochée, et masquée en mode silencieux (CI-safe)
-Name: "firewall"; Description: "Autoriser l'accès réseau (LAN) au port 8080 — demande les droits administrateur"; GroupDescription: "Réseau :"; Flags: unchecked; Check: not WizardSilent
+Name: "desktopicon"; Description: "{cm:TaskDesktop}"; GroupDescription: "{cm:GroupShortcuts}"; Flags: unchecked
+Name: "firewall"; Description: "{cm:TaskFirewall}"; GroupDescription: "{cm:GroupNetwork}"; Flags: unchecked; Check: not WizardSilent
 
 [Files]
 Source: "dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -59,7 +93,7 @@ Source: "start_birdnet.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsource
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
-Name: "{group}\Désinstaller {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Registry]
@@ -72,15 +106,26 @@ Filename: "{cmd}"; Parameters: "/C taskkill /F /IM {#MyAppExeName}"; Flags: runh
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\BirdNETGoControl"
 Type: filesandordirs; Name: "{app}\logs"
+Type: files; Name: "{app}\LANGUAGE.txt"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Lancer {#MyAppName}"; Flags: postinstall nowait skipifsilent runascurrentuser
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchApp}"; Flags: postinstall nowait skipifsilent runascurrentuser
 
 [Code]
 const
   FirewallRuleName = 'BirdNET-Go (TCP 8080)';
 
-// Construit la ligne de commande netsh (ajout ciblé sur l'exe + port, profils privé/domaine)
+function LangCode(): String;
+begin
+  case ActiveLanguage() of
+    'fr': Result := 'fr';
+    'de': Result := 'de';
+    'es': Result := 'es';
+  else
+    Result := 'en';
+  end;
+end;
+
 function FirewallParams(Add: Boolean): String;
 begin
   if Add then
@@ -91,7 +136,6 @@ begin
     Result := 'advfirewall firewall delete rule name="' + FirewallRuleName + '"';
 end;
 
-// Exécute netsh avec élévation UAC à la demande (l'install reste sans admin)
 procedure ApplyFirewall(Add: Boolean);
 var
   ErrorCode: Integer;
@@ -100,27 +144,31 @@ begin
                SW_HIDE, ewWaitUntilTerminated, ErrorCode) then
   begin
     if ErrorCode = 0 then
-      Log('Pare-feu : règle "' + FirewallRuleName + '" appliquée.')
+      Log('Pare-feu : regle appliquee.')
     else
-      Log('Pare-feu : netsh a renvoyé le code ' + IntToStr(ErrorCode));
+      Log('Pare-feu : netsh code ' + IntToStr(ErrorCode));
   end
   else
-    Log('Pare-feu : élévation refusée ou impossible (code ' + IntToStr(ErrorCode) + ').');
+    Log('Pare-feu : elevation refusee (code ' + IntToStr(ErrorCode) + ').');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  // Jamais en silencieux : aucun prompt UAC ne doit bloquer une install auto / CI
-  if (CurStep = ssPostInstall) and (not WizardSilent) and WizardIsTaskSelected('firewall') then
-    ApplyFirewall(True);
+  if CurStep = ssPostInstall then
+  begin
+    // Transmet la langue choisie a l'app (lue par Loc.Init en mode "auto")
+    SaveStringToFile(ExpandConstant('{app}\LANGUAGE.txt'), LangCode(), False);
+
+    if (not WizardSilent) and WizardIsTaskSelected('firewall') then
+      ApplyFirewall(True);
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-  // Nettoyage proposé uniquement en désinstallation interactive
   if (CurUninstallStep = usPostUninstall) and (not UninstallSilent) then
   begin
-    if MsgBox('Supprimer la règle de pare-feu "' + FirewallRuleName + '" ?',
+    if MsgBox(FmtMessage(CustomMessage('RemoveFirewall'), [FirewallRuleName]),
               mbConfirmation, MB_YESNO) = IDYES then
       ApplyFirewall(False);
   end;
