@@ -39,7 +39,9 @@ namespace BirdNETGoControl
 
         public MainWindow()
         {
+            Loc.Init(AppSettings.Current.Language);
             InitializeComponent();
+
             _installDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
             _exePath = Path.Combine(_installDir, "birdnet-go.exe");
             _uiVersionFile = Path.Combine(_installDir, "UI_VERSION.txt");
@@ -50,13 +52,7 @@ namespace BirdNETGoControl
             _tray = new WinForms.NotifyIcon { Text = "BirdNET-Go", Visible = true };
             var iconPath = Path.Combine(_installDir, "icon.ico");
             _tray.Icon = File.Exists(iconPath) ? new System.Drawing.Icon(iconPath) : System.Drawing.SystemIcons.Application;
-
-            var menu = new WinForms.ContextMenuStrip();
-            menu.Items.Add("🌐 Ouvrir l'interface web", null, (_, _) => OpenWeb());
-            menu.Items.Add("⚙️ Afficher le panneau", null, (_, _) => ShowWindow());
-            menu.Items.Add("🔧 Réglages", null, (_, _) => { ShowWindow(); OpenSettings(); });
-            menu.Items.Add("❌ Quitter", null, (_, _) => QuitAll());
-            _tray.ContextMenuStrip = menu;
+            BuildTrayMenu();
             _tray.DoubleClick += (_, _) => ShowWindow();
 
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("BirdNET-Go-UI/1.0");
@@ -73,6 +69,7 @@ namespace BirdNETGoControl
             PurgeOldLogs();
             ApplySettings();
             RefreshLocalVersions();
+            ApplyLanguage();
             _ = CheckUpdatesAsync();
 
             Closing += (_, e) =>
@@ -87,7 +84,30 @@ namespace BirdNETGoControl
             UpdateUI();
         }
 
-        // ---------------- Serveur (birdnet-go.exe) ----------------
+        // ---------------- Langue ----------------
+        private void ApplyLanguage()
+        {
+            TxtLblController.Text = Loc.T("LblController");
+            TxtLblEngine.Text = Loc.T("LblEngine");
+            TxtUpdateHint.Text = Loc.T("UpdateHint");
+            BtnOpen.Content = Loc.T("BtnOpenWeb");
+            BtnUpdate.Content = Loc.T("BtnUpdate");
+            BuildTrayMenu();
+        }
+
+        private void BuildTrayMenu()
+        {
+            var old = _tray.ContextMenuStrip;
+            var menu = new WinForms.ContextMenuStrip();
+            menu.Items.Add(Loc.T("BtnOpenWeb"), null, (_, _) => OpenWeb());
+            menu.Items.Add(Loc.T("TrayShow"), null, (_, _) => ShowWindow());
+            menu.Items.Add(Loc.T("TraySettings"), null, (_, _) => { ShowWindow(); OpenSettings(); });
+            menu.Items.Add(Loc.T("TrayQuit"), null, (_, _) => QuitAll());
+            _tray.ContextMenuStrip = menu;
+            old?.Dispose();
+        }
+
+        // ---------------- Serveur ----------------
         private bool IsServerRunning() => Process.GetProcessesByName("birdnet-go").Length > 0;
 
         private void StartServer()
@@ -151,23 +171,23 @@ namespace BirdNETGoControl
 
             if (isRunning)
             {
-                TxtStatus.Text = "EN LIGNE";
+                TxtStatus.Text = Loc.T("StatusOnline");
                 TxtStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
                 StatusDot.Fill = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
-                BtnToggle.Content = "ARRÊTER LE SERVEUR";
+                BtnToggle.Content = Loc.T("BtnStop");
                 BtnToggle.Background = new SolidColorBrush(WpfColor.FromRgb(225, 29, 72));
                 BtnOpen.IsEnabled = true;
-                _tray.Text = "BirdNET-Go - En ligne";
+                _tray.Text = Loc.T("TrayOnline");
             }
             else
             {
-                TxtStatus.Text = "HORS LIGNE";
+                TxtStatus.Text = Loc.T("StatusOffline");
                 TxtStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
                 StatusDot.Fill = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
-                BtnToggle.Content = "DÉMARRER LE SERVEUR";
+                BtnToggle.Content = Loc.T("BtnStart");
                 BtnToggle.Background = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
                 BtnOpen.IsEnabled = false;
-                _tray.Text = "BirdNET-Go - Hors ligne";
+                _tray.Text = Loc.T("TrayOffline");
             }
         }
 
@@ -183,9 +203,17 @@ namespace BirdNETGoControl
             var win = new SettingsWindow { Owner = this };
             if (win.ShowDialog() == true)
             {
+                Loc.Init(AppSettings.Current.Language);
                 ApplySettings();
+                ApplyLanguage();
                 _lastUpdateCheck = DateTime.MinValue;
                 _ = CheckUpdatesAsync();
+                UpdateUI();
+            }
+            else
+            {
+                Loc.Init(AppSettings.Current.Language);
+                ApplyLanguage();
                 UpdateUI();
             }
         }
@@ -207,14 +235,12 @@ namespace BirdNETGoControl
         }
 
         // ---------------- Versions ----------------
-        // Normalise : "v20261031.140-1" ou "20261031.140-1" -> "v20261031.140-1" (un seul v)
         private static string FormatVersion(string raw)
         {
             var v = (raw ?? "").Trim().TrimStart('v', 'V');
             return string.IsNullOrEmpty(v) ? "v0.0.0" : "v" + v;
         }
 
-        // Affiche les versions locales même sans réseau / vérif désactivée
         private void RefreshLocalVersions()
         {
             try
@@ -249,7 +275,7 @@ namespace BirdNETGoControl
             var s = AppSettings.Current;
             if (s.UpdateCheckIntervalHours <= 0)
             {
-                TxtUpdateStatus.Text = "Vérification désactivée";
+                TxtUpdateStatus.Text = Loc.T("UpdateDisabled");
                 TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(108, 112, 134));
                 return;
             }
@@ -262,28 +288,27 @@ namespace BirdNETGoControl
                 var latestTag = release?.tag_name ?? "";
                 var uiVersion = File.Exists(_uiVersionFile) ? File.ReadAllText(_uiVersionFile).Trim() : "0.0.0";
 
-                // Comparaison normalisée : ignore le préfixe "v" des deux côtés
                 bool upToDate = string.IsNullOrEmpty(latestTag) ||
                                 FormatVersion(uiVersion) == FormatVersion(latestTag);
 
                 if (!upToDate)
                 {
-                    BtnUpdate.Content = "MAJ DISPONIBLE";
+                    BtnUpdate.Content = Loc.T("BtnUpdateAvailable");
                     BtnUpdate.Background = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
-                    TxtUpdateStatus.Text = $"Nouveau : {FormatVersion(latestTag)}";
+                    TxtUpdateStatus.Text = string.Format(Loc.T("UpdateNew"), FormatVersion(latestTag));
                     TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(245, 158, 11));
                 }
                 else
                 {
-                    BtnUpdate.Content = "METTRE À JOUR";
+                    BtnUpdate.Content = Loc.T("BtnUpdate");
                     BtnUpdate.Background = new SolidColorBrush(WpfColor.FromRgb(139, 92, 246));
-                    TxtUpdateStatus.Text = "Aucune mise à jour";
+                    TxtUpdateStatus.Text = Loc.T("UpdateNone");
                     TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
                 }
             }
             catch
             {
-                TxtUpdateStatus.Text = "Vérification impossible";
+                TxtUpdateStatus.Text = Loc.T("UpdateImpossible");
                 TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
             }
         }
@@ -291,7 +316,7 @@ namespace BirdNETGoControl
         private async void OnUpdate(object sender, RoutedEventArgs e)
         {
             BtnUpdate.IsEnabled = false;
-            BtnUpdate.Content = "MISE À JOUR...";
+            BtnUpdate.Content = Loc.T("BtnUpdating");
 
             try
             {
@@ -308,8 +333,8 @@ namespace BirdNETGoControl
                 }
 
                 var result = WpfMessageBox.Show(
-                    "L'application va se fermer pour installer la mise à jour (contrôleur + moteur). Continuer ?",
-                    "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    Loc.T("UpdateConfirmText"), Loc.T("UpdateConfirmTitle"),
+                    MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (result != MessageBoxResult.Yes) return;
 
                 StopServer();
@@ -327,14 +352,14 @@ namespace BirdNETGoControl
             catch (Exception ex)
             {
                 App.Log($"Update error: {ex.Message}");
-                BtnUpdate.Content = "ERREUR";
+                BtnUpdate.Content = Loc.T("BtnError");
                 await Task.Delay(2000);
             }
             finally
             {
                 if (!_isQuitting)
                 {
-                    BtnUpdate.Content = "METTRE À JOUR";
+                    BtnUpdate.Content = Loc.T("BtnUpdate");
                     BtnUpdate.IsEnabled = true;
                 }
             }
@@ -352,7 +377,6 @@ namespace BirdNETGoControl
             UpdateUI();
         }
 
-        // PUBLIC : appelé par App.xaml.cs quand une 2e instance demande "affiche-toi"
         public void ShowWindow()
         {
             Show();
@@ -365,7 +389,7 @@ namespace BirdNETGoControl
         private void ShowTrayTip()
         {
             if (AppSettings.Current.ShowBalloonNotifications)
-                _tray.ShowBalloonTip(3000, "BirdNET-Go", "L'app tourne en arrière-plan.", WinForms.ToolTipIcon.Info);
+                _tray.ShowBalloonTip(3000, "BirdNET-Go", Loc.T("TrayTipText"), WinForms.ToolTipIcon.Info);
         }
 
         private void QuitAll()
