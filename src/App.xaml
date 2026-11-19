@@ -189,6 +189,7 @@
         <Style x:Key="LangContainer" TargetType="ComboBoxItem">
             <Setter Property="Padding" Value="8,7"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
@@ -200,7 +201,12 @@
                                 </Grid.ColumnDefinitions>
                                 <Path x:Name="Check" Data="M0,4.5 L3.2,8 L8.5,0.5" Stroke="#A6E3A1" StrokeThickness="2.2"
                                       Visibility="Hidden" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
+                                <!-- CORRECTIF : on relaie explicitement le gabarit de contenu -->
+                                <ContentPresenter Grid.Column="1" VerticalAlignment="Center"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                                  ContentStringFormat="{TemplateBinding ContentStringFormat}"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -235,7 +241,6 @@
                                     <ControlTemplate TargetType="ToggleButton">
                                         <Border x:Name="Bd" Background="#232336" CornerRadius="8" BorderBrush="#3B3B54" BorderThickness="1" Height="40">
                                             <Grid>
-                                                <!-- Gabarit compact appliqué DIRECTEMENT (pas via SelectionBoxItemTemplate) -->
                                                 <ContentPresenter Margin="10,0,30,0" HorizontalAlignment="Left" VerticalAlignment="Center"
                                                                   Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                                                   ContentTemplate="{StaticResource LangCompact}"/>
