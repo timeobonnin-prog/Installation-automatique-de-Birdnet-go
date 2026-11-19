@@ -103,6 +103,11 @@
     </ul>
     <a href="#download" class="nav-cta">Télécharger</a>
   </div>
+  <div style="max-width: 900px; margin: 2.5rem auto 0; padding: 1.25rem 1.5rem; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius-sm); font-size: 0.88rem; color: var(--text-muted); line-height: 1.6;">
+  <strong style="color: var(--text); display: block; margin-bottom: 0.35rem;">⚠️ Note de sécurité et clause de non-responsabilité (Licence MIT)</strong>
+  Ce logiciel et ses installateurs sont fournis « tels quels », sans garantie d'aucune sorte. Les exécutables Windows n'étant pas encore signés par un certificat commercial, Windows SmartScreen ou certains antivirus peuvent déclencher une fausse alerte (faux positif). L'utilisateur télécharge et exécute ces fichiers sous sa seule responsabilité, et est invité à vérifier le rapport <strong>VirusTotal</strong> ainsi que l'empreinte <strong>SHA-256</strong> disponibles dans chaque <a href="https://github.com" target="_blank" rel="noopener">Release GitHub</a>.
+  </div>
+
 </nav>
 
 <section class="hero" id="download">
