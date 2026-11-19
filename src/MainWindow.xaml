@@ -39,17 +39,17 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="CONTRÔLEUR" Foreground="#6C7086" FontSize="11" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="TxtLblController" Text="CONTRÔLEUR" Foreground="#6C7086" FontSize="11" HorizontalAlignment="Center"/>
                                 <TextBlock x:Name="TxtUiVersion" Text="v0.0.0" Foreground="#CDD6F4" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="MOTEUR" Foreground="#6C7086" FontSize="11" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="TxtLblEngine" Text="MOTEUR" Foreground="#6C7086" FontSize="11" HorizontalAlignment="Center"/>
                                 <TextBlock x:Name="TxtEngineVersion" Text="v0.0.0" Foreground="#CDD6F4" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Grid>
                         <TextBlock x:Name="TxtUpdateStatus" Text="Vérification..." Foreground="#A6ADC8" FontSize="13" HorizontalAlignment="Center" Margin="0,0,0,12"/>
                         <Button x:Name="BtnUpdate" Content="METTRE À JOUR" FontSize="13" Background="#8B5CF6" Click="OnUpdate" Style="{StaticResource RoundedButton}"/>
-                        <TextBlock Text="Met à jour le contrôleur ET le moteur" Foreground="#6C7086" FontSize="11" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                        <TextBlock x:Name="TxtUpdateHint" Text="Met à jour le contrôleur ET le moteur" Foreground="#6C7086" FontSize="11" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
 
