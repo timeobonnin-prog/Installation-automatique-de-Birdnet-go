@@ -80,4 +80,7 @@ Free code signing provided by [SignPath.io](https://signpath.io/), certificate b
 
 ---
 
+> **⚠️ Clause de non-responsabilité :** Ce logiciel et ses installateurs sont fournis « tels quels » (licence MIT), sans garantie d'aucune sorte. Les exécutables n'étant pas encore signés par une autorité commerciale, certains antivirus ou Windows SmartScreen peuvent déclencher de fausses alertes (faux positifs). L'utilisateur est seul responsable de vérifier l'authenticité des fichiers via les empreintes SHA-256 et les rapports VirusTotal fournis avant toute installation.
+
+
 _Projet open source sous licence MIT. Non affilié officiellement au projet BirdNET-Go._
