@@ -34,14 +34,22 @@ namespace BirdNETGoControl
         private void FillLanguageCombo(string selected)
         {
             CmbLanguage.Items.Clear();
-            CmbLanguage.Items.Add(new ComboBoxItem { Content = Loc.T("LangAuto"), Tag = "auto" });
+            CmbLanguage.Items.Add(new ComboBoxItem { Content = AutoItem(), Tag = "auto" });
             foreach (var code in Loc.Codes)
-                CmbLanguage.Items.Add(new ComboBoxItem { Content = Loc.DisplayName(code), Tag = code });
+                CmbLanguage.Items.Add(new ComboBoxItem { Content = Loc.Item(code), Tag = code });
 
             foreach (ComboBoxItem it in CmbLanguage.Items)
                 if ((it.Tag?.ToString() ?? "") == selected) { CmbLanguage.SelectedItem = it; break; }
             if (CmbLanguage.SelectedItem == null) CmbLanguage.SelectedIndex = 0;
         }
+
+        private static LangItem AutoItem() => new LangItem
+        {
+            Code = "auto",
+            Native = Loc.T("LangAuto"),
+            English = "Auto",
+            Flag = Flags.Get(Loc.Current)
+        };
 
         private void FillNumericCombos(AppSettings s)
         {
@@ -74,6 +82,7 @@ namespace BirdNETGoControl
 
             TxtGrpLanguage.Text = Loc.T("GrpLanguage");
             TxtLblLanguage.Text = Loc.T("LblLanguage");
+            TxtLangCount.Text = Loc.Codes.Length + " · BirdNET-Go";
 
             TxtGrpStartup.Text = Loc.T("GrpStartup");
             ChkStartup.Content = Loc.T("ChkStartup");
@@ -103,7 +112,6 @@ namespace BirdNETGoControl
             BtnSave.Content = Loc.T("BtnSave");
         }
 
-        // Aperçu immédiat : toute la fenêtre se retraduit quand on change la langue
         private void OnLanguageChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_loading) return;
@@ -134,7 +142,7 @@ namespace BirdNETGoControl
 
         private void OnCancel(object sender, RoutedEventArgs e)
         {
-            Loc.Init(AppSettings.Current.Language);   // restaure la langue enregistrée
+            Loc.Init(AppSettings.Current.Language);
             DialogResult = false;
             Close();
         }
