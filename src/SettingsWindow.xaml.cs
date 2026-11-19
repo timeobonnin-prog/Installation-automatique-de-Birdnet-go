@@ -33,10 +33,14 @@ namespace BirdNETGoControl
 
         private void FillLanguageCombo(string selected)
         {
+            // CORRECTIF : un ComboBoxItem fourni à la main ne reçoit PAS ItemTemplate.
+            // On pose donc ContentTemplate explicitement sur chaque élément.
+            var tpl = (DataTemplate)FindResource("LangFull");
+
             CmbLanguage.Items.Clear();
-            CmbLanguage.Items.Add(new ComboBoxItem { Content = AutoItem(), Tag = "auto" });
+            CmbLanguage.Items.Add(new ComboBoxItem { Content = AutoItem(), Tag = "auto", ContentTemplate = tpl });
             foreach (var code in Loc.Codes)
-                CmbLanguage.Items.Add(new ComboBoxItem { Content = Loc.Item(code), Tag = code });
+                CmbLanguage.Items.Add(new ComboBoxItem { Content = Loc.Item(code), Tag = code, ContentTemplate = tpl });
 
             foreach (ComboBoxItem it in CmbLanguage.Items)
                 if ((it.Tag?.ToString() ?? "") == selected) { CmbLanguage.SelectedItem = it; break; }
