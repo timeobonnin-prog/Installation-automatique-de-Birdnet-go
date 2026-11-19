@@ -5,7 +5,6 @@ using System.IO;
 
 namespace BirdNETGoControl
 {
-    // Traduction légère : ordre des colonnes = fr, en, de, es
     public static class Loc
     {
         public static readonly string[] Codes = { "fr", "en", "de", "es" };
@@ -15,7 +14,6 @@ namespace BirdNETGoControl
         {
             if (string.IsNullOrWhiteSpace(pref) || pref == "auto")
             {
-                // 1) langue choisie dans l'installateur (LANGUAGE.txt), 2) langue Windows, 3) anglais
                 string forced = "";
                 try
                 {
