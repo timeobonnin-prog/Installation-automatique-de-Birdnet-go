@@ -1,0 +1,53 @@
+# ============================================================
+#  Fichiers à NE JAMAIS reformater par Prettier (workflow Maintenance)
+# ============================================================
+
+# --- Script critique : contient du CSS/JS avec des accolades ---
+# Prettier (ou tout outil de formatage) ne doit pas toucher ce fichier,
+# sous peine de casser la génération d'index.html.
+generate_html.py
+
+# --- Fichiers générés automatiquement (ne pas reformater) ---
+index.html
+update.json
+releases.json
+CHANGELOG.md
+
+# --- Artefacts de build / sortie ---
+dist/
+Output/
+bin/
+obj/
+*.min.js
+*.min.css
+
+# --- Dépendances ---
+node_modules/
+package-lock.json
+
+# --- Fichiers de données temporaires du workflow ---
+rel.json
+
+# --- Fichiers binaires / médias (Prettier les ignore déjà, mais par sécurité) ---
+*.ico
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.pdf
+*.zip
+*.exe
+*.deb
+*.pkg
+
+# --- Fichiers C# / XAML (Prettier ne les gère pas, mais on verrouille) ---
+src/**/*.cs
+src/**/*.xaml
+src/**/*.csproj
+
+# --- Installateur Inno Setup (syntaxe propriétaire) ---
+BirdNET-Go-Installer.iss
+
+# --- Scripts shell / batch (formatage manuel souhaité) ---
+install-birdnet.sh
+start_birdnet.bat
