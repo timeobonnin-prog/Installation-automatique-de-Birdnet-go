@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -47,6 +48,8 @@ namespace BirdNETGoControl
             _uiVersionFile = Path.Combine(_installDir, "UI_VERSION.txt");
             _engineVersionFile = Path.Combine(_installDir, "VERSION.txt");
 
+            RestoreWindowPosition();
+
             TitleBar.MouseLeftButtonDown += (_, _) => DragMove();
 
             _tray = new WinForms.NotifyIcon { Text = "BirdNET-Go", Visible = true };
@@ -74,6 +77,7 @@ namespace BirdNETGoControl
 
             Closing += (_, e) =>
             {
+                SaveWindowPosition();
                 if (!_isQuitting) { e.Cancel = true; Hide(); ShowTrayTip(); }
             };
 
@@ -82,6 +86,31 @@ namespace BirdNETGoControl
             if (s.MinimizeToTrayOnLaunch) Hide();
 
             UpdateUI();
+        }
+
+        // ---------------- #14 Position de fenêtre ----------------
+        private void RestoreWindowPosition()
+        {
+            var s = AppSettings.Current;
+            if (!s.RememberWindowPos || !s.WinLeft.HasValue || !s.WinTop.HasValue) return;
+
+            double x = s.WinLeft.Value, y = s.WinTop.Value;
+            var area = SystemParameters.WorkArea;
+            if (x >= area.Left - 50 && x < area.Right - 50 && y >= area.Top - 50 && y < area.Bottom - 50)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Left = x;
+                Top = y;
+            }
+        }
+
+        private void SaveWindowPosition()
+        {
+            var s = AppSettings.Current;
+            if (!s.RememberWindowPos || WindowState != WindowState.Normal) return;
+            s.WinLeft = Left;
+            s.WinTop = Top;
+            s.Save();
         }
 
         // ---------------- Langue ----------------
@@ -101,10 +130,18 @@ namespace BirdNETGoControl
             var menu = new WinForms.ContextMenuStrip();
             menu.Items.Add(Loc.T("BtnOpenWeb"), null, (_, _) => OpenWeb());
             menu.Items.Add(Loc.T("TrayShow"), null, (_, _) => ShowWindow());
+            menu.Items.Add(Loc.T("TrayLogs"), null, (_, _) => OpenLogs());
             menu.Items.Add(Loc.T("TraySettings"), null, (_, _) => { ShowWindow(); OpenSettings(); });
             menu.Items.Add(Loc.T("TrayQuit"), null, (_, _) => QuitAll());
             _tray.ContextMenuStrip = menu;
             old?.Dispose();
+        }
+
+        // ---------------- #4 Visionneuse de logs ----------------
+        private void OpenLogs()
+        {
+            var win = new LogWindow { Owner = this };
+            win.Show();
         }
 
         // ---------------- Serveur ----------------
@@ -268,6 +305,15 @@ namespace BirdNETGoControl
                 "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
         }
 
+        // #2 : hash SHA-256 local comparé au digest fourni par GitHub
+        private static string Sha256OfFile(string path)
+        {
+            using var fs = File.OpenRead(path);
+            using var sha = SHA256.Create();
+            var hash = sha.ComputeHash(fs);
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
         private async Task CheckUpdatesAsync()
         {
             RefreshLocalVersions();
@@ -332,6 +378,23 @@ namespace BirdNETGoControl
                     await dl.Content.CopyToAsync(fs);
                 }
 
+                // #2 SHA-256 : bloquant si incohérent
+                if (AppSettings.Current.VerifyUpdateHash &&
+                    !string.IsNullOrEmpty(asset.digest) && asset.digest.StartsWith("sha256:"))
+                {
+                    string expected = asset.digest.Substring(7).ToLowerInvariant();
+                    string actual = Sha256OfFile(installer);
+                    if (expected != actual)
+                    {
+                        try { File.Delete(installer); } catch { }
+                        App.Log($"❌ SHA-256 invalide : attendu {expected}, obtenu {actual}");
+                        WpfMessageBox.Show(Loc.T("HashMismatch"), Loc.T("UpdateConfirmTitle"),
+                            MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+                    App.Log("🔐 SHA-256 de l'installateur vérifié.");
+                }
+
                 var result = WpfMessageBox.Show(
                     Loc.T("UpdateConfirmText"), Loc.T("UpdateConfirmTitle"),
                     MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -367,7 +430,7 @@ namespace BirdNETGoControl
 
         // ---------------- UI / tray ----------------
         private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-        private void OnClose(object sender, RoutedEventArgs e) { Hide(); ShowTrayTip(); }
+        private void OnClose(object sender, RoutedEventArgs e) { SaveWindowPosition(); Hide(); ShowTrayTip(); }
         private void OnOpen(object sender, RoutedEventArgs e) => OpenWeb();
         private void OpenWeb() => Process.Start(new ProcessStartInfo($"http://localhost:{AppSettings.Current.ServerPort}") { UseShellExecute = true });
 
@@ -395,6 +458,7 @@ namespace BirdNETGoControl
         private void QuitAll()
         {
             _isQuitting = true;
+            SaveWindowPosition();
             if (AppSettings.Current.StopServerOnExit) StopServer();
             _tray.Visible = false;
             _tray.Dispose();
@@ -413,5 +477,6 @@ namespace BirdNETGoControl
     {
         public string? name { get; set; }
         public string? browser_download_url { get; set; }
+        public string? digest { get; set; }   // #2 : "sha256:…"
     }
 }
