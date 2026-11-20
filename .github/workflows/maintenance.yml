@@ -42,7 +42,7 @@ jobs:
           npx prettier --write "**/*.{md,yml,yaml,json}" --ignore-path .gitignore || true
           find . -name "*.sh" -exec shfmt -w -i 2 -ci {} \; || true
 
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: auto-format [skip ci]"
           file_pattern: "*.md *.yml *.yaml *.sh *.bat *.iss"
