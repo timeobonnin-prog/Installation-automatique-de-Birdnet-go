@@ -24,10 +24,9 @@ namespace BirdNETGoControl
         public bool ShowBalloonNotifications { get; set; } = true;
         public int PurgeLogsOlderThanDays { get; set; } = 30;
 
-        // --- Vague 1 ---
-        public bool VerifyUpdateHash { get; set; } = true;   // #2 SHA-256 avant install
-        public bool RememberWindowPos { get; set; } = true;  // #14 position fenêtre
-        public double? WinLeft { get; set; } = null;         // nullable : JSON refuse NaN
+        public bool VerifyUpdateHash { get; set; } = true;
+        public bool RememberWindowPos { get; set; } = true;
+        public double? WinLeft { get; set; } = null;
         public double? WinTop { get; set; } = null;
 
         private static AppSettings _current;
