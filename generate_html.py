@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ==============================================================================
+# ⚠️ IMPORTANT : NE PAS FORMATER CE FICHIER (Prettier, Black, etc.)
+# Ce script utilise des marqueurs __XXX__ et du CSS/JS brut.
+# Tout formatage automatique risque de casser la génération de la page HTML.
+# Assurez-vous que ce fichier est listé dans .prettierignore.
+# ==============================================================================
 """
 Génère index.html (GitHub Pages) et update.json (canal de MAJ statique).
 Utilise .replace() au lieu de .format() pour être 100% immunisé contre 
-les formateurs de code (Prettier, etc.) qui mangent les doubles accolades.
+les formateurs de code qui mangent les accolades.
 """
 
 import json
 import os
 import re
 import html
+import sys
 from datetime import datetime, timezone
 
 RELEASES_FILE = "releases.json"
@@ -268,39 +275,45 @@ document.querySelectorAll('.copy').forEach(function(b) {
 </html>"""
 
 def main():
-    releases = load_json(RELEASES_FILE) or []
-    if isinstance(releases, dict):
-        releases = releases.get("releases", [])
-    
-    stable = pick_latest(releases, nightly=False)
-    nightly = pick_latest(releases, nightly=True)
-    
-    stable_tag = (stable or {}).get("tag_name") or "—"
-    nightly_tag = (nightly or {}).get("tag_name") or "—"
-    
-    cards_stable = "".join(build_platform_card(k, stable) for k in ASSET_MAP) if stable else ""
-    cards_nightly = "".join(build_platform_card(k, nightly) for k in ASSET_MAP) if nightly else ""
-    
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    
-    # Remplacement sécurisé, insensible aux formateurs de code
-    page = HTML_TEMPLATE
-    page = page.replace("__UPSTREAM__", UPSTREAM)
-    page = page.replace("__REPO__", REPO)
-    page = page.replace("__STABLE_TAG__", html.escape(stable_tag))
-    page = page.replace("__NIGHTLY_TAG__", html.escape(nightly_tag))
-    page = page.replace("__CARDS_STABLE__", cards_stable)
-    page = page.replace("__CARDS_NIGHTLY__", cards_nightly)
-    page = page.replace("__NOW__", now)
-    
-    with open(OUT_HTML, "w", encoding="utf-8") as f:
-        f.write(page)
-    print(f"✅ {OUT_HTML} généré ({len(page)} octets)")
-    
-    update_data = build_update_json(stable)
-    with open(OUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(update_data, f, indent=2)
-    print(f"✅ {OUT_JSON} généré (tag: {update_data.get('tag')})")
+    try:
+        releases = load_json(RELEASES_FILE) or []
+        if isinstance(releases, dict):
+            releases = releases.get("releases", [])
+        
+        stable = pick_latest(releases, nightly=False)
+        nightly = pick_latest(releases, nightly=True)
+        
+        stable_tag = (stable or {}).get("tag_name") or "—"
+        nightly_tag = (nightly or {}).get("tag_name") or "—"
+        
+        # Petit message de secours si aucune release n'est trouvée
+        cards_stable = "".join(build_platform_card(k, stable) for k in ASSET_MAP) if stable else "<p style='color:var(--muted);'>Aucune release stable trouvée pour le moment.</p>"
+        cards_nightly = "".join(build_platform_card(k, nightly) for k in ASSET_MAP) if nightly else "<p style='color:var(--muted);'>Aucune release nightly trouvée pour le moment.</p>"
+        
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        
+        # Remplacement sécurisé, insensible aux formateurs de code
+        page = HTML_TEMPLATE
+        page = page.replace("__UPSTREAM__", UPSTREAM)
+        page = page.replace("__REPO__", REPO)
+        page = page.replace("__STABLE_TAG__", html.escape(stable_tag))
+        page = page.replace("__NIGHTLY_TAG__", html.escape(nightly_tag))
+        page = page.replace("__CARDS_STABLE__", cards_stable)
+        page = page.replace("__CARDS_NIGHTLY__", cards_nightly)
+        page = page.replace("__NOW__", now)
+        
+        with open(OUT_HTML, "w", encoding="utf-8") as f:
+            f.write(page)
+        print(f"✅ {OUT_HTML} généré avec succès ({len(page)} octets)")
+        
+        update_data = build_update_json(stable)
+        with open(OUT_JSON, "w", encoding="utf-8") as f:
+            json.dump(update_data, f, indent=2)
+        print(f"✅ {OUT_JSON} généré (tag: {update_data.get('tag')})")
+        
+    except Exception as e:
+        print(f"❌ Erreur fatale lors de la génération : {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
