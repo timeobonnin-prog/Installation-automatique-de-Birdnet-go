@@ -29,8 +29,15 @@ namespace BirdNETGoControl
         public double? WinLeft { get; set; } = null;
         public double? WinTop { get; set; } = null;
 
+        // #9 raccourci global (défaut : Ctrl+Alt+B)
+        public bool HotkeyEnabled { get; set; } = true;
+        public int HotkeyModifiers { get; set; } = 3;   // MOD_ALT(1) | MOD_CONTROL(2)
+        public int HotkeyVk { get; set; } = 0x42;       // 'B'
+
         private static AppSettings _current;
         public static AppSettings Current => _current ??= Load();
+
+        public static AppSettings Reload() { _current = Load(); return _current; }
 
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -38,13 +45,35 @@ namespace BirdNETGoControl
 
         public static AppSettings Load()
         {
+            AppSettings inst;
             try
             {
-                if (File.Exists(SettingsPath))
-                    return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
+                inst = File.Exists(SettingsPath)
+                    ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings()
+                    : new AppSettings();
+            }
+            catch { inst = new AppSettings(); }
+
+            inst.ApplyInstallPortOverride();   // #10 : /PORT= de l'installateur
+            return inst;
+        }
+
+        // Lit PORT_OVERRIDE.txt écrit par l'installateur (/PORT=), patche le moteur, puis se supprime
+        private void ApplyInstallPortOverride()
+        {
+            try
+            {
+                var f = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PORT_OVERRIDE.txt");
+                if (!File.Exists(f)) return;
+                if (int.TryParse(File.ReadAllText(f).Trim(), out int p) && p >= 1 && p <= 65535)
+                {
+                    ServerPort = p;
+                    PortHelper.TrySetEnginePort(p);
+                }
+                File.Delete(f);
+                Save();
             }
             catch { }
-            return new AppSettings();
         }
 
         public void Save()
