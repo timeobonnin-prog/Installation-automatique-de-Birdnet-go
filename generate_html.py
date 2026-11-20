@@ -272,7 +272,7 @@ footer { text-align: center; color: var(--muted); font-size: 13px; padding: 48px
   .preview-grid { grid-template-columns: 1fr; }
   .preview-side { flex-direction: row; }
 }
-.preview-main img,.preview-sub img{width:100%;height:100%;object-fit:cover;border-radius:8px;display:block}</style>
+.preview-main img,.preview-sub img{width:100%;height:100%;object-fit:cover;border-radius:8px;display:block}.preview-main img,.preview-sub img{width:100%;height:100%;object-fit:cover;border-radius:8px;display:block}</style>
 </head>
 <body>
 <div class="wrap">
