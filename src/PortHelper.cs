@@ -51,7 +51,27 @@ namespace BirdNETGoControl
             return null;
         }
 
-        // #6 / #10 : réécrit la première ligne "port: <n>" du config.yaml du moteur
+        // Lit le port réel du moteur depuis son config.yaml ("port: 8080")
+        public static int? GetEnginePort()
+        {
+            try
+            {
+                var path = FindEngineConfig();
+                if (path == null) return null;
+                foreach (var line in File.ReadLines(path))
+                {
+                    var t = line.Trim();
+                    if (t.StartsWith("port:"))
+                    {
+                        if (int.TryParse(t.Substring(5).Trim(), out int p)) return p;
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        // Réécrit la première ligne "port: <n>" du config.yaml du moteur
         public static bool TrySetEnginePort(int newPort)
         {
             try
