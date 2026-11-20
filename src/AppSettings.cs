@@ -6,7 +6,7 @@ namespace BirdNETGoControl
 {
     public class AppSettings
     {
-        public string Language { get; set; } = "auto";   // auto | fr | en | de | es
+        public string Language { get; set; } = "auto";
 
         public bool LaunchAtStartup { get; set; } = false;
         public bool AutoStartServer { get; set; } = true;
@@ -23,6 +23,12 @@ namespace BirdNETGoControl
         public int ServerPort { get; set; } = 8080;
         public bool ShowBalloonNotifications { get; set; } = true;
         public int PurgeLogsOlderThanDays { get; set; } = 30;
+
+        // --- Vague 1 ---
+        public bool VerifyUpdateHash { get; set; } = true;   // #2 SHA-256 avant install
+        public bool RememberWindowPos { get; set; } = true;  // #14 position fenêtre
+        public double? WinLeft { get; set; } = null;         // nullable : JSON refuse NaN
+        public double? WinTop { get; set; } = null;
 
         private static AppSettings _current;
         public static AppSettings Current => _current ??= Load();
