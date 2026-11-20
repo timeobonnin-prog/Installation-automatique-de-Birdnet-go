@@ -272,7 +272,7 @@ footer { text-align: center; color: var(--muted); font-size: 13px; padding: 48px
   .preview-grid { grid-template-columns: 1fr; }
   .preview-side { flex-direction: row; }
 }
-</style>
+.preview-main img,.preview-sub img{width:100%;height:100%;object-fit:cover;border-radius:8px;display:block}</style>
 </head>
 <body>
 <div class="wrap">
@@ -314,12 +314,9 @@ footer { text-align: center; color: var(--muted); font-size: 13px; padding: 48px
 <section>
   <h2>Aperçu de l'application</h2>
   <div class="preview-grid">
-    <!-- Remplacez ces divs par : <img src="screenshots/control.png" style="width:100%; border-radius:8px;"> -->
-    <div class="preview-main">[ Capture : Tableau de bord de Contrôle ]</div>
-    <div class="preview-side">
-      <div class="preview-sub">[ Capture : Résultats en direct ]</div>
-      <div class="preview-sub">[ Capture : Statistiques ]</div>
-    </div>
+    
+    <div class="preview-main"><img src="screenshots/control.webp" alt="Control dashboard" loading="lazy"></div>
+    <div class="preview-side"><div class="preview-sub"><img src="screenshots/results.webp" alt="Live results" loading="lazy"></div><div class="preview-sub"><img src="screenshots/stats.webp" alt="Statistics" loading="lazy"></div></div>
   </div>
 </section>
 
