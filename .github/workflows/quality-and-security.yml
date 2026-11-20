@@ -211,35 +211,59 @@ jobs:
   # NOTIFICATIONS : résumé + commentaire PR
   # =========================================================
   notify:
-    needs: [lint-and-guard, build-check, security-scan, test-installer]
+    needs: [build-check, lint-and-guard, security-scan, test-installer]
     if: always()
     runs-on: ubuntu-24.04
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
     steps:
-      - name: Construire le résumé
+      - name: Vérifier que le résumé n'est pas vide
+        id: check
         run: |
-          icon() { case "$1" in success) printf '✅';; failure) printf '❌';; skipped) printf '⏭️';; *) printf '⚠️';; esac; }
-          Q="$(icon '${{ needs.lint-and-guard.result }}')"
-          B="$(icon '${{ needs.build-check.result }}')"
-          S="$(icon '${{ needs.security-scan.result }}')"
-          T="$(icon '${{ needs.test-installer.result }}')"
-          OVERALL="succès"
-          for r in '${{ needs.lint-and-guard.result }}' '${{ needs.build-check.result }}' '${{ needs.security-scan.result }}' '${{ needs.test-installer.result }}'; do
-            [ "$r" = "failure" ] && OVERALL="ÉCHEC"
-          done
-          {
-            echo "## 🧪 Qualité, Sécurité & Installateur — $OVERALL"
-            echo ""
-            echo "| Job | État |"
-            echo "|-----|------|"
-            echo "| Lint & garde-fou | $Q |"
-            echo "| Compilation (.NET 8) | $B |"
-            echo "| Sécurité (SHA-256 / VT) | $S |"
-            echo "| Test installateur Windows | $T |"
-            echo ""
-            echo "_Commit : \`${{ github.sha }}\` — branche \`${{ github.ref_name }}\`_"
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s "$GITHUB_STEP_SUMMARY" ] && [ -n "$(cat "$GITHUB_STEP_SUMMARY" | tr -d '[:space:]')" ]; then
+            echo "has_body=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_body=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ Résumé vide, aucun commentaire à poster."
+          fi
+
+      - name: Poster le commentaire de notification
+        if: steps.check.outputs.has_body == 'true'
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(process.env.GITHUB_STEP_SUMMARY, 'utf8').trim();
+
+            if (!body) {
+              core.info('Body vide après trim, annulation.');
+              return;
+            }
+
+            // Éviter les doublons : ne poster qu'une fois par run
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const already = comments.data.some(c =>
+              (c.body || '').includes('📊 Résumé du build') ||
+              (c.body || '').includes('## ✅') ||
+              (c.body || '').includes('## ❌')
+            );
+            if (already) {
+              core.info('Commentaire déjà présent, on ne duplique pas.');
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '📊 Résumé du build\n\n' + body
+            });
 
       - name: Commenter la Pull Request (si applicable)
         if: github.event_name == 'pull_request'
