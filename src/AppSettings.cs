@@ -29,10 +29,12 @@ namespace BirdNETGoControl
         public double? WinLeft { get; set; } = null;
         public double? WinTop { get; set; } = null;
 
-        // #9 raccourci global (défaut : Ctrl+Alt+B)
         public bool HotkeyEnabled { get; set; } = true;
-        public int HotkeyModifiers { get; set; } = 3;   // MOD_ALT(1) | MOD_CONTROL(2)
-        public int HotkeyVk { get; set; } = 0x42;       // 'B'
+        public int HotkeyModifiers { get; set; } = 3;
+        public int HotkeyVk { get; set; } = 0x42;
+
+        // Override manuel si l'auto-découverte de l'API moteur échoue (ex. "/api/v2")
+        public string EngineApiBase { get; set; } = "";
 
         private static AppSettings _current;
         public static AppSettings Current => _current ??= Load();
@@ -54,11 +56,10 @@ namespace BirdNETGoControl
             }
             catch { inst = new AppSettings(); }
 
-            inst.ApplyInstallPortOverride();   // #10 : /PORT= de l'installateur
+            inst.ApplyInstallPortOverride();
             return inst;
         }
 
-        // Lit PORT_OVERRIDE.txt écrit par l'installateur (/PORT=), patche le moteur, puis se supprime
         private void ApplyInstallPortOverride()
         {
             try
