@@ -118,7 +118,6 @@ namespace BirdNETGoControl
             UpdateUI();
         }
 
-        // ---------------- Navigation par onglets ----------------
         private void SetNav(Button active)
         {
             NavControl.Tag = null;
@@ -136,7 +135,6 @@ namespace BirdNETGoControl
         private void OnNavStats(object sender, RoutedEventArgs e) { SetNav(NavStats); _ = RefreshStatsAsync(); }
         private void OnRefreshStats(object sender, RoutedEventArgs e) => _ = RefreshStatsAsync();
 
-        // ---------------- Résultats / Statistiques ----------------
         private async Task RefreshStatsAsync()
         {
             var status = await EngineApi.PingAsync();
@@ -223,7 +221,6 @@ namespace BirdNETGoControl
             try { File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8); } catch { }
         }
 
-        // ---------------- #9 Raccourci global ----------------
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
@@ -252,7 +249,6 @@ namespace BirdNETGoControl
             return IntPtr.Zero;
         }
 
-        // ---------------- #6 Port auto ----------------
         private void EnsurePort()
         {
             try
@@ -271,7 +267,6 @@ namespace BirdNETGoControl
             catch { }
         }
 
-        // ---------------- #14 Position fenêtre ----------------
         private void RestoreWindowPosition()
         {
             var s = AppSettings.Current;
@@ -296,7 +291,6 @@ namespace BirdNETGoControl
             s.Save();
         }
 
-        // ---------------- Langue ----------------
         private void ApplyLanguage()
         {
             NavControl.Content = Loc.T("NavControl");
@@ -333,7 +327,6 @@ namespace BirdNETGoControl
             old?.Dispose();
         }
 
-        // ---------------- Logs / backup ----------------
         private void OpenLogs()
         {
             var win = new LogWindow { Owner = this };
@@ -374,7 +367,6 @@ namespace BirdNETGoControl
             Tip(Loc.T("RestoreDone"), WinForms.ToolTipIcon.Info);
         }
 
-        // ---------------- Serveur ----------------
         private bool IsServerRunning() => Process.GetProcessesByName("birdnet-go").Length > 0;
 
         private void StartServer()
@@ -406,7 +398,6 @@ namespace BirdNETGoControl
             catch (Exception ex) { App.Log($"Erreur arrêt : {ex.Message}"); }
         }
 
-        // Le scan de processus tourne HORS thread UI => plus de freeze au drag
         private async Task TickAsync()
         {
             bool isRunning = await Task.Run(() => Process.GetProcessesByName("birdnet-go").Length > 0);
@@ -466,7 +457,6 @@ namespace BirdNETGoControl
             }
         }
 
-        // ---------------- Réglages ----------------
         private void ApplySettings()
         {
             var s = AppSettings.Current;
@@ -510,7 +500,6 @@ namespace BirdNETGoControl
             catch { }
         }
 
-        // ---------------- Versions ----------------
         private static string FormatVersion(string raw)
         {
             var v = (raw ?? "").Trim().TrimStart('v', 'V');
@@ -529,7 +518,6 @@ namespace BirdNETGoControl
             catch { }
         }
 
-        // ---------------- Mises à jour (canal statique, sans quota API) ----------------
         private async Task<UpdateInfo?> FetchUpdateInfoAsync()
         {
             if (!AppSettings.Current.AllowNightlyUpdates)
@@ -660,7 +648,7 @@ namespace BirdNETGoControl
                 if (AppSettings.Current.VerifyUpdateHash && !string.IsNullOrEmpty(info.sha256))
                 {
                     string expected = info.sha256.ToLowerInvariant();
-                    string actual = await Task.Run(() => Sha256OfFile(installer));   // fond => pas de freeze
+                    string actual = await Task.Run(() => Sha256OfFile(installer));
                     if (expected != actual)
                     {
                         try { File.Delete(installer); } catch { }
@@ -709,7 +697,6 @@ namespace BirdNETGoControl
             }
         }
 
-        // ---------------- UI / tray ----------------
         private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void OnClose(object sender, RoutedEventArgs e) { SaveWindowPosition(); Hide(); ShowTrayTip(); }
         private void OnOpen(object sender, RoutedEventArgs e) => OpenWeb();
