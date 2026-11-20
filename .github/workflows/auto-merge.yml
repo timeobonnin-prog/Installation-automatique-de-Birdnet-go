@@ -1,16 +1,9 @@
 name: Auto-merge PR (Dependabot + Owner)
 
+# Se déclenche automatiquement à la fin des tests d'une PR
 on:
   check_suite:
     types: [completed]
-  schedule:
-    - cron: "*/10 * * * *"
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Mode simulation (ne merge rien)"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -26,19 +19,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      # Ajout de 'app/dependabot' pour couvrir les variations de nom du bot GitHub
+      # Liste des auteurs autorisés à l'auto-merge
       ALLOWED_AUTHORS: "dependabot[bot],app/dependabot,timeobonnin-prog"
+      # Le token (le PAT est nécessaire pour merger les PR de Dependabot)
       GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-      DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
     steps:
       - name: Vérifier le token
         run: |
           if [ -z "${GH_TOKEN}" ]; then
-            echo "❌ Aucun token disponible (ni GH_PAT ni GITHUB_TOKEN)."
+            echo "❌ Aucun token disponible. L'auto-merge est désactivé."
             exit 1
-          fi
-          if [ -z "${{ secrets.GH_PAT }}" ]; then
-            echo "⚠️ Pas de GH_PAT : les PR Dependabot ne pourront PAS être mergées automatiquement."
           fi
 
       - name: Scanner et merger les PR éligibles
@@ -62,7 +52,7 @@ jobs:
             echo "────────────────────────────────────────"
             echo "PR #$NUM — $TITLE (auteur: $AUTHOR, state: $STATE)"
 
-            # 1) Filtre auteur (correspondance partielle pour attraper 'app/dependabot' ou 'dependabot[bot]')
+            # 1) Vérifier l'auteur
             ALLOWED=false
             for a in "${AUTHORS[@]}"; do
               if [[ "$AUTHOR" == *"$a"* ]]; then 
@@ -75,13 +65,9 @@ jobs:
               continue
             fi
 
-            # 2) Filtre état de merge (On accepte CLEAN et UNSTABLE, on bloque DIRTY et BLOCKED)
-            if [ "$STATE" = "DIRTY" ]; then
-              echo "⚠️  Conflit détecté, skip. Rebase nécessaire."
-              continue
-            fi
-            if [ "$STATE" = "BLOCKED" ]; then
-              echo "⚠️  Required checks non passés, skip."
+            # 2) Vérifier l'absence de conflits
+            if [ "$STATE" = "DIRTY" ] || [ "$STATE" = "BLOCKED" ]; then
+              echo "⚠️  Conflit ou checks requis non passés, skip."
               continue
             fi
             if [ "$MERGEABLE" != "MERGEABLE" ]; then
@@ -89,43 +75,32 @@ jobs:
               continue
             fi
 
-            # 3) Vérifier les check-runs du commit head
+            # 3) Vérifier que TOUS les checks sont verts (succès)
             CHECKS=$(gh api "repos/$REPO/commits/$SHA/check-runs" -q '.check_runs[] | "\(.status) \(.conclusion)"' 2>/dev/null || true)
             PENDING=$(echo "$CHECKS" | grep -cE "in_progress|queued" || true)
             FAILED=$(echo "$CHECKS" | grep -cE "completed (failure|cancelled|timed_out|action_required)" || true)
             SUCCESS=$(echo "$CHECKS" | grep -c "completed success" || true)
 
             if [ "$PENDING" -gt 0 ]; then
-              echo "⏳ $PENDING check(s) en cours, skip (réessai au prochain run)."
+              echo "⏳ Checks encore en cours, on attend le prochain déclenchement."
               continue
             fi
             if [ "$FAILED" -gt 0 ]; then
-              echo "❌ $FAILED check(s) en échec, skip."
+              echo "❌ Des checks ont échoué, skip."
               continue
             fi
             if [ "$SUCCESS" -eq 0 ]; then
-              echo "ℹ️  Aucun check success, skip."
+              echo "ℹ️  Aucun check terminé, skip."
               continue
             fi
-            echo "✅ Tous les checks sont verts ($SUCCESS success)."
+            
+            echo "✅ Tous les checks sont verts ($SUCCESS success). Merge en cours..."
 
-            # 4) MERGE
-            if [ "$DRY_RUN" = "true" ]; then
-              echo "🧪 DRY-RUN : aurait mergé PR #$NUM"
+            # 4) MERGE automatique (Squash)
+            if gh pr merge "$NUM" --repo "$REPO" --squash --delete-branch \
+               --body "🤖 Auto-merged: tous les checks sont au vert et l'auteur est autorisé."; then
+              echo "✅ PR #$NUM mergée avec succès !"
             else
-              echo "🚀 Merge squash de PR #$NUM..."
-              if gh pr merge "$NUM" --repo "$REPO" --squash --delete-branch \
-                 --body "Auto-merged: tous les checks au vert, auteur autorisé."; then
-                echo "✅ PR #$NUM mergée !"
-              else
-                echo "❌ Échec du merge (GH_PAT requis pour Dependabot)."
-              fi
+              echo "❌ Échec du merge. (Vérifie que le secret GH_PAT est bien configuré pour les PR Dependabot)"
             fi
           done
-
-      - name: Résumé
-        if: always()
-        run: |
-          echo "## 🤖 Auto-merge" >> $GITHUB_STEP_SUMMARY
-          echo "- Auteurs autorisés : \`$ALLOWED_AUTHORS\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Mode : $( [ "$DRY_RUN" = true ] && echo '🧪 DRY-RUN' || echo '🚀 Actif' )" >> $GITHUB_STEP_SUMMARY
