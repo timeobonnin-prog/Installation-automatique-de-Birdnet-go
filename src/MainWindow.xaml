@@ -8,7 +8,6 @@
     <Border Background="#1E1E2E" CornerRadius="12" BorderBrush="#313244" BorderThickness="1">
         <DockPanel>
 
-            <!-- Barre de titre -->
             <Border x:Name="TitleBar" DockPanel.Dock="Top" Background="#313244" CornerRadius="12,12,0,0" Padding="14,8">
                 <Grid>
                     <TextBlock Text="BirdNET-Go" Foreground="#CDD6F4" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
@@ -20,7 +19,6 @@
                 </Grid>
             </Border>
 
-            <!-- Navigation par onglets -->
             <Border DockPanel.Dock="Top" Background="#26263A" Padding="10,8">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -34,9 +32,7 @@
                 </Grid>
             </Border>
 
-            <!-- Panneaux -->
             <Grid>
-                <!-- ===== ONGLET CONTRÔLE ===== -->
                 <ScrollViewer x:Name="PanelControl" VerticalScrollBarVisibility="Auto" Padding="20">
                     <StackPanel>
                         <Border Background="#313244" CornerRadius="8" Padding="16" Margin="0,0,0,14">
@@ -73,7 +69,6 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- ===== ONGLET RÉSULTATS ===== -->
                 <ScrollViewer x:Name="PanelResults" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="20">
                     <StackPanel>
                         <Border Background="#313244" CornerRadius="10" Padding="16" Margin="0,0,0,12">
@@ -96,7 +91,6 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- ===== ONGLET STATISTIQUES ===== -->
                 <ScrollViewer x:Name="PanelStats" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="20">
                     <StackPanel>
                         <TextBlock x:Name="TxtSparkTitle" Text="—" Foreground="#89B4FA" FontWeight="Bold" Margin="0,0,0,8"/>
