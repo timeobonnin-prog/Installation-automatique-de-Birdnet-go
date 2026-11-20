@@ -555,9 +555,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
-  # =========================================================
-  # POST-RELEASE : enchaîne Maintenance + Clean + Update HTML
-  # =========================================================
   post-release:
     name: Trigger Maintenance + Clean + HTML
     needs: publish-release
