@@ -12,6 +12,7 @@
                 <Grid>
                     <TextBlock Text="BirdNET-Go" Foreground="#CDD6F4" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="📊" Click="OnStats" Style="{StaticResource TitleButton}"/>
                         <Button Content="⚙" Click="OnSettings" Style="{StaticResource TitleButton}"/>
                         <Button Content="─" Click="OnMinimize" Style="{StaticResource TitleButton}"/>
                         <Button Content="✕" Click="OnClose" Style="{StaticResource TitleButton}" Foreground="#F38BA8"/>
