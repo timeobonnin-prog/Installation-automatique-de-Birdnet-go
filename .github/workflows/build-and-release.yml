@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       build_stable: ${{ steps.check.outputs.build_stable }}
@@ -42,37 +42,37 @@ jobs:
       stable_tag: ${{ steps.check.outputs.stable }}
       nightly_tag: ${{ steps.check.outputs.nightly }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check versions
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           STABLE=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
-          echo "stable=$STABLE" >> $GITHUB_OUTPUT
-          HAS_STABLE=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
+          echo "stable=$STABLE" >> "$GITHUB_OUTPUT"
+          HAS_STABLE=$(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"v$STABLE\")) | .tagName" || true)
 
           if [ -z "$HAS_STABLE" ] || [ "${{ github.event.inputs.force_build }}" == "true" ] || [ "${{ github.event_name }}" == "push" ]; then
-            echo "build_stable=true" >> $GITHUB_OUTPUT
+            echo "build_stable=true" >> "$GITHUB_OUTPUT"
           else
-            echo "build_stable=false" >> $GITHUB_OUTPUT
+            echo "build_stable=false" >> "$GITHUB_OUTPUT"
           fi
 
           NIGHTLY_RAW=$(gh release list --repo tphakala/birdnet-go --exclude-drafts --pre-releases --limit 50 --json tagName -q '.[].tagName' | grep -E '^nightly-[0-9]{8}$' | head -n 1 || true)
 
           if [ -n "$NIGHTLY_RAW" ]; then
             CLEAN_NIGHTLY="${NIGHTLY_RAW#nightly-}"
-            echo "nightly=$CLEAN_NIGHTLY" >> $GITHUB_OUTPUT
-            HAS_NIGHTLY=$(gh release list --repo ${{ github.repository }} --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"nightly-v$CLEAN_NIGHTLY\")) | .tagName" || true)
+            echo "nightly=$CLEAN_NIGHTLY" >> "$GITHUB_OUTPUT"
+            HAS_NIGHTLY=$(gh release list --repo "${{ github.repository }}" --limit 100 --json tagName -q ".[] | select(.tagName | startswith(\"nightly-v$CLEAN_NIGHTLY\")) | .tagName" || true)
 
             if [ -z "$HAS_NIGHTLY" ] || [ "${{ github.event.inputs.force_build }}" == "true" ] || [ "${{ github.event.inputs.build_nightly }}" == "true" ]; then
-              echo "build_nightly=true" >> $GITHUB_OUTPUT
+              echo "build_nightly=true" >> "$GITHUB_OUTPUT"
             else
-              echo "build_nightly=false" >> $GITHUB_OUTPUT
+              echo "build_nightly=false" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "nightly=" >> $GITHUB_OUTPUT
-            echo "build_nightly=false" >> $GITHUB_OUTPUT
+            echo "nightly=" >> "$GITHUB_OUTPUT"
+            echo "build_nightly=false" >> "$GITHUB_OUTPUT"
           fi
 
   build-windows-stable:
@@ -81,7 +81,14 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('src/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Install Inno Setup and FFmpeg
         run: |
           choco install innosetup --no-progress -y
@@ -150,7 +157,14 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('src/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
       - name: Install Inno Setup and FFmpeg
         run: |
           choco install innosetup --no-progress -y
@@ -221,15 +235,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux-amd64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux-arm64
           - os: macos-latest
             platform: darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download Binary
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -245,7 +259,7 @@ jobs:
           tar -xzf birdnet.tar.gz -C dist
 
       - name: Download FFmpeg & FFprobe (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           wget -q https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
           tar -xf ffmpeg-master-latest-linux64-gpl.tar.xz
@@ -257,11 +271,22 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install ffmpeg
 
+      - name: Cache Go (nfpm)
+        if: matrix.os == 'ubuntu-24.04'
+        id: go-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/go/bin
+          key: go-nfpm-${{ runner.os }}-v1
+
       - name: Install nfpm (Linux only)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04' && steps.go-cache.outputs.cache-hit != 'true'
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
       - name: Build .deb (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         env:
           ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
         run: |
@@ -270,17 +295,19 @@ jobs:
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
           if [ "$ARCH" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
+
       - name: Build .pkg (Mac only)
         if: matrix.os == 'macos-latest'
         run: |
           VERSION="${{ needs.check-version.outputs.stable_tag }}"
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
-          cp -L $(which ffmpeg) payload/usr/local/bin/
-          cp -L $(which ffprobe) payload/usr/local/bin/
+          cp -L "$(which ffmpeg)" payload/usr/local/bin/
+          cp -L "$(which ffprobe)" payload/usr/local/bin/
           install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
           chmod +x payload/usr/local/bin/*
-          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
+          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version "$VERSION" --install-location / BirdNET-Go-macOS.pkg
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -297,15 +324,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux-amd64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: linux-arm64
           - os: macos-latest
             platform: darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download Binary
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -321,7 +348,7 @@ jobs:
           tar -xzf birdnet.tar.gz -C dist
 
       - name: Download FFmpeg & FFprobe (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           wget -q https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
           tar -xf ffmpeg-master-latest-linux64-gpl.tar.xz
@@ -333,11 +360,22 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install ffmpeg
 
+      - name: Cache Go (nfpm)
+        if: matrix.os == 'ubuntu-24.04'
+        id: go-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/go/bin
+          key: go-nfpm-${{ runner.os }}-v1
+
       - name: Install nfpm (Linux only)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04' && steps.go-cache.outputs.cache-hit != 'true'
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
       - name: Build .deb (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         env:
           ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
         run: |
@@ -346,17 +384,19 @@ jobs:
           sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
           ~/go/bin/nfpm package -p deb -f nfpm.yaml
           if [ "$ARCH" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
+
       - name: Build .pkg (Mac only)
         if: matrix.os == 'macos-latest'
         run: |
           VERSION="${{ needs.check-version.outputs.nightly_tag }}"
           mkdir -p payload/usr/local/bin
           cp -r dist/* payload/usr/local/bin/
-          cp -L $(which ffmpeg) payload/usr/local/bin/
-          cp -L $(which ffprobe) payload/usr/local/bin/
+          cp -L "$(which ffmpeg)" payload/usr/local/bin/
+          cp -L "$(which ffprobe)" payload/usr/local/bin/
           install_name_tool -change @rpath/libtensorflowlite_c.dylib @executable_path/libtensorflowlite_c.dylib payload/usr/local/bin/birdnet-go || true
           chmod +x payload/usr/local/bin/*
-          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version $VERSION --install-location / BirdNET-Go-macOS.pkg
+          pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version "$VERSION" --install-location / BirdNET-Go-macOS.pkg
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -377,10 +417,37 @@ jobs:
     if: |
       !cancelled() &&
       (needs.check-version.outputs.build_stable == 'true' || needs.check-version.outputs.build_nightly == 'true')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      # Historique complet + tags : nécessaire pour lister les commits DEPUIS la release précédente
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # ---------- Changelog EN TEXTE (aucun lien comparateur => rien ne casse quand les releases sont nettoyées) ----------
+      - name: Build inline changelog
+        id: changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREV=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 1 --json tagName -q '.[0].tagName' || true)
+          LOG=""
+          if [ -n "$PREV" ] && git rev-parse -q --verify "refs/tags/$PREV" >/dev/null 2>&1; then
+            LOG=$(git log --no-merges --pretty=format:'- %s' "$PREV..HEAD" | head -n 40)
+          fi
+          if [ -z "$LOG" ]; then
+            LOG=$(git log --no-merges --pretty=format:'- %s' -n 20 HEAD)
+          fi
+          if [ -z "$LOG" ]; then
+            LOG="- (changelog vide)"
+          fi
+          {
+            echo "changelog<<EOF"
+            echo "$LOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
@@ -394,25 +461,25 @@ jobs:
         if: needs.check-version.outputs.build_stable == 'true'
         id: verify_stable
         run: |
-          echo "📦 Fichiers stables téléchargés :"
+          echo "Fichiers stables telecharges :"
           ls -la all-files/ || true
-
-          if [ -d all-files ] && [ -n "$(ls -A all-files 2>/dev/null)" ]; then
-            echo "has_files=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_files=false" >> $GITHUB_OUTPUT
-            echo "::warning::Aucun artefact stable, publication ignorée."
-          fi
-
-          if [ -f "all-files/BirdNET-Go-Windows.exe" ] && [ -f "all-files/BirdNET-Go-Linux-x64.deb" ] && [ -f "all-files/BirdNET-Go-macOS.pkg" ]; then
-            echo "is_complete=true" >> $GITHUB_OUTPUT
-            echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ✅" >> $GITHUB_OUTPUT
-            echo "release_body=🎉 Publication complète : Windows, Linux x64, Raspberry Pi, macOS." >> $GITHUB_OUTPUT
-          else
-            echo "is_complete=false" >> $GITHUB_OUTPUT
-            echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} ⚠️ INCOMPLET" >> $GITHUB_OUTPUT
-            echo "release_body=⚠️ Publication incomplète (un ou plusieurs fichiers manquent). Marquée en prerelease pour protéger la dernière version stable. Vérifiez les jobs de build." >> $GITHUB_OUTPUT
-          fi
+          {
+            if [ -d all-files ] && [ -n "$(ls -A all-files 2>/dev/null)" ]; then
+              echo "has_files=true"
+            else
+              echo "has_files=false"
+              echo "::warning::Aucun artefact stable, publication ignoree."
+            fi
+            if [ -f "all-files/BirdNET-Go-Windows.exe" ] && [ -f "all-files/BirdNET-Go-Linux-x64.deb" ] && [ -f "all-files/BirdNET-Go-macOS.pkg" ]; then
+              echo "is_complete=true"
+              echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} OK"
+              echo "release_body=Publication complete : Windows, Linux x64, Raspberry Pi, macOS."
+            else
+              echo "is_complete=false"
+              echo "release_name=Stable v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }} INCOMPLET"
+              echo "release_body=Publication incomplete. Marquee en prerelease pour proteger la derniere version stable."
+            fi
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish Stable Release
         if: needs.check-version.outputs.build_stable == 'true' && steps.verify_stable.outputs.has_files == 'true'
@@ -420,11 +487,14 @@ jobs:
         with:
           tag_name: v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
           name: ${{ steps.verify_stable.outputs.release_name }}
-          body: ${{ steps.verify_stable.outputs.release_body }}
+          body: |
+            ${{ steps.verify_stable.outputs.release_body }}
+
+            ## 📝 Changelog
+            ${{ steps.changelog.outputs.changelog }}
           files: all-files/*
           make_latest: ${{ steps.verify_stable.outputs.is_complete == 'true' }}
           prerelease: ${{ steps.verify_stable.outputs.is_complete == 'false' }}
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
@@ -440,21 +510,21 @@ jobs:
         if: needs.check-version.outputs.build_nightly == 'true'
         id: verify_nightly
         run: |
-          echo "📦 Fichiers nightly téléchargés :"
+          echo "Fichiers nightly telecharges :"
           ls -la all-files-nightly/ || true
-
-          if [ -d all-files-nightly ] && [ -n "$(ls -A all-files-nightly 2>/dev/null)" ]; then
-            echo "has_files=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_files=false" >> $GITHUB_OUTPUT
-            echo "::warning::Aucun artefact nightly, publication ignorée."
-          fi
-
-          if [ -f "all-files-nightly/BirdNET-Go-Windows.exe" ]; then
-            echo "release_name=Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}" >> $GITHUB_OUTPUT
-          else
-            echo "release_name=Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }} ⚠️ INCOMPLET" >> $GITHUB_OUTPUT
-          fi
+          {
+            if [ -d all-files-nightly ] && [ -n "$(ls -A all-files-nightly 2>/dev/null)" ]; then
+              echo "has_files=true"
+            else
+              echo "has_files=false"
+              echo "::warning::Aucun artefact nightly, publication ignoree."
+            fi
+            if [ -f "all-files-nightly/BirdNET-Go-Windows.exe" ]; then
+              echo "release_name=Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}"
+            else
+              echo "release_name=Nightly v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }} INCOMPLET"
+            fi
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish Nightly Release
         if: needs.check-version.outputs.build_nightly == 'true' && steps.verify_nightly.outputs.has_files == 'true'
@@ -462,10 +532,12 @@ jobs:
         with:
           tag_name: nightly-v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
           name: ${{ steps.verify_nightly.outputs.release_name }}
+          body: |
+            ## 📝 Changelog
+            ${{ steps.changelog.outputs.changelog }}
           files: all-files-nightly/*
           make_latest: false
           prerelease: true
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
@@ -490,17 +562,17 @@ jobs:
       - name: Lancer "Maintenance"
         run: |
           if gh workflow run "Maintenance" --repo "$GITHUB_REPOSITORY" 2>/tmp/m.err; then
-            echo "✅ Maintenance déclenchée."
+            echo "Maintenance declenchee."
           else
-            echo "::warning::Dispatch 'Maintenance' refusé. Détail : $(cat /tmp/m.err)"
+            echo "::warning::Dispatch Maintenance refuse. Detail : $(cat /tmp/m.err)"
             exit 1
           fi
 
       - name: Lancer "Clean Releases + Update HTML"
         run: |
           if gh workflow run "Clean Releases + Update HTML" --repo "$GITHUB_REPOSITORY" 2>/tmp/c.err; then
-            echo "✅ Clean Releases + Update HTML déclenchés."
+            echo "Clean Releases + Update HTML declenches."
           else
-            echo "::warning::Dispatch 'Clean Releases + Update HTML' refusé. Détail : $(cat /tmp/c.err)"
+            echo "::warning::Dispatch Clean Releases refuse. Detail : $(cat /tmp/c.err)"
             exit 1
           fi
