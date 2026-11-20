@@ -20,7 +20,6 @@ namespace BirdNETGoControl
         public double LatencyMs { get; set; }
     }
 
-    // Client léger vers le moteur local. Degrade proprement si l'API n'est pas reconnue.
     public static class EngineApi
     {
         private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(4) };
@@ -28,7 +27,6 @@ namespace BirdNETGoControl
 
         private static string Root => $"http://localhost:{AppSettings.Current.ServerPort}";
 
-        // R7 : latence mesurée sur la racine web (existe toujours, même sans API connue)
         public static async Task<EngineStatus> PingAsync()
         {
             var sw = Stopwatch.StartNew();
