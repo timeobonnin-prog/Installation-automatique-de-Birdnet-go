@@ -1,6 +1,6 @@
 ; ---------------------------------------------------------------
 ;  BirdNET-Go — Installateur Windows (Inno Setup 6) — USER SCOPE
-;  16 langues BirdNET-Go + LANGUAGE.txt transmis à l'application
+;  16 langues + LANGUAGE.txt + /PORT= + /REPAIR + migration admin
 ; ---------------------------------------------------------------
 
 #define MyAppName "BirdNET-Go"
@@ -52,7 +52,6 @@ Name: "fi"; MessagesFile: "compiler:Languages\Finnish.isl"
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
 Name: "hu"; MessagesFile: "compiler:Languages\Hungarian.isl"
 Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
-; Latvian : pas de .isl officiel Inno -> chrome anglais, messages perso en letton
 Name: "lv"; MessagesFile: "compiler:Default.isl"
 Name: "nb"; MessagesFile: "compiler:Languages\Norwegian.isl"
 Name: "nl"; MessagesFile: "compiler:Languages\Dutch.isl"
@@ -189,6 +188,7 @@ Filename: "{cmd}"; Parameters: "/C taskkill /F /IM {#MyAppExeName}"; Flags: runh
 Type: filesandordirs; Name: "{userappdata}\BirdNETGoControl"
 Type: filesandordirs; Name: "{app}\logs"
 Type: files; Name: "{app}\LANGUAGE.txt"
+Type: files; Name: "{app}\PORT_OVERRIDE.txt"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchApp}"; Flags: postinstall nowait skipifsilent runascurrentuser
@@ -201,6 +201,46 @@ function LangCode(): String;
 begin
   Result := ActiveLanguage();
   if Result = '' then Result := 'en';
+end;
+
+{ #10 : /PORT=8081 }
+function GetPortParam(): String;
+begin
+  Result := ExpandConstant('{param:PORT|}');
+end;
+
+{ #11 : /REPAIR }
+function IsRepair(): Boolean;
+begin
+  Result := Pos('/REPAIR', Uppercase(GetCmdTail)) > 0;
+end;
+
+{ #12 : ancienne installation admin (Program Files) }
+function OldAdminDir(): String;
+begin
+  Result := ExpandConstant('{pf}\BirdNET-Go');
+end;
+
+procedure MigrateOldInstall();
+var
+  src, dst: String;
+begin
+  src := OldAdminDir();
+  dst := ExpandConstant('{app}');
+  if DirExists(src) then
+  begin
+    Log('Ancienne installation admin detectee : ' + src);
+    if FileExists(src + '\config.yaml') then
+    begin
+      FileCopy(src + '\config.yaml', dst + '\config.yaml', False);
+      Log('config.yaml migre.');
+    end;
+    if FileExists(src + '\birdnet-go.db') then
+    begin
+      FileCopy(src + '\birdnet-go.db', dst + '\birdnet-go.db', False);
+      Log('birdnet-go.db migre.');
+    end;
+  end;
 end;
 
 function FirewallParams(Add: Boolean): String;
@@ -225,10 +265,21 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  port: String;
 begin
   if CurStep = ssPostInstall then
   begin
+    if IsRepair then Log('Mode REPAIR : reinstall + reconfiguration.');
+
     SaveStringToFile(ExpandConstant('{app}\LANGUAGE.txt'), LangCode(), False);
+
+    port := GetPortParam();
+    if port <> '' then
+      SaveStringToFile(ExpandConstant('{app}\PORT_OVERRIDE.txt'), port, False);
+
+    MigrateOldInstall();
+
     if (not WizardSilent) and WizardIsTaskSelected('firewall') then
       ApplyFirewall(True);
   end;
