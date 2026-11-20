@@ -3,7 +3,7 @@ name: Clean Releases + Update HTML
 on:
   schedule:
     - cron: "55 15 * * *" # Tous les jours à 15h55 UTC
-  workflow_dispatch:      # Déclenchement manuel possible
+  workflow_dispatch: # Déclenchement manuel possible
   release:
     types: [published, edited, deleted]
 
@@ -96,7 +96,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
-          
+
           # Exécute le script Python qui génère index.html et update.json
           python3 generate_html.py
 
@@ -115,7 +115,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           git add index.html update.json
           if git diff --staged --quiet; then
             echo "ℹ️ Aucun changement détecté dans index.html ou update.json."
