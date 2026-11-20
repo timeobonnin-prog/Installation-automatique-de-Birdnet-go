@@ -5,9 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
@@ -37,6 +39,16 @@ namespace BirdNETGoControl
         private DateTime _lastCrashTime = DateTime.MinValue;
         private DateTime _lastUpdateCheck = DateTime.MinValue;
         private bool _isQuitting = false;
+
+        // #9 raccourci global
+        private const int WM_HOTKEY = 0x0312;
+        private const int HOTKEY_ID = 9001;
+        private HwndSource? _hwndSource;
+
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
         public MainWindow()
         {
@@ -82,13 +94,65 @@ namespace BirdNETGoControl
             };
 
             var s = AppSettings.Current;
-            if (s.AutoStartServer && !IsServerRunning() && File.Exists(_exePath)) StartServer();
+            if (s.AutoStartServer && !IsServerRunning() && File.Exists(_exePath))
+            {
+                EnsurePort();
+                StartServer();
+            }
             if (s.MinimizeToTrayOnLaunch) Hide();
 
             UpdateUI();
         }
 
-        // ---------------- #14 Position de fenêtre ----------------
+        // ---------------- #9 Raccourci global ----------------
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            var helper = new WindowInteropHelper(this);
+            _hwndSource = HwndSource.FromHwnd(helper.Handle);
+            _hwndSource?.AddHook(WndProc);
+            RegisterHotkey();
+        }
+
+        private void RegisterHotkey()
+        {
+            if (_hwndSource == null) return;
+            var s = AppSettings.Current;
+            UnregisterHotKey(_hwndSource.Handle, HOTKEY_ID);
+            if (s.HotkeyEnabled)
+                RegisterHotKey(_hwndSource.Handle, HOTKEY_ID, (uint)s.HotkeyModifiers, (uint)s.HotkeyVk);
+        }
+
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+            {
+                ShowWindow();
+                handled = true;
+            }
+            return IntPtr.Zero;
+        }
+
+        // ---------------- #6 Port auto ----------------
+        private void EnsurePort()
+        {
+            try
+            {
+                if (IsServerRunning()) return;                 // le moteur occupe déjà son port : rien à faire
+                var s = AppSettings.Current;
+                if (PortHelper.IsFree(s.ServerPort)) return;   // port libre : OK
+                int free = PortHelper.FindFree(s.ServerPort + 1);
+                if (free == s.ServerPort) return;
+                int old = s.ServerPort;
+                s.ServerPort = free;
+                s.Save();
+                PortHelper.TrySetEnginePort(free);
+                App.Log($"Port {old} occupé → bascule sur {free} (config moteur patchée si trouvée).");
+            }
+            catch { }
+        }
+
+        // ---------------- #14 Position fenêtre ----------------
         private void RestoreWindowPosition()
         {
             var s = AppSettings.Current;
@@ -131,10 +195,47 @@ namespace BirdNETGoControl
             menu.Items.Add(Loc.T("BtnOpenWeb"), null, (_, _) => OpenWeb());
             menu.Items.Add(Loc.T("TrayShow"), null, (_, _) => ShowWindow());
             menu.Items.Add(Loc.T("TrayLogs"), null, (_, _) => OpenLogs());
+            menu.Items.Add(Loc.T("TrayBackup"), null, (_, _) => DoBackup());
+            menu.Items.Add(Loc.T("TrayRestore"), null, (_, _) => DoRestore());
             menu.Items.Add(Loc.T("TraySettings"), null, (_, _) => { ShowWindow(); OpenSettings(); });
             menu.Items.Add(Loc.T("TrayQuit"), null, (_, _) => QuitAll());
             _tray.ContextMenuStrip = menu;
             old?.Dispose();
+        }
+
+        // ---------------- #7 Backup / Restore ----------------
+        private void Tip(string text, WinForms.ToolTipIcon icon)
+        {
+            if (AppSettings.Current.ShowBalloonNotifications)
+                _tray.ShowBalloonTip(3000, "BirdNET-Go", text, icon);
+        }
+
+        private void DoBackup()
+        {
+            var zip = BackupHelper.Create();
+            if (zip == null) { App.Log("Backup échoué."); Tip(Loc.T("BackupFail"), WinForms.ToolTipIcon.Warning); return; }
+            App.Log($"Backup créé : {zip}");
+            Tip(Loc.T("BackupDone"), WinForms.ToolTipIcon.Info);
+        }
+
+        private void DoRestore()
+        {
+            var zip = BackupHelper.Latest();
+            if (zip == null || !BackupHelper.Restore(zip))
+            {
+                App.Log("Restore échoué.");
+                Tip(Loc.T("RestoreFail"), WinForms.ToolTipIcon.Warning);
+                return;
+            }
+
+            AppSettings.Reload();
+            Loc.Init(AppSettings.Current.Language);
+            ApplySettings();
+            ApplyLanguage();
+            RegisterHotkey();
+            UpdateUI();
+            App.Log($"Restore effectué : {zip}");
+            Tip(Loc.T("RestoreDone"), WinForms.ToolTipIcon.Info);
         }
 
         // ---------------- #4 Visionneuse de logs ----------------
@@ -243,6 +344,7 @@ namespace BirdNETGoControl
                 Loc.Init(AppSettings.Current.Language);
                 ApplySettings();
                 ApplyLanguage();
+                RegisterHotkey();
                 _lastUpdateCheck = DateTime.MinValue;
                 _ = CheckUpdatesAsync();
                 UpdateUI();
@@ -305,7 +407,6 @@ namespace BirdNETGoControl
                 "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
         }
 
-        // #2 : SHA-256 local comparé au digest GitHub
         private static string Sha256OfFile(string path)
         {
             using var fs = File.OpenRead(path);
@@ -434,7 +535,8 @@ namespace BirdNETGoControl
 
         private void OnToggle(object sender, RoutedEventArgs e)
         {
-            if (IsServerRunning()) StopServer(); else StartServer();
+            if (IsServerRunning()) StopServer();
+            else { EnsurePort(); StartServer(); }
             UpdateUI();
         }
 
@@ -447,16 +549,13 @@ namespace BirdNETGoControl
             Topmost = false;
         }
 
-        private void ShowTrayTip()
-        {
-            if (AppSettings.Current.ShowBalloonNotifications)
-                _tray.ShowBalloonTip(3000, "BirdNET-Go", Loc.T("TrayTipText"), WinForms.ToolTipIcon.Info);
-        }
+        private void ShowTrayTip() => Tip(Loc.T("TrayTipText"), WinForms.ToolTipIcon.Info);
 
         private void QuitAll()
         {
             _isQuitting = true;
             SaveWindowPosition();
+            if (_hwndSource != null) UnregisterHotKey(_hwndSource.Handle, HOTKEY_ID);
             if (AppSettings.Current.StopServerOnExit) StopServer();
             _tray.Visible = false;
             _tray.Dispose();
