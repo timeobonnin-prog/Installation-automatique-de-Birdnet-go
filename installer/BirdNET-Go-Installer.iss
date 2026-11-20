@@ -1,22 +1,23 @@
-﻿; ---------------------------------------------------------------
+; ---------------------------------------------------------------
 ;  BirdNET-Go — Installateur Windows (Inno Setup 6) — USER SCOPE
 ;  16 langues + LANGUAGE.txt + /PORT= + /REPAIR + migration admin
 ; ---------------------------------------------------------------
 
-#define MyAppName "BirdNET-Go"
+#define MyAppName "BirdNET-Go Control"
 #define MyAppExeName "BirdNET-Go-Control.exe"
 #define MyAppPublisher "timeobonnin-prog"
 #define MyAppURL "https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go"
 
 [Setup]
-AppId=BirdNETGo
+AppId=BirdNETGoControl
 AppName={#MyAppName}
-AppVersion=1.0
+AppVersion=1.0.0
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
 
+; Installation dans le dossier utilisateur (pas besoin d'admin)
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
 DefaultDirName={localappdata}\Programs\BirdNET-Go
@@ -24,14 +25,19 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
+
+; Chemins de sortie (sera créé dans installer/Output/)
 OutputDir=Output
 OutputBaseFilename=BirdNET-Go-Windows
+
+; Icônes et compression
 SetupIconFile=..\assets\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+
 VersionInfoVersion=1.0.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoProductName={#MyAppName}
@@ -168,14 +174,20 @@ Name: "desktopicon"; Description: "{cm:TaskDesktop}"; GroupDescription: "{cm:Gro
 Name: "firewall"; Description: "{cm:TaskFirewall}"; GroupDescription: "{cm:GroupNetwork}"; Flags: unchecked; Check: not WizardSilent
 
 [Files]
-Source: "..\\dist\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 1. Tout le contenu compilé (moteur + UI)
+Source: "..\dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 2. Icône (copiée pour les raccourcis)
 Source: "..\assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+; 3. Script de démarrage
 Source: "..\scripts\start_birdnet.bat"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; 4. Licence
+Source: "..\docs\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\..\assets\icon.ico"
+; CORRECTION CRITIQUE : On utilise {app}\icon.ico, pas le chemin relatif du dépôt
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\..\assets\icon.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "BirdNETGoControl"; Flags: uninsdeletevalue
