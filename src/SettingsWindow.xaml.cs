@@ -9,7 +9,7 @@ namespace BirdNETGoControl
     public partial class SettingsWindow : System.Windows.Window
     {
         private bool _loading = true;
-        private bool _suppressLang = false;   // anti-récursion SelectionChanged
+        private bool _suppressLang = false;
 
         public SettingsWindow()
         {
@@ -25,6 +25,13 @@ namespace BirdNETGoControl
             ChkBalloon.IsChecked = s.ShowBalloonNotifications;
             TxtPort.Text = s.ServerPort.ToString();
 
+            int? enginePort = PortHelper.GetEnginePort();
+            if (enginePort.HasValue)
+            {
+                TxtPort.Text = enginePort.Value.ToString();
+                TxtLblPort.Text = Loc.T("LblPort") + " — " + Loc.T("PortFromEngine");
+            }
+
             FillLanguageCombo(s.Language);
             FillNumericCombos(s);
             ApplyLanguage();
@@ -34,8 +41,6 @@ namespace BirdNETGoControl
 
         private void FillLanguageCombo(string selected)
         {
-            // Un ComboBoxItem fourni à la main ne reçoit PAS ItemTemplate :
-            // on pose ContentTemplate explicitement sur chaque élément.
             var tpl = (DataTemplate)FindResource("LangFull");
 
             CmbLanguage.Items.Clear();
@@ -120,7 +125,6 @@ namespace BirdNETGoControl
         private void OnLanguageChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_loading || _suppressLang) return;
-
             _suppressLang = true;
             try
             {
@@ -128,7 +132,7 @@ namespace BirdNETGoControl
                 Loc.Init(code);
                 ApplyLanguage();
                 FillNumericCombos(AppSettings.Current);
-                FillLanguageCombo(code);   // rafraîchit le libellé « Auto (système) »
+                FillLanguageCombo(code);
             }
             finally
             {
@@ -184,6 +188,7 @@ namespace BirdNETGoControl
             s.ServerPort = port;
             s.ShowBalloonNotifications = ChkBalloon.IsChecked == true;
             s.PurgeLogsOlderThanDays = ReadTag(CmbPurge, 30);
+            PortHelper.TrySetEnginePort(port);
             s.Save();
 
             Loc.Init(s.Language);
