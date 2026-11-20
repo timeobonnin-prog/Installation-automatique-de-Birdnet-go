@@ -128,7 +128,7 @@ jobs:
           $tag = "v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}-${{ github.run_attempt }}"
           Set-Content -Path "dist\UI_VERSION.txt" -Value $tag -Encoding UTF8
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
       - name: Compile C# UI
@@ -212,7 +212,7 @@ jobs:
           $tag = "nightly-v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}-${{ github.run_attempt }}"
           Set-Content -Path "dist\UI_VERSION.txt" -Value $tag -Encoding UTF8
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
       - name: Compile C# UI
