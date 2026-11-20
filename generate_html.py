@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Génère index.html (GitHub Pages) et update.json (canal de MAJ statique)
-à partir de releases.json (fourni par le workflow via l'API GitHub).
-
-Aucune clé API externe : le SHA-256 est lu dans le champ `digest` de l'asset,
-et le scan VirusTotal est proposé via le lien GUI (virustotal.com/gui/file/<sha>).
+Génère index.html (GitHub Pages) et update.json (canal de MAJ statique).
+Utilise .replace() au lieu de .format() pour être 100% immunisé contre 
+les formateurs de code (Prettier, etc.) qui mangent les doubles accolades.
 """
 
 import json
 import os
 import re
-import html as html_mod
+import html
 from datetime import datetime, timezone
 
-# --- Configuration ---
 RELEASES_FILE = "releases.json"
 OUT_HTML = "index.html"
 OUT_JSON = "update.json"
@@ -22,14 +19,13 @@ REPO = "timeobonnin-prog/Installation-automatique-de-Birdnet-go"
 UPSTREAM = "tphakala/birdnet-go"
 
 ASSET_MAP = {
-    "windows":     ("BirdNET-Go-Windows.exe",          "🪟", "Windows",       ".exe · x64"),
+    "windows":     ("BirdNET-Go-Windows.exe",          "🪟", "Windows",          ".exe · x64"),
     "windows_zip": ("BirdNET-Go-Windows-Portable.zip", "📦", "Windows portable", ".zip · x64"),
-    "linux_x64":   ("BirdNET-Go-Linux-x64.deb",        "🐧", "Linux x64",     ".deb · amd64"),
-    "raspberry":   ("BirdNET-Go-RaspberryPi.deb",      "🍓", "Raspberry Pi",  ".deb · arm64"),
-    "macos":       ("BirdNET-Go-macOS.pkg",            "🍎", "macOS (ARM)",   ".pkg · arm64"),
+    "linux_x64":   ("BirdNET-Go-Linux-x64.deb",        "🐧", "Linux x64",        ".deb · amd64"),
+    "raspberry":   ("BirdNET-Go-RaspberryPi.deb",      "🍓", "Raspberry Pi",     ".deb · arm64"),
+    "macos":       ("BirdNET-Go-macOS.pkg",            "🍎", "macOS (ARM)",      ".pkg · arm64"),
 }
 
-# --- Helpers ---
 def load_json(path):
     if not os.path.exists(path):
         return None
@@ -79,7 +75,7 @@ def build_platform_card(key, release):
     asset = find_asset(release, name)
     if not asset:
         return ""
-    url = html_mod.escape(asset.get("browser_download_url", "#"))
+    url = html.escape(asset.get("browser_download_url", "#"))
     size = fmt_size(asset.get("size"))
     sha = sha256_from_asset(asset)
     sha_html = ""
@@ -111,14 +107,14 @@ def build_update_json(release):
         "sha256": sha256_from_asset(asset),
     }
 
-# --- Template HTML ---
+# Les marqueurs __XXX__ sont immunisés contre Prettier et les formateurs de code
 HTML_TEMPLATE = """<!doctype html>
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BirdNET-Go Control — Installateur communautaire</title>
-<meta name="description" content="Panneau de contrôle multilingue pour BirdNET-Go : installateurs Windows, Linux, Raspberry Pi, macOS. Vérification SHA-256.">
+<meta name="description" content="Panneau de contrôle multilingue pour BirdNET-Go. Vérification SHA-256.">
 <link rel="icon" href="logo.png" type="image/png">
 <style>
 :root {
@@ -167,7 +163,8 @@ h2 .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); 
 .tab { background:var(--panel2); border:1px solid var(--panel); color:var(--muted);
   padding:8px 16px; border-radius:9px; cursor:pointer; font-weight:600; font-size:14px; }
 .tab.active { background:var(--accent); color:#1E1E2E; border-color:var(--accent); }
-.pane { display:none; } .pane.active { display:block; }
+.pane { display:none; }
+.pane.active { display:block; }
 .features { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
 .feature { background:var(--panel); border-radius:var(--radius); padding:16px; border:1px solid var(--panel2); }
 .feature b { display:block; margin-bottom:4px; }
@@ -184,7 +181,6 @@ footer a { color:var(--muted); }
 </head>
 <body>
 <div class="wrap">
-
 <header>
   <img src="logo.png" alt="BirdNET-Go Control">
   <h1>🐦 BirdNET-Go Control</h1>
@@ -196,7 +192,7 @@ footer a { color:var(--muted); }
   </div>
   <div class="notice">
     ⚠️ <strong>Projet communautaire non officiel.</strong> Les binaires BirdNET-Go proviennent directement des releases officielles de
-    <a href="https://github.com/{upstream}" target="_blank" rel="noopener">{upstream}</a>, jamais recompilés.
+    <a href="https://github.com/__UPSTREAM__" target="_blank" rel="noopener">__UPSTREAM__</a>, jamais recompilés.
     Chaque fichier est vérifié par empreinte <strong>SHA-256</strong> avant installation.
   </div>
 </header>
@@ -205,11 +201,11 @@ footer a { color:var(--muted); }
   <h2><span class="dot"></span> Télécharger</h2>
   <p class="sub">Choisissez le canal, puis votre plateforme. Les empreintes SHA-256 sont affichées pour chaque fichier.</p>
   <div class="tabs">
-    <button class="tab active" data-pane="stable">Stable · {stable_tag}</button>
-    <button class="tab" data-pane="nightly">Nightly · {nightly_tag}</button>
+    <button class="tab active" data-pane="stable">Stable · __STABLE_TAG__</button>
+    <button class="tab" data-pane="nightly">Nightly · __NIGHTLY_TAG__</button>
   </div>
-  <div class="pane active" id="pane-stable"><div class="grid">{cards_stable}</div></div>
-  <div class="pane" id="pane-nightly"><div class="grid">{cards_nightly}</div></div>
+  <div class="pane active" id="pane-stable"><div class="grid">__CARDS_STABLE__</div></div>
+  <div class="pane" id="pane-nightly"><div class="grid">__CARDS_NIGHTLY__</div></div>
 </section>
 
 <section>
@@ -229,15 +225,15 @@ footer a { color:var(--muted); }
 <section class="security">
   <h2><span class="dot"></span> Sécurité</h2>
   <ol>
-    <li><strong>Source officielle</strong> — binaires téléchargés depuis les releases de <code>{upstream}</code>.</li>
+    <li><strong>Source officielle</strong> — binaires téléchargés depuis les releases de <code>__UPSTREAM__</code>.</li>
     <li><strong>SHA-256 vérifié</strong> — empreinte comparée au digest GitHub avant exécution ; mismatch = installation annulée.</li>
     <li><strong>100 % open source</strong> — code auditable dans <code>src/</code>.</li>
     <li><strong>Scan VirusTotal</strong> — chaque fichier propose un lien direct vers son rapport (aucune clé API requise).</li>
   </ol>
   <div class="links">
-    <a href="https://github.com/{repo}" target="_blank" rel="noopener">📂 Dépôt du contrôleur</a>
-    <a href="https://github.com/{upstream}" target="_blank" rel="noopener">🐦 Projet officiel BirdNET-Go</a>
-    <a href="https://github.com/{upstream}/wiki" target="_blank" rel="noopener">📖 Documentation officielle</a>
+    <a href="https://github.com/__REPO__" target="_blank" rel="noopener">📂 Dépôt du contrôleur</a>
+    <a href="https://github.com/__UPSTREAM__" target="_blank" rel="noopener">🐦 Projet officiel BirdNET-Go</a>
+    <a href="https://github.com/__UPSTREAM__/wiki" target="_blank" rel="noopener">📖 Documentation officielle</a>
   </div>
   <p class="sub" style="margin-top:14px">
     Installation avancée (Windows) :
@@ -247,24 +243,23 @@ footer a { color:var(--muted); }
 </section>
 
 <footer>
-  <p>BirdNET-Go Installer · généré le {now} · <a href="https://github.com/{repo}" target="_blank" rel="noopener">Dépôt</a> · <a href="https://github.com/{repo}/releases" target="_blank" rel="noopener">Releases</a> · <a href="https://github.com/{upstream}" target="_blank" rel="noopener">Projet officiel</a></p>
+  <p>BirdNET-Go Installer · généré le __NOW__ · <a href="https://github.com/__REPO__" target="_blank" rel="noopener">Dépôt</a> · <a href="https://github.com/__REPO__/releases" target="_blank" rel="noopener">Releases</a> · <a href="https://github.com/__UPSTREAM__" target="_blank" rel="noopener">Projet officiel</a></p>
   <p>Non affilié officiellement au projet BirdNET-Go. Licence MIT.</p>
 </footer>
-
 </div>
 <script>
-document.querySelectorAll('.tab').forEach(function(t){
-  t.addEventListener('click',function(){
-    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active');});
-    document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('active');});
+document.querySelectorAll('.tab').forEach(function(t) {
+  t.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(x) { x.classList.remove('active'); });
+    document.querySelectorAll('.pane').forEach(function(x) { x.classList.remove('active'); });
     t.classList.add('active');
-    document.getElementById('pane-'+t.dataset.pane).classList.add('active');
+    document.getElementById('pane-' + t.dataset.pane).classList.add('active');
   });
 });
-document.querySelectorAll('.copy').forEach(function(b){
-  b.addEventListener('click',function(){
-    navigator.clipboard.writeText(b.dataset.copy).then(function(){
-      var o=b.textContent; b.textContent='✓'; setTimeout(function(){b.textContent=o;},1200);
+document.querySelectorAll('.copy').forEach(function(b) {
+  b.addEventListener('click', function() {
+    navigator.clipboard.writeText(b.dataset.copy).then(function() {
+      var o = b.textContent; b.textContent = '✓'; setTimeout(function() { b.textContent = o; }, 1200);
     });
   });
 });
@@ -276,33 +271,32 @@ def main():
     releases = load_json(RELEASES_FILE) or []
     if isinstance(releases, dict):
         releases = releases.get("releases", [])
-
+    
     stable = pick_latest(releases, nightly=False)
     nightly = pick_latest(releases, nightly=True)
-
+    
     stable_tag = (stable or {}).get("tag_name") or "—"
     nightly_tag = (nightly or {}).get("tag_name") or "—"
-
+    
     cards_stable = "".join(build_platform_card(k, stable) for k in ASSET_MAP) if stable else ""
     cards_nightly = "".join(build_platform_card(k, nightly) for k in ASSET_MAP) if nightly else ""
-
+    
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-    page = HTML_TEMPLATE.format(
-        upstream=UPSTREAM,
-        repo=REPO,
-        stable_tag=html_mod.escape(stable_tag),
-        nightly_tag=html_mod.escape(nightly_tag),
-        cards_stable=cards_stable,
-        cards_nightly=cards_nightly,
-        now=now
-    )
-
+    
+    # Remplacement sécurisé, insensible aux formateurs de code
+    page = HTML_TEMPLATE
+    page = page.replace("__UPSTREAM__", UPSTREAM)
+    page = page.replace("__REPO__", REPO)
+    page = page.replace("__STABLE_TAG__", html.escape(stable_tag))
+    page = page.replace("__NIGHTLY_TAG__", html.escape(nightly_tag))
+    page = page.replace("__CARDS_STABLE__", cards_stable)
+    page = page.replace("__CARDS_NIGHTLY__", cards_nightly)
+    page = page.replace("__NOW__", now)
+    
     with open(OUT_HTML, "w", encoding="utf-8") as f:
         f.write(page)
     print(f"✅ {OUT_HTML} généré ({len(page)} octets)")
-
-    # Génération de update.json pour l'app
+    
     update_data = build_update_json(stable)
     with open(OUT_JSON, "w", encoding="utf-8") as f:
         json.dump(update_data, f, indent=2)
