@@ -5,7 +5,6 @@ using System.Windows.Media;
 
 namespace BirdNETGoControl
 {
-    // Drapeaux vectoriels 30x20 — nets à toute taille, aucune police emoji requise
     public static class Flags
     {
         private static readonly Dictionary<string, ImageSource> Cache = new();
@@ -73,75 +72,46 @@ namespace BirdNETGoControl
         {
             switch (c)
             {
-                case "cs": // Tchéquie
+                case "cs":
                     Box(g, "#FFFFFF", 0, 0, 30, 10);
                     Box(g, "#D7141A", 0, 10, 30, 10);
                     Poly(g, "#11457E", null, new Point(0, 0), new Point(15, 10), new Point(0, 20));
                     break;
-
-                case "da": // Danemark
-                    Nordic(g, "#C8102E", "#FFFFFF", 4);
-                    break;
-
-                case "de": // Allemagne
-                    H(g, "#000000", "#DD0000", "#FFCE00");
-                    break;
-
-                case "es": // Espagne
+                case "da": Nordic(g, "#C8102E", "#FFFFFF", 4); break;
+                case "de": H(g, "#000000", "#DD0000", "#FFCE00"); break;
+                case "es":
                     Box(g, "#AA151B", 0, 0, 30, 5);
                     Box(g, "#F1BF00", 0, 5, 30, 10);
                     Box(g, "#AA151B", 0, 15, 30, 5);
                     Box(g, "#AA151B", 7.5, 7.5, 3, 5);
                     Box(g, "#F1BF00", 8.4, 8.6, 1.2, 2.8);
                     break;
-
-                case "fi": // Finlande
-                    Nordic(g, "#FFFFFF", "#003580", 5);
-                    break;
-
-                case "fr": // France
-                    V(g, "#0055A4", "#FFFFFF", "#EF4135");
-                    break;
-
-                case "hu": // Hongrie
-                    H(g, "#CE2939", "#FFFFFF", "#477050");
-                    break;
-
-                case "it": // Italie
-                    V(g, "#008C45", "#F4F5F0", "#CD212A");
-                    break;
-
-                case "lv": // Lettonie
+                case "fi": Nordic(g, "#FFFFFF", "#003580", 5); break;
+                case "fr": V(g, "#0055A4", "#FFFFFF", "#EF4135"); break;
+                case "hu": H(g, "#CE2939", "#FFFFFF", "#477050"); break;
+                case "it": V(g, "#008C45", "#F4F5F0", "#CD212A"); break;
+                case "lv":
                     Box(g, "#9E3039", 0, 0, 30, 8);
                     Box(g, "#FFFFFF", 0, 8, 30, 4);
                     Box(g, "#9E3039", 0, 12, 30, 8);
                     break;
-
-                case "nb": // Norvège
+                case "nb":
                     Box(g, "#BA0C2F", 0, 0, 30, 20);
                     Box(g, "#FFFFFF", 9.5, 0, 7, 20);
                     Box(g, "#FFFFFF", 0, 6.5, 30, 7);
                     Box(g, "#00205B", 11.25, 0, 3.5, 20);
                     Box(g, "#00205B", 0, 8.25, 30, 3.5);
                     break;
-
-                case "nl": // Pays-Bas
-                    H(g, "#AE1C28", "#FFFFFF", "#21468B");
-                    break;
-
-                case "pl": // Pologne
-                    H(g, "#FFFFFF", "#DC143C");
-                    break;
-
-                case "pt": // Portugal
+                case "nl": H(g, "#AE1C28", "#FFFFFF", "#21468B"); break;
+                case "pl": H(g, "#FFFFFF", "#DC143C"); break;
+                case "pt":
                     Box(g, "#046A38", 0, 0, 12, 20);
                     Box(g, "#DA291C", 12, 0, 18, 20);
                     Disc(g, "#FFE900", 12, 10, 4.6);
                     Disc(g, "#DA291C", 12, 10, 2.7);
                     Disc(g, "#FFFFFF", 12, 10, 1.3);
                     break;
-
-                case "sk": // Slovaquie
+                case "sk":
                     H(g, "#FFFFFF", "#0B4EA2", "#EE1C25");
                     Poly(g, "#EE1C25", "#FFFFFF",
                         new Point(6, 4.5), new Point(13, 4.5), new Point(13, 12),
@@ -150,12 +120,8 @@ namespace BirdNETGoControl
                     Box(g, "#FFFFFF", 7.7, 7.6, 3.8, 1.1);
                     Box(g, "#FFFFFF", 8.3, 9.7, 2.6, 1.1);
                     break;
-
-                case "sv": // Suède
-                    Nordic(g, "#005293", "#FECB00", 4);
-                    break;
-
-                default: // en — Royaume-Uni
+                case "sv": Nordic(g, "#005293", "#FECB00", 4); break;
+                default:
                     Box(g, "#012169", 0, 0, 30, 20);
                     Slash(g, "#FFFFFF", 4.4, 0, 0, 30, 20);
                     Slash(g, "#FFFFFF", 4.4, 30, 0, 0, 20);
