@@ -1,38 +1,133 @@
-name: Auto-Merge (Dependabot & Moi)
+name: Auto-merge PR (Dependabot + Owner)
 
+# Déclenché :
+#  - en temps réel dès qu'un check_suite se termine sur une PR
+#  - toutes les 10 min (filet de sécurité si un check_suite est raté)
+#  - à la demande (workflow_dispatch) pour tester manuellement
 on:
-  workflow_run:
-    workflows: ["Quality, Security & Notifications"]
+  check_suite:
     types: [completed]
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Mode simulation (ne merge rien)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   pull-requests: write
+  checks: read
+
+concurrency:
+  group: auto-merge
+  cancel-in-progress: false
 
 jobs:
   auto-merge:
-    if: |
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # Auteurs autorisés à l'auto-merge (séparés par virgule)
+      ALLOWED_AUTHORS: "dependabot[bot],timeobonnin-prog"
+      # Token : PAT obligatoire pour merger les PR Dependabot !
+      GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+      DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
     steps:
-      - name: Récupérer le numéro de la PR
-        id: pr
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Vérifier que le token permet l'auto-merge
         run: |
-          PR_NUMBER=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }} --jq '.pull_requests[0].number')
-          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" == "null" ]; then exit 0; fi
-          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
-
-      - name: Vérifier l'auteur et fusionner
-        if: steps.pr.outputs.number != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
-        run: |
-          AUTHOR=$(gh pr view $PR_NUMBER --json author --jq .author.login)
-          if [ "$AUTHOR" == "dependabot[bot]" ] || [ "$AUTHOR" == "${{ github.repository_owner }}" ]; then
-            gh pr review $PR_NUMBER --approve
-            gh pr merge $PR_NUMBER --squash --delete-branch
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "❌ Aucun token disponible (ni GH_PAT ni GITHUB_TOKEN)."
+            exit 1
           fi
+          # Avertissement si on n'a que le GITHUB_TOKEN (Dependabot bloqué)
+          if [ -z "${{ secrets.GH_PAT }}" ]; then
+            echo "⚠️ Pas de GH_PAT : les PR Dependabot ne pourront PAS être mergées."
+          fi
+
+      - name: Scanner et merger les PR éligibles
+        run: |
+          REPO="$GITHUB_REPOSITORY"
+          IFS=',' read -ra AUTHORS <<< "$ALLOWED_AUTHORS"
+
+          echo "🔍 Recherche des PR ouvertes..."
+          PRS=$(gh pr list --repo "$REPO" --state open --json number,title,author,headRefName,mergeable,mergeableState,url --limit 100)
+
+          echo "$PRS" | jq -c '.[]' | while read -r pr; do
+            NUM=$(echo "$pr" | jq -r '.number')
+            TITLE=$(echo "$pr" | jq -r '.title')
+            AUTHOR=$(echo "$pr" | jq -r '.author.login')
+            MERGEABLE=$(echo "$pr" | jq -r '.mergeable')
+            STATE=$(echo "$pr" | jq -r '.mergeableState')
+            URL=$(echo "$pr" | jq -r '.url')
+
+            echo "────────────────────────────────────────"
+            echo "PR #$NUM — $TITLE (auteur: $AUTHOR)"
+
+            # 1) Filtre auteur
+            ALLOWED=false
+            for a in "${AUTHORS[@]}"; do
+              if [ "$AUTHOR" = "$a" ]; then ALLOWED=true; break; fi
+            done
+            if [ "$ALLOWED" = false ]; then
+              echo "⏭️  Auteur non autorisé, skip."
+              continue
+            fi
+
+            # 2) Filtre conflit de merge
+            if [ "$MERGEABLE" != "MERGEABLE" ] || [ "$STATE" = "dirty" ]; then
+              echo "⚠️  Conflit détecté (state=$STATE), skip. Rebase nécessaire."
+              continue
+            fi
+
+            # 3) Vérifier TOUS les checks du commit head : aucun pending, aucun failure
+            SHA=$(gh pr view "$NUM" --repo "$REPO" --json headRefOid -q .headRefOid)
+            CHECKS=$(gh api "repos/$REPO/commits/$SHA/check-runs" -q '.check_runs[] | "\(.status) \(.conclusion)"')
+            PENDING=$(echo "$CHECKS" | grep -c "in_progress\|queued" || true)
+            FAILED=$(echo "$CHECKS" | grep -c "completed failure\|completed cancelled\|completed timed_out" || true)
+            TOTAL=$(echo "$CHECKS" | grep -c "completed" || true)
+
+            if [ "$PENDING" -gt 0 ]; then
+              echo "⏳ $PENDING check(s) encore en cours, skip (on réessaiera au prochain run)."
+              continue
+            fi
+            if [ "$FAILED" -gt 0 ]; then
+              echo "❌ $FAILED check(s) en échec, skip."
+              continue
+            fi
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "ℹ️  Aucun check terminé, skip."
+              continue
+            fi
+            echo "✅ Tous les checks sont verts ($TOTAL check(s) success)."
+
+            # 4) Vérifier les STATUSES (checks legacy / required)
+            STATUS=$(gh api "repos/$REPO/commits/$SHA/status" -q '.state' || echo "unknown")
+            if [ "$STATUS" = "failure" ] || [ "$STATUS" = "pending" ]; then
+              echo "⚠️  Statut commit = $STATUS, skip."
+              continue
+            fi
+
+            # 5) MERGE (squash)
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "🧪 DRY-RUN : aurait mergé PR #$NUM"
+            else
+              echo "🚀 Merge squash de PR #$NUM..."
+              if gh pr merge "$NUM" --repo "$REPO" --squash --delete-branch \
+                 --body "Auto-merged: tous les checks au vert, auteur autorisé."; then
+                echo "✅ PR #$NUM mergée !"
+              else
+                echo "❌ Échec du merge (probablement le token : GH_PAT requis pour Dependabot)."
+              fi
+            fi
+          done
+
+      - name: Résumé
+        if: always()
+        run: |
+          echo "## 🤖 Auto-merge" >> $GITHUB_STEP_SUMMARY
+          echo "- Auteurs autorisés : \`$ALLOWED_AUTHORS\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Mode : $( [ "$DRY_RUN" = true ] && echo '🧪 DRY-RUN' || echo '🚀 Actif' )" >> $GITHUB_STEP_SUMMARY
+          echo "- Dépend du secret \`GH_PAT\` pour merger les PR Dependabot." >> $GITHUB_STEP_SUMMARY
