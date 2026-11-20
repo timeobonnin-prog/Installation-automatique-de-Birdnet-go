@@ -1,0 +1,147 @@
+name: Clean Releases + Update HTML
+
+on:
+  schedule:
+    - cron: "55 15 * * *"
+  workflow_dispatch:
+  release:
+    types: [published, edited, deleted]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  cleanup-releases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Nettoyage des miroirs et tri par version officielle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOCAL: ${{ github.repository }}
+        run: |
+          python3 - << 'EOF'
+          import os, re, json, subprocess
+
+          repo = os.environ["LOCAL"]
+          cmd = ["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]
+          releases = json.loads(subprocess.check_output(cmd).decode())
+
+          pattern = re.compile(r'^(nightly-v|v)(\d+)\.(\d+)(?:-(\d+))?$')
+          grouped = {}
+          to_delete = []
+
+          for r in releases:
+              tag = r["tag_name"]
+              if tag.startswith("manual-"):
+                  print(f"[CONSERVE - Manuel] {tag}")
+                  continue
+
+              match = pattern.match(tag)
+              if not match:
+                  print(f"[A SUPPRIMER - Miroir / Inconnu] {tag}")
+                  to_delete.append(tag)
+              else:
+                  prefix, base_ver, build_str, patch_str = match.groups()
+                  build_num = int(build_str)
+                  patch_num = int(patch_str) if patch_str else 0
+
+                  key = f"{prefix}{base_ver}"
+                  grouped.setdefault(key, []).append(((build_num, patch_num), tag))
+
+          for key, items in grouped.items():
+              items.sort(key=lambda x: x[0], reverse=True)
+              print(f"[CONSERVE - Plus recent de {key}] {items[0][1]}")
+              for _, old_tag in items[1:]:
+                  print(f"[A SUPPRIMER - Ancien de {key}] {old_tag}")
+                  to_delete.append(old_tag)
+
+          for tag in to_delete:
+              print(f"Suppression de {tag}...")
+              del_cmd = ["gh", "release", "delete", tag, "--repo", repo, "--yes", "--cleanup-tag"]
+              subprocess.run(del_cmd, check=False)
+          EOF
+
+  update-html:
+    needs: cleanup-releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch releases & Vérification HTML
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
+          python3 generate_html.py
+
+          if [ ! -s index.html ]; then
+            echo "❌ Erreur : index.html est vide ou introuvable !"
+            exit 1
+          fi
+          if ! grep -qi "<html" index.html || ! grep -qi "</html>" index.html; then
+            echo "❌ Erreur : index.html semble corrompu !"
+            exit 1
+          fi
+          echo "✅ Vérification HTML réussie !"
+
+      - name: Generate update.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" \
+            --jq '{tag:.tag_name, prerelease:.prerelease, assets:[.assets[]|select(.name=="BirdNET-Go-Windows.exe")|{name,digest,browser_download_url}]}' > rel.json
+          python3 - << 'EOF'
+          import json
+          rel = json.load(open('rel.json'))
+          asset = (rel.get('assets') or [{}])[0]
+          digest = (asset.get('digest') or '').replace('sha256:', '')
+          out = {
+              'tag': rel.get('tag_name'),
+              'prerelease': bool(rel.get('prerelease')),
+              'url': asset.get('browser_download_url'),
+              'sha256': digest or None,
+          }
+          with open('update.json', 'w') as f:
+              json.dump(out, f, indent=2)
+          print(open('update.json').read())
+          EOF
+
+      - name: Commit index.html + update.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html update.json
+          if git diff --staged --quiet; then
+            echo "Aucun changement."
+          else
+            git commit -m "chore: update index.html + update.json [skip ci]"
+            git push || true
+          fi
+
+      - name: Créer le fichier .nojekyll
+        run: touch .nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
