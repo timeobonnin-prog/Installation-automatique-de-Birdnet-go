@@ -31,7 +31,7 @@ namespace BirdNETGoControl
         private readonly DispatcherTimer _updateTimer;
 
         private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
-        private readonly HttpClient _downloadHttp = new() { Timeout = TimeSpan.FromMinutes(5) };
+        private readonly HttpClient _downloadHttp = new() { Timeout = TimeSpan.FromMinutes(10) };
 
         private int _crashCount = 0;
         private bool _wasRunning = false;
@@ -39,6 +39,10 @@ namespace BirdNETGoControl
         private DateTime _lastCrashTime = DateTime.MinValue;
         private DateTime _lastUpdateCheck = DateTime.MinValue;
         private bool _isQuitting = false;
+
+        // Cache de la release (évite de multiplier les appels API non authentifiés, limite 60/h)
+        private GitHubRelease? _cachedRelease;
+        private DateTime _cachedReleaseAt = DateTime.MinValue;
 
         // #9 raccourci global
         private const int WM_HOTKEY = 0x0312;
@@ -138,7 +142,7 @@ namespace BirdNETGoControl
         {
             try
             {
-                if (IsServerRunning()) return;                 // le moteur occupe déjà son port : rien à faire
+                if (IsServerRunning()) return;                 // le moteur occupe déjà son port
                 var s = AppSettings.Current;
                 if (PortHelper.IsFree(s.ServerPort)) return;   // port libre : OK
                 int free = PortHelper.FindFree(s.ServerPort + 1);
@@ -395,16 +399,28 @@ namespace BirdNETGoControl
         // ---------------- Mises à jour ----------------
         private async Task<GitHubRelease?> GetTargetReleaseAsync()
         {
+            // Cache 5 min : 1 seul appel API pour le check + le clic MAJ (limite 60/h sans token)
+            if (_cachedRelease != null && (DateTime.Now - _cachedReleaseAt).TotalMinutes < 5)
+                return _cachedRelease;
+
             var s = AppSettings.Current;
+            GitHubRelease? release;
             if (s.AllowNightlyUpdates)
             {
                 var list = await _http.GetFromJsonAsync<List<GitHubRelease>>(
                     "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases?per_page=15");
-                return list?.Find(r => r.prerelease && (r.tag_name ?? "").StartsWith("nightly-"))
-                       ?? list?.Find(r => !r.prerelease);
+                release = list?.Find(r => r.prerelease && (r.tag_name ?? "").StartsWith("nightly-"))
+                          ?? list?.Find(r => !r.prerelease);
             }
-            return await _http.GetFromJsonAsync<GitHubRelease>(
-                "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
+            else
+            {
+                release = await _http.GetFromJsonAsync<GitHubRelease>(
+                    "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
+            }
+
+            _cachedRelease = release;
+            _cachedReleaseAt = DateTime.Now;
+            return release;
         }
 
         private static string Sha256OfFile(string path)
@@ -468,10 +484,13 @@ namespace BirdNETGoControl
             {
                 var release = await GetTargetReleaseAsync();
                 var asset = release?.assets?.FirstOrDefault(a => a.name == "BirdNET-Go-Windows.exe");
-                if (asset is null) throw new Exception("Installateur introuvable");
+                if (asset is null) throw new Exception("Installateur introuvable dans la release");
 
-                var installer = Path.Combine(Path.GetTempPath(), "BirdNET-Go-Update.exe");
-                using (var dl = await _downloadHttp.GetAsync(asset.browser_download_url))
+                // Nom unique horodaté => jamais bloqué par un ancien installateur verrouillé
+                string installer = Path.Combine(Path.GetTempPath(), $"BirdNET-Go-Update-{DateTime.Now:yyyyMMdd-HHmmss}.exe");
+
+                // Streamé (ResponseHeadersRead) => OK même pour un exe self-contained de ~100 Mo+
+                using (var dl = await _downloadHttp.GetAsync(asset.browser_download_url, HttpCompletionOption.ResponseHeadersRead))
                 {
                     dl.EnsureSuccessStatusCode();
                     await using var fs = File.Create(installer);
@@ -486,18 +505,19 @@ namespace BirdNETGoControl
                     if (expected != actual)
                     {
                         try { File.Delete(installer); } catch { }
-                        App.Log($"❌ SHA-256 invalide : attendu {expected}, obtenu {actual}");
-                        WpfMessageBox.Show(Loc.T("HashMismatch"), Loc.T("UpdateConfirmTitle"),
-                            MessageBoxButton.OK, MessageBoxImage.Error);
-                        return;
+                        throw new Exception("SHA-256 invalide (fichier corrompu ou incomplet)");
                     }
-                    App.Log("🔐 SHA-256 de l'installateur vérifié.");
+                    App.Log("SHA-256 de l'installateur vérifié.");
                 }
 
                 var result = WpfMessageBox.Show(
                     Loc.T("UpdateConfirmText"), Loc.T("UpdateConfirmTitle"),
                     MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (result != MessageBoxResult.Yes) return;
+                if (result != MessageBoxResult.Yes)
+                {
+                    try { File.Delete(installer); } catch { }
+                    return;
+                }
 
                 StopServer();
                 _tray.Visible = false;
@@ -513,15 +533,18 @@ namespace BirdNETGoControl
             }
             catch (Exception ex)
             {
-                App.Log($"Update error: {ex.Message}");
+                App.Log($"Update error: {ex.GetType().Name}: {ex.Message}");
+                TxtUpdateStatus.Text = ex.Message;   // ← la VRAIE raison s'affiche ici
+                TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
                 BtnUpdate.Content = Loc.T("BtnError");
-                await Task.Delay(2000);
+                await Task.Delay(4000);
             }
             finally
             {
                 if (!_isQuitting)
                 {
-                    BtnUpdate.Content = Loc.T("BtnUpdate");
+                    BtnUpdate.Content = Loc.T("BtnUpdateAvailable");
+                    BtnUpdate.Background = new SolidColorBrush(WpfColor.FromRgb(16, 185, 129));
                     BtnUpdate.IsEnabled = true;
                 }
             }
