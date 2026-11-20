@@ -53,7 +53,7 @@
 
 | Contrôle                    | Résultats                    | Statistiques                    |
 | :-------------------------- | :--------------------------- | :------------------------------ |
-| _<img width="1085" height="931" alt="screenzy-1795196737426" src="https://github.com/user-attachments/assets/8a2b15b4-227a-408c-9547-69dcf8a41f07" />_ | _<img width="1078" height="928" alt="screenzy-1795196903627" src="https://github.com/user-attachments/assets/f1a7a931-d0cf-4793-a678-7ce5b75c1273" />)_ | _<img width="1086" height="933" alt="screenzy-1795196954884" src="https://github.com/user-attachments/assets/1531fe7c-b93d-466a-a505-df17397d98d3" />_ |
+| _<img width="1085" height="931" alt="screenzy-1795196737426" src="https://github.com/user-attachments/assets/8a2b15b4-227a-408c-9547-69dcf8a41f07" />_ | _<img width="1078" height="928" alt="screenzy-1795196903627" src="https://github.com/user-attachments/assets/f1a7a931-d0cf-4793-a678-7ce5b75c1273" />_ | _<img width="1086" height="933" alt="screenzy-1795196954884" src="https://github.com/user-attachments/assets/1531fe7c-b93d-466a-a505-df17397d98d3" />_ |
 
 ---
 
