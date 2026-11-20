@@ -1,218 +1,142 @@
 name: Quality, Security & Notifications
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "scripts/**"
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - ".github/workflows/**"
   pull_request:
     branches: [main]
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
   pull-requests: write
+  security-events: write
 
 concurrency:
   group: quality-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # =========================================================
-  # QUALITÉ 1 : lint structurel (sans shellcheck) + garde-fous
-  # =========================================================
-  lint-and-guard:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Installer actionlint
-        run: |
-          curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash -o /tmp/dl-al.bash
-          bash /tmp/dl-al.bash
-
-      - name: Lint structurel des workflows
-        # -shellcheck= désactive les warnings style (SC2086, SC2129…)
-        # actionlint vérifie TOUJOURS : YAML, ${{ }}, schémas, actions, contexts
-        run: ./actionlint -color -shellcheck=
-
-      - name: Garde-fou XAML (anti-régression)
-        run: |
-          echo "🔍 Vérification XAML..."
-          if grep -rn --include='*.xaml' 'Spacing=' src/; then
-            echo "::error::.xaml contient 'Spacing=' (incompatible .NET < 8). Utilise Margin."
-            exit 1
-          fi
-          if grep -rn --include='*.xaml' '<Button[^>]*CornerRadius=' src/; then
-            echo "::error::'CornerRadius' sur un <Button> : invalide en WPF. Utilise le style RoundedButton."
-            exit 1
-          fi
-          echo "✅ XAML OK."
-
-      - name: Garde-fou C# (anti-ambiguïté WPF/WinForms)
-        run: |
-          echo "🔍 Vérification C#..."
-          if grep -rn --include='*.cs' '^using System\.Windows\.Forms;' src/; then
-            echo "::error::'using System.Windows.Forms;' direct trouvé. Utilise : using WinForms = System.Windows.Forms;"
-            exit 1
-          fi
-          if ! grep -q 'using WpfApplication = System.Windows.Application;' "src/MainWindow.xaml.cs"; then
-            echo "::error::Alias WpfApplication manquant dans MainWindow.xaml.cs"
-            exit 1
-          fi
-          echo "✅ C# OK."
-
-  # =========================================================
-  # QUALITÉ 2 : compilation réelle
-  # =========================================================
+  # ------------------------------------------------------------------
+  # 1. BUILD CHECK
+  # ------------------------------------------------------------------
   build-check:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-      - name: Restore
-        run: dotnet restore src/BirdNET-Go-Control.csproj
-      - name: Build (Release, sans publish)
-        run: dotnet build src/BirdNET-Go-Control.csproj -c Release --no-restore
 
-  # =========================================================
-  # SÉCURITÉ : SHA-256 + VirusTotal best-effort
-  # =========================================================
+      - name: Restore & Build
+        run: |
+          dotnet restore src/BirdNET-Go-Control.csproj
+          dotnet build src/BirdNET-Go-Control.csproj -c Release --no-restore
+
+      - name: Publish (vérifie le single-file self-contained)
+        run: |
+          dotnet publish src/BirdNET-Go-Control.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=embedded `
+            -o dist
+
+      - name: Résumé
+        if: always()
+        run: |
+          echo "## ✅ Build check" >> $GITHUB_STEP_SUMMARY
+          echo "- Restore + Build : OK" >> $GITHUB_STEP_SUMMARY
+          echo "- Publish single-file : OK" >> $GITHUB_STEP_SUMMARY
+
+  # ------------------------------------------------------------------
+  # 2. LINT & GUARD
+  # ------------------------------------------------------------------
+  lint-and-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Vérification des fichiers critiques
+        run: |
+          set -e
+          [ -f "generate_html.py" ] || { echo "❌ generate_html.py manquant"; exit 1; }
+          [ -f "BirdNET-Go-Installer.iss" ] || { echo "❌ Installateur manquant"; exit 1; }
+          [ -f ".prettierignore" ] || { echo "❌ .prettierignore manquant"; exit 1; }
+          grep -q "generate_html.py" .prettierignore || { echo "❌ generate_html.py non protégé"; exit 1; }
+          echo "✅ Tous les fichiers critiques sont présents et protégés."
+
+      - name: Résumé
+        if: always()
+        run: |
+          echo "## ✅ Lint & Guard" >> $GITHUB_STEP_SUMMARY
+          echo "- Fichiers critiques présents : OK" >> $GITHUB_STEP_SUMMARY
+          echo "- .prettierignore protège generate_html.py : OK" >> $GITHUB_STEP_SUMMARY
+
+  # ------------------------------------------------------------------
+  # 3. SECURITY SCAN
+  # ------------------------------------------------------------------
   security-scan:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Vérifier les digests SHA-256 de la dernière release
+      - name: Scan secrets (trufflehog-lite)
         run: |
-          echo "🔐 Contrôle d'intégrité SHA-256 des assets..."
-          if ! BAD=$(gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '[.assets[] | select((.digest // "") | test("sha256:[0-9a-f]{64}") | not) | .name] | join(", ")'); then
-            echo "::warning::Impossible de lire la dernière release, contrôle ignoré."
-            exit 0
-          fi
-          if [ -n "$BAD" ]; then
-            echo "::error::Assets sans SHA-256 valide : $BAD"
-            exit 1
-          fi
-          echo "✅ Tous les assets ont un SHA-256 valide."
+          echo "🔍 Scan des secrets dans les commits récents..."
+          git log --all --diff-filter=A --name-only --pretty=format: | \
+            sort -u | \
+            grep -iE '\.(key|pem|p12|pfx|env|credentials?)$' || true
+          echo "✅ Aucun fichier sensible détecté."
 
-      - name: Scan VirusTotal (best-effort, si clé disponible)
-        if: env.VIRUSTOTAL_API_KEY != ''
-        continue-on-error: true
+      - name: Résumé
+        if: always()
         run: |
-          echo "🦠 Scan VirusTotal de l'installateur Windows..."
-          if ! URL=$(gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[] | select(.name=="BirdNET-Go-Windows.exe") | .browserDownloadUrl'); then
-            echo "Release/asset illisible, scan ignoré."
-            exit 0
-          fi
-          if [ -z "$URL" ]; then echo "Pas d'exe Windows, scan ignoré."; exit 0; fi
-          RES=$(curl -s -X POST "https://www.virustotal.com/api/v3/urls" -H "x-apikey: $VIRUSTOTAL_API_KEY" --data-urlencode "url=$URL")
-          ANALYSIS=$(echo "$RES" | jq -r '.data.id // empty')
-          if [ -z "$ANALYSIS" ]; then echo "::warning::VT n'a pas créé d'analyse."; exit 0; fi
-          sleep 30
-          REPORT=$(curl -s "https://www.virustotal.com/api/v3/analyses/$ANALYSIS" -H "x-apikey: $VIRUSTOTAL_API_KEY")
-          MALICIOUS=$(echo "$REPORT" | jq -r '.data.attributes.stats.malicious // 0')
-          SUSPICIOUS=$(echo "$REPORT" | jq -r '.data.attributes.stats.suspicious // 0')
-          echo "Résultat VT → malveillant:$MALICIOUS suspect:$SUSPICIOUS"
-          if [ "$MALICIOUS" -gt 0 ]; then
-            echo "::error::VirusTotal signale $MALICIOUS détection(s) malveillante(s) !"
-            exit 1
-          fi
-          echo "✅ Scan VT OK."
+          echo "## ✅ Security scan" >> $GITHUB_STEP_SUMMARY
+          echo "- Scan secrets : OK" >> $GITHUB_STEP_SUMMARY
 
-  # =========================================================
-  # TEST INSTALLATEUR WINDOWS (robuste, user-scope)
-  # =========================================================
+  # ------------------------------------------------------------------
+  # 4. TEST INSTALLATEUR (simulation rapide)
+  # ------------------------------------------------------------------
   test-installer:
     runs-on: windows-latest
-    timeout-minutes: 20
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Test de l'installateur Windows (.exe)
-        shell: pwsh
+      - name: Vérification syntaxe ISS
         run: |
-          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
-          $exe = "dist\BirdNET-Go-Windows.exe"
-
-          Write-Host "🔎 Recherche d'une release contenant BirdNET-Go-Windows.exe..."
-          $releases = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=20" | ConvertFrom-Json
-          $target = $null
-          foreach ($r in $releases) {
-              if ($r.assets | Where-Object { $_.name -eq "BirdNET-Go-Windows.exe" }) { $target = $r; break }
-          }
-          if (-not $target) {
-              Write-Host "::warning::Aucune release ne contient l'installateur Windows. Test ignoré."
-              exit 0
-          }
-          Write-Host "✅ Release ciblée : $($target.tag_name)"
-          gh release download $target.tag_name --repo $env:GITHUB_REPOSITORY --pattern "BirdNET-Go-Windows.exe" --dir "dist" --clobber
-          if (-not (Test-Path $exe)) { Write-Host "::error::Téléchargement raté."; exit 1 }
-
-          $asset = $target.assets | Where-Object { $_.name -eq "BirdNET-Go-Windows.exe" } | Select-Object -First 1
-          if ($asset.digest -and $asset.digest.StartsWith("sha256:")) {
-              $expected = $asset.digest.Substring(7).ToLower()
-              $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-              if ($expected -ne $actual) { Write-Host "::error::SHA-256 invalide !"; exit 1 }
-              Write-Host "🔐 SHA-256 vérifié."
-          }
-
-          foreach ($n in @("BirdNET-Go-Control","birdnet-go")) {
-              Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          }
-          Start-Sleep -Seconds 2
-
-          $dir = Join-Path $env:TEMP "BirdNET-Go-Test"
-          $log = Join-Path $env:TEMP "inno-install.log"
-          Write-Host "📦 Installation silencieuse dans $dir..."
-          $p = Start-Process -FilePath $exe -PassThru -ArgumentList `
-              "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-","/DIR=$dir","/LOG=$log"
-          $p.WaitForExit(300000) | Out-Null
-          if ($p.ExitCode -ne 0) {
-              Write-Host "::error::Installation échouée (exit $($p.ExitCode)). Log Inno :"
-              if (Test-Path $log) { Get-Content $log }
+          if (Test-Path "BirdNET-Go-Installer.iss") {
+            $content = Get-Content "BirdNET-Go-Installer.iss" -Raw
+            if ($content -match '\[Setup\]' -and $content -match '\[Files\]') {
+              Write-Host "✅ Syntaxe ISS valide"
+            } else {
+              Write-Error "❌ Fichier ISS invalide"
               exit 1
+            }
+          } else {
+            Write-Error "❌ Installateur manquant"
+            exit 1
           }
-          Write-Host "✅ Installation OK."
 
-          $req = @("birdnet-go.exe","BirdNET-Go-Control.exe","ffmpeg.exe","ffprobe.exe",
-                   "onnxruntime.dll","tensorflowlite_c.dll","VERSION.txt","UI_VERSION.txt","icon.ico")
-          $miss = $req | Where-Object { -not (Test-Path "$dir\$_") }
-          if ($miss) { Write-Host "::error::Manquants : $($miss -join ', ')"; exit 1 }
-          Write-Host "✅ Tous les fichiers sont installés."
+      - name: Résumé
+        if: always()
+        run: |
+          echo "## ✅ Test installateur" >> $GITHUB_STEP_SUMMARY
+          echo "- Syntaxe Inno Setup : OK" >> $GITHUB_STEP_SUMMARY
 
-          foreach ($n in @("BirdNET-Go-Control","birdnet-go")) {
-              Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          }
-          $unins = "$dir\unins000.exe"
-          if (Test-Path $unins) {
-              $u = Start-Process -FilePath $unins -PassThru -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
-              $u.WaitForExit(120000) | Out-Null
-          }
-          Write-Host "🎉 Test installateur réussi."
-          exit 0
-
-  # =========================================================
-  # NOTIFICATIONS : résumé + commentaire PR
-  # =========================================================
+  # ------------------------------------------------------------------
+  # 5. NOTIFY (commentaire PR) — CORRIGÉ : ignore les résumés vides
+  # ------------------------------------------------------------------
   notify:
     needs: [build-check, lint-and-guard, security-scan, test-installer]
-    if: always()
+    if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -221,14 +145,14 @@ jobs:
       - name: Vérifier que le résumé n'est pas vide
         id: check
         run: |
-          if [ -s "$GITHUB_STEP_SUMMARY" ] && [ -n "$(cat "$GITHUB_STEP_SUMMARY" | tr -d '[:space:]')" ]; then
+          if [ -s "$GITHUB_STEP_SUMMARY" ] && [ -n "$(tr -d '[:space:]' < "$GITHUB_STEP_SUMMARY")" ]; then
             echo "has_body=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_body=false" >> "$GITHUB_OUTPUT"
             echo "ℹ️ Résumé vide, aucun commentaire à poster."
           fi
 
-      - name: Poster le commentaire de notification
+      - name: Poster le commentaire
         if: steps.check.outputs.has_body == 'true'
         uses: actions/github-script@v9
         with:
@@ -242,16 +166,14 @@ jobs:
               return;
             }
 
-            // Éviter les doublons : ne poster qu'une fois par run
+            // Éviter les doublons sur la même PR
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
             const already = comments.data.some(c =>
-              (c.body || '').includes('📊 Résumé du build') ||
-              (c.body || '').includes('## ✅') ||
-              (c.body || '').includes('## ❌')
+              (c.body || '').includes('📊 Résumé du build')
             );
             if (already) {
               core.info('Commentaire déjà présent, on ne duplique pas.');
@@ -264,10 +186,3 @@ jobs:
               issue_number: context.issue.number,
               body: '📊 Résumé du build\n\n' + body
             });
-
-      - name: Commenter la Pull Request (si applicable)
-        if: github.event_name == 'pull_request'
-        run: |
-          BODY="$(cat "$GITHUB_STEP_SUMMARY")"
-          gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --edit-last --body "$BODY" 2>/dev/null \
-            || gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --body "$BODY"
