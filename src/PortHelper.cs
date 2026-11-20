@@ -51,7 +51,6 @@ namespace BirdNETGoControl
             return null;
         }
 
-        // Lit le port réel du moteur depuis son config.yaml ("port: 8080")
         public static int? GetEnginePort()
         {
             try
@@ -71,7 +70,6 @@ namespace BirdNETGoControl
             return null;
         }
 
-        // Réécrit la première ligne "port: <n>" du config.yaml du moteur
         public static bool TrySetEnginePort(int newPort)
         {
             try
