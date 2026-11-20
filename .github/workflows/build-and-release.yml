@@ -137,19 +137,27 @@ jobs:
           dotnet publish src/BirdNET-Go-Control.csproj `
             -c Release `
             -r win-x64 `
-            --self-contained false `
+            --self-contained true `
             -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:DebugType=embedded `
             -o dist
       - name: Compile installer
         shell: pwsh
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+      - name: Build portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "Output" -Force | Out-Null
+          Compress-Archive -Path "dist\*" -DestinationPath "Output\BirdNET-Go-Windows-Portable.zip" -Force
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: stable-windows-installer
-          path: Output/BirdNET-Go-Windows.exe
+          path: |
+            Output/BirdNET-Go-Windows.exe
+            Output/BirdNET-Go-Windows-Portable.zip
 
   build-windows-nightly:
     needs: check-version
@@ -213,19 +221,27 @@ jobs:
           dotnet publish src/BirdNET-Go-Control.csproj `
             -c Release `
             -r win-x64 `
-            --self-contained false `
+            --self-contained true `
             -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:DebugType=embedded `
             -o dist
       - name: Compile installer
         shell: pwsh
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+      - name: Build portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "Output" -Force | Out-Null
+          Compress-Archive -Path "dist\*" -DestinationPath "Output\BirdNET-Go-Windows-Portable.zip" -Force
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: nightly-windows-installer
-          path: Output/BirdNET-Go-Windows.exe
+          path: |
+            Output/BirdNET-Go-Windows.exe
+            Output/BirdNET-Go-Windows-Portable.zip
 
   build-linux-mac-stable:
     needs: check-version
@@ -420,13 +436,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      # Historique complet + tags : nécessaire pour lister les commits DEPUIS la release précédente
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      # ---------- Changelog EN TEXTE (aucun lien comparateur => rien ne casse quand les releases sont nettoyées) ----------
       - name: Build inline changelog
         id: changelog
         env:
@@ -543,9 +557,6 @@ jobs:
 
   # =========================================================
   # POST-RELEASE : enchaîne Maintenance + Clean + Update HTML
-  # always() neutralise la propagation du skip des jobs nightly ;
-  # .result == 'success' garantit que publish-release a bien réussi.
-  # continue-on-error : un dispatch refusé ne rougit PAS le build.
   # =========================================================
   post-release:
     name: Trigger Maintenance + Clean + HTML
