@@ -95,6 +95,7 @@ namespace BirdNETGoControl
             _updateTimer.Start();
 
             PurgeOldLogs();
+            CleanupTempUpdates();   // ✅ Correctif 2 : nettoie les vieux installateurs
             ApplySettings();
             RefreshLocalVersions();
             ApplyLanguage();
@@ -110,7 +111,7 @@ namespace BirdNETGoControl
             var s = AppSettings.Current;
             if (s.AutoStartServer && !IsServerRunning() && File.Exists(_exePath))
             {
-                EnsurePort();
+                EnsurePort();   // ✅ Correctif 3 : détection processus fantômes
                 StartServer();
             }
             if (s.MinimizeToTrayOnLaunch) Hide();
@@ -118,6 +119,22 @@ namespace BirdNETGoControl
             UpdateUI();
         }
 
+        // ✅ Correctif 2 : nettoyage des anciens installateurs en cache
+        private void CleanupTempUpdates()
+        {
+            try
+            {
+                string tempDir = Path.GetTempPath();
+                var oldFiles = Directory.GetFiles(tempDir, "BirdNET-Go-Update-*.exe");
+                foreach (var file in oldFiles)
+                {
+                    try { File.Delete(file); } catch { /* Ignorer si verrouillé */ }
+                }
+            }
+            catch { }
+        }
+
+        // ---------------- Navigation par onglets ----------------
         private void SetNav(Button active)
         {
             NavControl.Tag = null;
@@ -135,6 +152,7 @@ namespace BirdNETGoControl
         private void OnNavStats(object sender, RoutedEventArgs e) { SetNav(NavStats); _ = RefreshStatsAsync(); }
         private void OnRefreshStats(object sender, RoutedEventArgs e) => _ = RefreshStatsAsync();
 
+        // ---------------- Résultats / Statistiques ----------------
         private async Task RefreshStatsAsync()
         {
             var status = await EngineApi.PingAsync();
@@ -221,6 +239,7 @@ namespace BirdNETGoControl
             try { File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8); } catch { }
         }
 
+        // ---------------- #9 Raccourci global ----------------
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
@@ -249,24 +268,40 @@ namespace BirdNETGoControl
             return IntPtr.Zero;
         }
 
+        // ---------------- #6 Port auto + Correctif 3 : détection processus fantômes ----------------
         private void EnsurePort()
         {
             try
             {
-                if (IsServerRunning()) return;
                 var s = AppSettings.Current;
-                if (PortHelper.IsFree(s.ServerPort)) return;
-                int free = PortHelper.FindFree(s.ServerPort + 1);
-                if (free == s.ServerPort) return;
-                int old = s.ServerPort;
-                s.ServerPort = free;
-                s.Save();
-                PortHelper.TrySetEnginePort(free);
-                App.Log($"Port {old} occupé → bascule sur {free} (config moteur patchée si trouvée).");
+
+                // 1. Vérifier si le processus est déjà en cours d'exécution
+                var processes = Process.GetProcessesByName("birdnet-go");
+                if (processes.Length > 0)
+                {
+                    // Le moteur tourne déjà, on synchronise juste l'UI
+                    _shouldServerBeRunning = true;
+                    return;
+                }
+
+                // 2. Si le processus n'est pas là, mais que le port est occupé, c'est un conflit externe
+                if (!PortHelper.IsFree(s.ServerPort))
+                {
+                    int free = PortHelper.FindFree(s.ServerPort + 1);
+                    if (free != s.ServerPort)
+                    {
+                        int old = s.ServerPort;
+                        s.ServerPort = free;
+                        s.Save();
+                        PortHelper.TrySetEnginePort(free);
+                        App.Log($"⚠️ Port {old} occupé par une autre application → bascule sur {free}.");
+                    }
+                }
             }
             catch { }
         }
 
+        // ---------------- #14 Position fenêtre ----------------
         private void RestoreWindowPosition()
         {
             var s = AppSettings.Current;
@@ -291,6 +326,7 @@ namespace BirdNETGoControl
             s.Save();
         }
 
+        // ---------------- Langue ----------------
         private void ApplyLanguage()
         {
             NavControl.Content = Loc.T("NavControl");
@@ -325,6 +361,13 @@ namespace BirdNETGoControl
             menu.Items.Add(Loc.T("TrayQuit"), null, (_, _) => QuitAll());
             _tray.ContextMenuStrip = menu;
             old?.Dispose();
+        }
+
+        // ---------------- Résultats / logs / backup ----------------
+        private void OpenStats()
+        {
+            SetNav(NavResults);
+            _ = RefreshStatsAsync();
         }
 
         private void OpenLogs()
@@ -367,6 +410,7 @@ namespace BirdNETGoControl
             Tip(Loc.T("RestoreDone"), WinForms.ToolTipIcon.Info);
         }
 
+        // ---------------- Serveur ----------------
         private bool IsServerRunning() => Process.GetProcessesByName("birdnet-go").Length > 0;
 
         private void StartServer()
@@ -398,6 +442,7 @@ namespace BirdNETGoControl
             catch (Exception ex) { App.Log($"Erreur arrêt : {ex.Message}"); }
         }
 
+        // Le scan de processus tourne HORS thread UI => plus de freeze au drag
         private async Task TickAsync()
         {
             bool isRunning = await Task.Run(() => Process.GetProcessesByName("birdnet-go").Length > 0);
@@ -457,6 +502,7 @@ namespace BirdNETGoControl
             }
         }
 
+        // ---------------- Réglages ----------------
         private void ApplySettings()
         {
             var s = AppSettings.Current;
@@ -500,6 +546,7 @@ namespace BirdNETGoControl
             catch { }
         }
 
+        // ---------------- Versions ----------------
         private static string FormatVersion(string raw)
         {
             var v = (raw ?? "").Trim().TrimStart('v', 'V');
@@ -518,6 +565,7 @@ namespace BirdNETGoControl
             catch { }
         }
 
+        // ---------------- Mises à jour (canal statique, sans quota API) ----------------
         private async Task<UpdateInfo?> FetchUpdateInfoAsync()
         {
             if (!AppSettings.Current.AllowNightlyUpdates)
@@ -648,7 +696,7 @@ namespace BirdNETGoControl
                 if (AppSettings.Current.VerifyUpdateHash && !string.IsNullOrEmpty(info.sha256))
                 {
                     string expected = info.sha256.ToLowerInvariant();
-                    string actual = await Task.Run(() => Sha256OfFile(installer));
+                    string actual = await Task.Run(() => Sha256OfFile(installer));   // fond => pas de freeze
                     if (expected != actual)
                     {
                         try { File.Delete(installer); } catch { }
@@ -697,6 +745,7 @@ namespace BirdNETGoControl
             }
         }
 
+        // ---------------- UI / tray ----------------
         private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void OnClose(object sender, RoutedEventArgs e) { SaveWindowPosition(); Hide(); ShowTrayTip(); }
         private void OnOpen(object sender, RoutedEventArgs e) => OpenWeb();

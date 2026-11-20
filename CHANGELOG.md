@@ -2,8 +2,7 @@
 
 Toutes les modifications notables de ce projet sont documentées dans ce fichier.
 
-Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
-et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
+Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/), et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
@@ -24,7 +23,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 - Freeze de l'interface lors du calcul du hash SHA-256 (déporté en tâche de fond).
 - Fichiers de mise à jour verrouillés dans le dossier Temp (utilisation de noms horodatés uniques).
 
-## [1.0.0] - 2026-10-31
+## - 2026-10-31
 
 ### Fonctionnalités initiales
 - Première version stable du panneau de contrôle WPF (Windows).
