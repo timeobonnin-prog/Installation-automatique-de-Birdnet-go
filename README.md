@@ -38,12 +38,12 @@
 
 ## 📥 Installation
 
-| Plateforme | Fichier | Commande |
-| :--- | :--- | :--- |
-| 🪟 Windows | `BirdNET-Go-Windows.exe` | Double-clic, ou `BirdNET-Go-Windows-Portable.zip` (sans install) |
-| 🐧 Linux x64 | `BirdNET-Go-Linux-x64.deb` | `sudo apt install ./BirdNET-Go-Linux-x64.deb` |
-| 🍓 Raspberry Pi | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb` |
-| 🍎 macOS (ARM) | `BirdNET-Go-macOS.pkg` | Double-clic |
+| Plateforme      | Fichier                      | Commande                                                         |
+| :-------------- | :--------------------------- | :--------------------------------------------------------------- |
+| 🪟 Windows      | `BirdNET-Go-Windows.exe`     | Double-clic, ou `BirdNET-Go-Windows-Portable.zip` (sans install) |
+| 🐧 Linux x64    | `BirdNET-Go-Linux-x64.deb`   | `sudo apt install ./BirdNET-Go-Linux-x64.deb`                    |
+| 🍓 Raspberry Pi | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb`                  |
+| 🍎 macOS (ARM)  | `BirdNET-Go-macOS.pkg`       | Double-clic                                                      |
 
 > Releases publiées automatiquement via GitHub Actions à chaque commit sur `main` et chaque jour à 15 h 55 UTC.
 
@@ -51,9 +51,9 @@
 
 ## 🖥️ Captures
 
-| Contrôle | Résultats | Statistiques |
-| :--- | :--- | :--- |
-| *(capture onglet Contrôle)* | *(capture onglet Résultats)* | *(capture onglet Statistiques)* |
+| Contrôle                    | Résultats                    | Statistiques                    |
+| :-------------------------- | :--------------------------- | :------------------------------ |
+| _(capture onglet Contrôle)_ | _(capture onglet Résultats)_ | _(capture onglet Statistiques)_ |
 
 ---
 
