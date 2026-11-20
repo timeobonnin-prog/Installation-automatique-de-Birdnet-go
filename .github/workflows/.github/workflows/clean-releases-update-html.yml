@@ -99,7 +99,6 @@ jobs:
           fi
           echo "✅ Vérification HTML réussie !"
 
-      # ---- Canal de MAJ sans API : update.json statique sur Pages ----
       - name: Generate update.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -134,7 +133,7 @@ jobs:
             git push || true
           fi
 
-      - name: Créer le fichier .nojekyll pour désactiver Jekyll
+      - name: Créer le fichier .nojekyll
         run: touch .nojekyll
 
       - uses: actions/configure-pages@v5
