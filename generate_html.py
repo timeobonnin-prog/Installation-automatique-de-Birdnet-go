@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# ==============================================================================
-# ⚠️ IMPORTANT : NE PAS FORMATER CE FICHIER (Prettier, Black, etc.)
-# ==============================================================================
 """
-Génère un index.html moderne, attractif et léger pour GitHub Pages.
-Design : Glassmorphism, animations fluides, dégradés subtils.
+Génère index.html (GitHub Pages) et update.json (canal de MAJ statique).
+Design : Hand-crafted, moderne, accessible, sécurisé et ultra-léger.
 """
 
 import json
@@ -14,7 +11,11 @@ import re
 import html
 import sys
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
+# ==============================================================================
+# CONFIGURATION
+# ==============================================================================
 RELEASES_FILE = "releases.json"
 OUT_HTML = "index.html"
 OUT_JSON = "update.json"
@@ -29,44 +30,60 @@ ASSET_MAP = {
     "macos":       ("BirdNET-Go-macOS.pkg",            "🍎", "macOS (ARM)",      ".pkg · arm64"),
 }
 
-def load_json(path):
-    if not os.path.exists(path): return None
+# ==============================================================================
+# HELPERS
+# ==============================================================================
+def load_json(path: str) -> Optional[List[Dict[str, Any]]]:
+    if not os.path.exists(path):
+        return None
     try:
-        with open(path, encoding="utf-8") as f: return json.load(f)
-    except Exception: return None
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else data.get("releases", [])
+    except Exception:
+        return None
 
-def find_asset(release, name):
+def find_asset(release: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
     for a in release.get("assets") or []:
-        if a.get("name") == name: return a
+        if a.get("name") == name:
+            return a
     return None
 
-def sha256_from_asset(asset):
-    if not asset: return None
+def sha256_from_asset(asset: Dict[str, Any]) -> Optional[str]:
+    if not asset:
+        return None
     d = (asset.get("digest") or "").strip().lower()
     m = re.match(r"^sha256:([0-9a-f]{64})$", d)
     return m.group(1) if m else None
 
-def pick_latest(releases, nightly=False):
+def pick_latest(releases: List[Dict[str, Any]], nightly: bool = False) -> Optional[Dict[str, Any]]:
     for r in releases:
-        if r.get("draft"): continue
+        if r.get("draft"):
+            continue
         tag = r.get("tag_name", "")
         is_nightly = tag.startswith("nightly-")
-        if nightly and is_nightly: return r
-        if (not nightly) and (not is_nightly): return r
+        if nightly and is_nightly:
+            return r
+        if (not nightly) and (not is_nightly):
+            return r
     return None
 
-def fmt_size(n):
-    if not n: return ""
+def fmt_size(n: Any) -> str:
+    if not n:
+        return ""
     n = float(n)
     for u in ("o", "Ko", "Mo", "Go"):
-        if n < 1024 or u == "Go": return f"{n:.0f} {u}" if u == "o" else f"{n:.1f} {u}"
+        if n < 1024 or u == "Go":
+            return f"{n:.0f} {u}" if u == "o" else f"{n:.1f} {u}"
         n /= 1024
     return ""
 
-def build_platform_card(key, release, index):
+def build_platform_card(key: str, release: Dict[str, Any], index: int) -> str:
     name, icon, title, sub = ASSET_MAP[key]
     asset = find_asset(release, name)
-    if not asset: return ""
+    if not asset:
+        return ""
+    
     url = html.escape(asset.get("browser_download_url", "#"))
     size = fmt_size(asset.get("size"))
     sha = sha256_from_asset(asset)
@@ -74,37 +91,38 @@ def build_platform_card(key, release, index):
     sha_html = ""
     if sha:
         vt = f"https://www.virustotal.com/gui/file/{sha}"
+        # On affiche le début et la fin du hash pour la propreté, le bouton copie le tout
+        short_sha = f"{sha[:16]}...{sha[-16:]}"
         sha_html = f"""
         <div class="sha-block">
             <div class="sha-row">
                 <span class="sha-label">SHA-256</span>
-                <code>{sha[:16]}...{sha[-16:]}</code>
+                <code title="{sha}">{short_sha}</code>
             </div>
             <div class="sha-actions">
-                <button class="btn-copy" data-copy="{sha}" title="Copier le hash complet">⧉ Copier</button>
-                <a class="btn-vt" href="{vt}" target="_blank" rel="noopener">🛡️ VirusTotal</a>
+                <button class="btn-copy" data-copy="{sha}" aria-label="Copier le hash SHA-256">⧉ Copier</button>
+                <a class="btn-vt" href="{vt}" target="_blank" rel="noopener noreferrer">🛡️ VirusTotal</a>
             </div>
         </div>"""
 
-    # Animation décalée pour un effet cascade
     delay = index * 0.1
     return f"""
-      <div class="card" style="animation-delay: {delay}s">
+      <article class="card" style="animation-delay: {delay}s">
         <div class="card-header">
-            <span class="card-icon">{icon}</span>
+            <span class="card-icon" aria-hidden="true">{icon}</span>
             <div>
-                <div class="card-title">{title}</div>
-                <div class="card-sub">{sub} · {size}</div>
+                <h3 class="card-title">{html.escape(title)}</h3>
+                <p class="card-sub">{html.escape(sub)} · {size}</p>
             </div>
         </div>
-        <a class="btn-dl" href="{url}" download>
+        <a class="btn-dl" href="{url}" download aria-label="Télécharger {html.escape(title)}">
             <span>Télécharger</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </a>
         {sha_html}
-      </div>"""
+      </article>"""
 
-def build_update_json(release):
+def build_update_json(release: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     asset = find_asset(release, "BirdNET-Go-Windows.exe") if release else None
     return {
         "tag": release.get("tag_name") if release else None,
@@ -114,17 +132,19 @@ def build_update_json(release):
     }
 
 # ==============================================================================
-# TEMPLATE HTML PREMIUM (Glassmorphism, Animations, Dégradés)
+# TEMPLATE HTML (Hand-crafted, sémantique, accessible)
 # ==============================================================================
 HTML_TEMPLATE = """<!doctype html>
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BirdNET-Go Control — Installateur Communautaire</title>
-<meta name="description" content="Panneau de contrôle multilingue et sécurisé pour BirdNET-Go.">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Panneau de contrôle multilingue et sécurisé pour BirdNET-Go. Installateurs vérifiés SHA-256.">
 <meta property="og:title" content="BirdNET-Go Control">
 <meta property="og:description" content="Installez, mettez à jour et surveillez BirdNET-Go en un clic.">
+<meta property="og:type" content="website">
+<title>BirdNET-Go Control — Installateur Communautaire</title>
 <link rel="icon" href="logo.png" type="image/png">
 <style>
 :root {
@@ -143,15 +163,16 @@ HTML_TEMPLATE = """<!doctype html>
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { 
-  font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; 
   background: var(--bg);
   background-image: var(--bg-glow);
   color: var(--text); 
   line-height: 1.6; 
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
-a:hover { color: #b4befe; }
+a:hover { color: #b4befe; text-decoration: underline; }
 
 .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
 
@@ -202,6 +223,7 @@ h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent)
   padding: 8px 20px; border-radius: 99px; cursor: pointer; 
   font-weight: 600; font-size: 14px; transition: all 0.3s ease; 
 }
+.tab:hover { color: var(--text); }
 .tab.active { background: var(--accent); color: #0f0f13; box-shadow: 0 4px 16px var(--accent-glow); }
 .pane { display: none; }
 .pane.active { display: block; }
@@ -211,6 +233,7 @@ h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent)
 .card { 
   background: var(--panel); 
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--panel-border); 
   border-radius: var(--radius); 
   padding: 24px; 
@@ -224,8 +247,8 @@ h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent)
 }
 .card-header { display: flex; align-items: flex-start; gap: 14px; }
 .card-icon { font-size: 32px; line-height: 1; }
-.card-title { font-weight: 700; font-size: 17px; color: #fff; }
-.card-sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
+.card-title { font-weight: 700; font-size: 17px; color: #fff; margin: 0; }
+.card-sub { color: var(--dim); font-size: 13px; margin-top: 2px; margin-bottom: 0; }
 
 /* --- Buttons --- */
 .btn-dl { 
@@ -235,7 +258,7 @@ h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent)
   padding: 12px; border-radius: 12px; 
   transition: all 0.2s ease; text-decoration: none;
 }
-.btn-dl:hover { filter: brightness(1.1); transform: scale(1.02); box-shadow: 0 8px 24px -4px var(--accent-glow); }
+.btn-dl:hover { filter: brightness(1.1); transform: scale(1.02); box-shadow: 0 8px 24px -4px var(--accent-glow); text-decoration: none; }
 .btn-dl svg { transition: transform 0.2s; }
 .btn-dl:hover svg { transform: translateY(2px); }
 
@@ -244,9 +267,9 @@ h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent)
   background: rgba(0,0,0,0.3); border: 1px solid var(--panel-border); 
   border-radius: 10px; padding: 12px; font-size: 13px; 
 }
-.sha-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; }
+.sha-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-family: "JetBrains Mono", "Fira Code", monospace; }
 .sha-label { background: rgba(166, 227, 161, 0.1); color: var(--green); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; font-family: system-ui; }
-.sha-row code { color: var(--muted); word-break: break-all; }
+.sha-row code { color: var(--muted); word-break: break-all; cursor: help; }
 .sha-actions { display: flex; gap: 8px; }
 .btn-copy, .btn-vt { 
   flex: 1; text-align: center; padding: 8px; border-radius: 8px; 
@@ -255,7 +278,7 @@ h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent)
 .btn-copy { background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--panel-border); }
 .btn-copy:hover { background: rgba(255,255,255,0.1); border-color: var(--accent); }
 .btn-vt { background: rgba(166, 227, 161, 0.1); color: var(--green); border: 1px solid rgba(166, 227, 161, 0.2); }
-.btn-vt:hover { background: rgba(166, 227, 161, 0.2); }
+.btn-vt:hover { background: rgba(166, 227, 161, 0.2); text-decoration: none; }
 
 /* --- Features --- */
 .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
@@ -277,7 +300,7 @@ h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent)
   background: var(--panel); padding: 10px 18px; border-radius: 10px; 
   border: 1px solid var(--panel-border); font-size: 14px; font-weight: 500;
 }
-.links a:hover { background: rgba(255,255,255,0.05); border-color: var(--accent); color: var(--accent); }
+.links a:hover { background: rgba(255,255,255,0.05); border-color: var(--accent); color: var(--accent); text-decoration: none; }
 footer { text-align: center; color: var(--dim); font-size: 13px; padding: 48px 0; border-top: 1px solid var(--panel-border); margin-top: 64px; }
 
 @media (max-width: 600px) { 
@@ -291,39 +314,40 @@ footer { text-align: center; color: var(--dim); font-size: 13px; padding: 48px 0
 <div class="wrap">
 
 <header class="animate" style="animation-delay: 0.1s">
-  <img src="logo.png" alt="BirdNET-Go Control">
+  <img src="logo.png" alt="Logo BirdNET-Go Control">
   <h1>BirdNET-Go Control</h1>
   <p class="tagline">Panneau de contrôle multilingue pour <strong>BirdNET-Go</strong>.<br>Installez, mettez à jour et surveillez en un clic.</p>
   <div class="badges">
-    <img src="https://img.shields.io/badge/license-MIT-89b4fa?style=flat-square" alt="License">
+    <img src="https://img.shields.io/badge/license-MIT-89b4fa?style=flat-square" alt="License MIT">
     <img src="https://img.shields.io/badge/langues-16-a6e3a1?style=flat-square" alt="16 langues">
-    <img src="https://img.shields.io/badge/SHA--256-v%C3%A9rifi%C3%A9-cba6f7?style=flat-square" alt="SHA-256">
+    <img src="https://img.shields.io/badge/SHA--256-v%C3%A9rifi%C3%A9-cba6f7?style=flat-square" alt="SHA-256 vérifié">
   </div>
   <div class="notice">
     ⚠️ <strong>Projet communautaire non officiel.</strong> Les binaires proviennent directement des releases de <a href="https://github.com/__UPSTREAM__" target="_blank" rel="noopener">__UPSTREAM__</a>, jamais recompilés. Chaque fichier est vérifié par empreinte SHA-256 avant installation.
   </div>
 </header>
 
+<main>
 <section class="animate" style="animation-delay: 0.2s">
   <h2><span class="dot"></span> Télécharger</h2>
   <p class="sub">Choisissez votre plateforme. Les empreintes de sécurité sont affichées pour chaque fichier.</p>
-  <div class="tabs">
-    <button class="tab active" data-pane="stable">Stable · __STABLE_TAG__</button>
-    <button class="tab" data-pane="nightly">Nightly · __NIGHTLY_TAG__</button>
+  <div class="tabs" role="tablist">
+    <button class="tab active" role="tab" aria-selected="true" data-pane="stable">Stable · __STABLE_TAG__</button>
+    <button class="tab" role="tab" aria-selected="false" data-pane="nightly">Nightly · __NIGHTLY_TAG__</button>
   </div>
-  <div class="pane active" id="pane-stable"><div class="grid">__CARDS_STABLE__</div></div>
-  <div class="pane" id="pane-nightly"><div class="grid">__CARDS_NIGHTLY__</div></div>
+  <div class="pane active" id="pane-stable" role="tabpanel"><div class="grid">__CARDS_STABLE__</div></div>
+  <div class="pane" id="pane-nightly" role="tabpanel"><div class="grid">__CARDS_NIGHTLY__</div></div>
 </section>
 
 <section class="animate" style="animation-delay: 0.3s">
   <h2><span class="dot"></span> Fonctionnalités</h2>
   <div class="features">
-    <div class="feature"><b>🎛️ Contrôle serveur</b><span>Démarrer/arrêter, watchdog anti-crash, port auto synchronisé.</span></div>
-    <div class="feature"><b>📊 Résultats en direct</b><span>Pastille qui pulse, latence ms, détections du jour.</span></div>
-    <div class="feature"><b>📈 Statistiques</b><span>Sparkline 24h, top 5 espèces, export CSV.</span></div>
-    <div class="feature"><b>🔄 Mises à jour in-app</b><span>Contrôleur + moteur en 1 clic, sans quota API.</span></div>
-    <div class="feature"><b>🌍 16 langues</b><span>FR, EN, DE, ES, IT, PT, NL, PL, CS, SK, HU, DA, SV, NB, FI, LV.</span></div>
-    <div class="feature"><b>💾 Backup / Restore</b><span>Sauvegarde zip horodatée des réglages.</span></div>
+    <article class="feature"><b>🎛️ Contrôle serveur</b><span>Démarrer/arrêter, watchdog anti-crash, port auto synchronisé.</span></article>
+    <article class="feature"><b>📊 Résultats en direct</b><span>Pastille qui pulse, latence ms, détections du jour.</span></article>
+    <article class="feature"><b>📈 Statistiques</b><span>Sparkline 24h, top 5 espèces, export CSV.</span></article>
+    <article class="feature"><b>🔄 Mises à jour in-app</b><span>Contrôleur + moteur en 1 clic, sans quota API.</span></article>
+    <article class="feature"><b>🌍 16 langues</b><span>FR, EN, DE, ES, IT, PT, NL, PL, CS, SK, HU, DA, SV, NB, FI, LV.</span></article>
+    <article class="feature"><b>💾 Backup / Restore</b><span>Sauvegarde zip horodatée des réglages.</span></article>
   </div>
 </section>
 
@@ -337,10 +361,11 @@ footer { text-align: center; color: var(--dim); font-size: 13px; padding: 48px 0
   </ol>
   <div class="links">
     <a href="https://github.com/__REPO__" target="_blank" rel="noopener">📂 Dépôt du contrôleur</a>
-    <a href="https://github.com/__UPSTREAM__" target="_blank" rel="OPenSource">🐦 Projet officiel BirdNET-Go</a>
+    <a href="https://github.com/__UPSTREAM__" target="_blank" rel="noopener">🐦 Projet officiel BirdNET-Go</a>
     <a href="https://github.com/__UPSTREAM__/wiki" target="_blank" rel="noopener">📖 Documentation officielle</a>
   </div>
 </section>
+</main>
 
 <footer class="animate" style="animation-delay: 0.5s">
   <p>BirdNET-Go Installer · généré le __NOW__</p>
@@ -349,14 +374,22 @@ footer { text-align: center; color: var(--dim); font-size: 13px; padding: 48px 0
 
 </div>
 <script>
+// Gestion des onglets
 document.querySelectorAll('.tab').forEach(function(t) {
   t.addEventListener('click', function() {
-    document.querySelectorAll('.tab').forEach(function(x) { x.classList.remove('active'); });
+    document.querySelectorAll('.tab').forEach(function(x) { 
+      x.classList.remove('active'); 
+      x.setAttribute('aria-selected', 'false');
+    });
     document.querySelectorAll('.pane').forEach(function(x) { x.classList.remove('active'); });
+    
     t.classList.add('active');
+    t.setAttribute('aria-selected', 'true');
     document.getElementById('pane-' + t.dataset.pane).classList.add('active');
   });
 });
+
+// Gestion de la copie du hash avec feedback
 document.querySelectorAll('.btn-copy').forEach(function(b) {
   b.addEventListener('click', function() {
     navigator.clipboard.writeText(b.dataset.copy).then(function() {
@@ -369,6 +402,8 @@ document.querySelectorAll('.btn-copy').forEach(function(b) {
         b.style.borderColor = ''; 
         b.style.color = '';
       }, 1500);
+    }).catch(function() {
+      b.innerHTML = '❌ Échec';
     });
   });
 });
@@ -376,11 +411,12 @@ document.querySelectorAll('.btn-copy').forEach(function(b) {
 </body>
 </html>"""
 
+# ==============================================================================
+# MAIN EXECUTION
+# ==============================================================================
 def main():
     try:
         releases = load_json(RELEASES_FILE) or []
-        if isinstance(releases, dict):
-            releases = releases.get("releases", [])
         
         stable = pick_latest(releases, nightly=False)
         nightly = pick_latest(releases, nightly=True)
@@ -388,11 +424,13 @@ def main():
         stable_tag = (stable or {}).get("tag_name") or "—"
         nightly_tag = (nightly or {}).get("tag_name") or "—"
         
-        cards_stable = "".join(build_platform_card(k, stable, i) for i, k in enumerate(ASSET_MAP)) if stable else "<p style='color:var(--dim); padding:20px;'>Aucune release stable trouvée.</p>"
-        cards_nightly = "".join(build_platform_card(k, nightly, i) for i, k in enumerate(ASSET_MAP)) if nightly else "<p style='color:var(--dim); padding:20px;'>Aucune release nightly trouvée.</p>"
+        # Fallback élégant si aucune release n'est trouvée
+        cards_stable = "".join(build_platform_card(k, stable, i) for i, k in enumerate(ASSET_MAP)) if stable else "<p style='color:var(--dim); padding:20px; grid-column: 1/-1; text-align:center;'>Aucune release stable trouvée pour le moment.</p>"
+        cards_nightly = "".join(build_platform_card(k, nightly, i) for i, k in enumerate(ASSET_MAP)) if nightly else "<p style='color:var(--dim); padding:20px; grid-column: 1/-1; text-align:center;'>Aucune release nightly trouvée pour le moment.</p>"
         
         now = datetime.now(timezone.utc).strftime("%d %b %Y à %H:%M UTC")
         
+        # Remplacement sécurisé (immunisé contre les formateurs de code)
         page = HTML_TEMPLATE
         page = page.replace("__UPSTREAM__", UPSTREAM)
         page = page.replace("__REPO__", REPO)
@@ -412,7 +450,7 @@ def main():
         print(f"✅ {OUT_JSON} généré (tag: {update_data.get('tag')})")
         
     except Exception as e:
-        print(f"❌ Erreur fatale : {e}", file=sys.stderr)
+        print(f"❌ Erreur fatale lors de la génération : {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
