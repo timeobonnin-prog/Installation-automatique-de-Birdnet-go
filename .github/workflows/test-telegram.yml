@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Envoyer un message de test
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
