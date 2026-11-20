@@ -2,8 +2,8 @@ name: Clean Releases + Update HTML
 
 on:
   schedule:
-    - cron: "55 15 * * *"
-  workflow_dispatch:
+    - cron: "55 15 * * *" # Tous les jours à 15h55 UTC
+  workflow_dispatch:      # Déclenchement manuel possible
   release:
     types: [published, edited, deleted]
 
@@ -17,6 +17,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ------------------------------------------------------------------
+  # 1. NETTOYAGE DES RELEASES OBSOLÈTES
+  # ------------------------------------------------------------------
   cleanup-releases:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -33,6 +36,7 @@ jobs:
           cmd = ["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]
           releases = json.loads(subprocess.check_output(cmd).decode())
 
+          # Pattern pour identifier les tags valides (ex: v20261031.102-1 ou nightly-v20261031)
           pattern = re.compile(r'^(nightly-v|v)(\d+)\.(\d+)(?:-(\d+))?$')
           grouped = {}
           to_delete = []
@@ -57,7 +61,7 @@ jobs:
 
           for key, items in grouped.items():
               items.sort(key=lambda x: x[0], reverse=True)
-              print(f"[CONSERVE - Plus recent de {key}] {items[0][1]}")
+              print(f"[CONSERVE - Plus récent de {key}] {items[0][1]}")
               for _, old_tag in items[1:]:
                   print(f"[A SUPPRIMER - Ancien de {key}] {old_tag}")
                   to_delete.append(old_tag)
@@ -68,6 +72,9 @@ jobs:
               subprocess.run(del_cmd, check=False)
           EOF
 
+  # ------------------------------------------------------------------
+  # 2. GÉNÉRATION ET DÉPLOIEMENT DE LA PAGE HTML + UPDATE.JSON
+  # ------------------------------------------------------------------
   update-html:
     needs: cleanup-releases
     runs-on: ubuntu-24.04
@@ -76,19 +83,24 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Fetch releases & Vérification HTML
+      - name: Fetch releases & Générer HTML
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
+          
+          # Exécute le script Python qui génère index.html et update.json
           python3 generate_html.py
 
+          # Vérification de sécurité : le fichier HTML doit exister et contenir les balises de base
           if [ ! -s index.html ]; then
             echo "❌ Erreur : index.html est vide ou introuvable !"
             exit 1
@@ -99,49 +111,30 @@ jobs:
           fi
           echo "✅ Vérification HTML réussie !"
 
-      - name: Generate update.json
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api "repos/$GITHUB_REPOSITORY/releases/latest" \
-            --jq '{tag:.tag_name, prerelease:.prerelease, assets:[.assets[]|select(.name=="BirdNET-Go-Windows.exe")|{name,digest,browser_download_url}]}' > rel.json
-          python3 - << 'EOF'
-          import json
-          rel = json.load(open('rel.json'))
-          asset = (rel.get('assets') or [{}])[0]
-          digest = (asset.get('digest') or '').replace('sha256:', '')
-          out = {
-              'tag': rel.get('tag_name'),
-              'prerelease': bool(rel.get('prerelease')),
-              'url': asset.get('browser_download_url'),
-              'sha256': digest or None,
-          }
-          with open('update.json', 'w') as f:
-              json.dump(out, f, indent=2)
-          print(open('update.json').read())
-          EOF
-
       - name: Commit index.html + update.json
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
           git add index.html update.json
           if git diff --staged --quiet; then
-            echo "Aucun changement."
+            echo "ℹ️ Aucun changement détecté dans index.html ou update.json."
           else
             git commit -m "chore: update index.html + update.json [skip ci]"
-            git push || true
+            git push || echo "⚠️ Échec du push (peut être normal si la branche est protégée ou en conflit)"
           fi
 
       - name: Créer le fichier .nojekyll
         run: touch .nojekyll
 
-      - uses: actions/configure-pages@v5
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: "."
 
-      - name: Deploy
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
