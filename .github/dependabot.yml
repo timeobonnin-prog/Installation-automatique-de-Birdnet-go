@@ -1,15 +1,21 @@
 version: 2
 updates:
-  # Met à jour les actions GitHub automatiquement
+  # Mettre à jour les actions GitHub automatiquement
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    commit-message:
-      prefix: "chore(deps)"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
 
-  # Met à jour les dépendances npm (si tu en as plus tard)
-  - package-ecosystem: "npm"
-    directory: "/"
+  # Mettre à jour les paquets .NET (NuGet) automatiquement
+  - package-ecosystem: "nuget"
+    directory: "/src"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "dotnet"
