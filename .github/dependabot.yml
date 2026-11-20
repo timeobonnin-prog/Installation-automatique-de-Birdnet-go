@@ -6,6 +6,7 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # Pas de clé 'labels' ici : Dependabot ajoute automatiquement 'dependencies'
 
   # Mettre à jour les paquets .NET (NuGet) automatiquement
   - package-ecosystem: "nuget"
