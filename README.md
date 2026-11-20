@@ -36,12 +36,12 @@
 
 ## 📥 Installation
 
-| Plateforme | Fichier | Commande |
-|---|---|---|
-| 🪟 Windows | `BirdNET-Go-Windows.exe` | Double-clic (installateur) ou `BirdNET-Go-Windows-Portable.zip` (sans install) |
-| 🐧 Linux x64 | `BirdNET-Go-Linux-x64.deb` | `sudo apt install ./BirdNET-Go-Linux-x64.deb` |
-| 🍓 Raspberry Pi | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb` |
-| 🍎 macOS (ARM) | `BirdNET-Go-macOS.pkg` | Double-clic |
+| Plateforme      | Fichier                      | Commande                                                                       |
+| --------------- | ---------------------------- | ------------------------------------------------------------------------------ |
+| 🪟 Windows      | `BirdNET-Go-Windows.exe`     | Double-clic (installateur) ou `BirdNET-Go-Windows-Portable.zip` (sans install) |
+| 🐧 Linux x64    | `BirdNET-Go-Linux-x64.deb`   | `sudo apt install ./BirdNET-Go-Linux-x64.deb`                                  |
+| 🍓 Raspberry Pi | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb`                                |
+| 🍎 macOS (ARM)  | `BirdNET-Go-macOS.pkg`       | Double-clic                                                                    |
 
 > Les releases sont publiées automatiquement via GitHub Actions à chaque commit sur `main` et chaque jour à 15 h 55 UTC.
 
@@ -49,9 +49,9 @@
 
 ## 🖥️ Captures
 
-| Contrôle | Résultats | Statistiques |
-|---|---|---|
-| *(ajouter capture onglet Contrôle)* | *(ajouter capture onglet Résultats)* | *(ajouter capture onglet Statistiques)* |
+| Contrôle                            | Résultats                            | Statistiques                            |
+| ----------------------------------- | ------------------------------------ | --------------------------------------- |
+| _(ajouter capture onglet Contrôle)_ | _(ajouter capture onglet Résultats)_ | _(ajouter capture onglet Statistiques)_ |
 
 ---
 
@@ -63,3 +63,4 @@ BirdNET-Go-Windows.exe /VERYSILENT /PORT=9090
 
 # Mode réparation (réinstalle sans toucher aux réglages)
 BirdNET-Go-Windows.exe /REPAIR
+```
