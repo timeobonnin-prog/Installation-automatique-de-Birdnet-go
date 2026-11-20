@@ -497,7 +497,7 @@ jobs:
 
       - name: Publish Stable Release
         if: needs.check-version.outputs.build_stable == 'true' && steps.verify_stable.outputs.has_files == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.check-version.outputs.stable_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
           name: ${{ steps.verify_stable.outputs.release_name }}
@@ -542,7 +542,7 @@ jobs:
 
       - name: Publish Nightly Release
         if: needs.check-version.outputs.build_nightly == 'true' && steps.verify_nightly.outputs.has_files == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: nightly-v${{ needs.check-version.outputs.nightly_tag }}.${{ github.run_number }}-${{ github.run_attempt }}
           name: ${{ steps.verify_nightly.outputs.release_name }}
