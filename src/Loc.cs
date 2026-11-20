@@ -16,7 +16,6 @@ namespace BirdNETGoControl
 
     public static class Loc
     {
-        // Ordre BirdNET-Go (alphabétique sur le nom anglais) — l'ordre des colonnes du Map est IDENTIQUE
         public static readonly string[] Codes =
             { "cs", "da", "en", "de", "es", "fi", "fr", "hu", "it", "lv", "nb", "nl", "pl", "pt", "sk", "sv" };
 
@@ -57,7 +56,6 @@ namespace BirdNETGoControl
         {
             if (string.IsNullOrWhiteSpace(pref) || pref == "auto")
             {
-                // 1) langue choisie par l'installateur (LANGUAGE.txt), 2) langue Windows, 3) anglais
                 string forced = "";
                 try
                 {
@@ -115,6 +113,7 @@ namespace BirdNETGoControl
             ["RestoreDone"]        = new[]{ "Obnoveno ze zálohy.", "Gendannet fra sikkerhedskopi.", "Restored from backup.", "Aus Sicherung wiederhergestellt.", "Restaurado desde copia.", "Palautettu varmuuskopiosta.", "Restauré depuis la sauvegarde.", "Visszaállítva mentésből.", "Ripristinato dal backup.", "Atjaunots no dublēta.", "Gjenopprettet fra sikkerhetskopi.", "Hersteld van back-up.", "Przywrócono z kopii.", "Restaurado da cópia.", "Obnovené zo zálohy.", "Återställt från säkerhetskopia." },
             ["RestoreFail"]        = new[]{ "Obnova selhala.", "Gendannelse fejlede.", "Restore failed.", "Wiederherstellung fehlgeschlagen.", "La restauración falló.", "Palautus epäonnistui.", "Échec de la restauration.", "A visszaállítás sikertelen.", "Ripristino non riuscito.", "Atjaunošana neizdevās.", "Gjenoppretting mislyktes.", "Herstel mislukt.", "Przywracanie nieudane.", "Falha na restauração.", "Obnova zlyhala.", "Återställning misslyckades." },
             ["TrayStats"]          = new[]{ "Výsledky", "Resultater", "Results", "Ergebnisse", "Resultados", "Tulokset", "Résultats", "Eredmények", "Risultati", "Rezultāti", "Resultater", "Resultaten", "Wyniki", "Resultados", "Výsledky", "Resultat" },
+            ["NavControl"]         = new[]{ "Ovládání", "Styring", "Control", "Steuerung", "Control", "Ohjaus", "Contrôle", "Vezérlés", "Controllo", "Vadība", "Kontroll", "Bediening", "Sterowanie", "Controlo", "Ovládanie", "Kontroll" },
             ["TrayOnline"]         = new[]{ "BirdNET-Go – online", "BirdNET-Go – online", "BirdNET-Go – Online", "BirdNET-Go – online", "BirdNET-Go – en línea", "BirdNET-Go – verkossa", "BirdNET-Go – en ligne", "BirdNET-Go – online", "BirdNET-Go – online", "BirdNET-Go – tiešsaistē", "BirdNET-Go – pålogget", "BirdNET-Go – online", "BirdNET-Go – online", "BirdNET-Go – online", "BirdNET-Go – online", "BirdNET-Go – online" },
             ["TrayOffline"]        = new[]{ "BirdNET-Go – offline", "BirdNET-Go – offline", "BirdNET-Go – Offline", "BirdNET-Go – offline", "BirdNET-Go – sin conexión", "BirdNET-Go – poissa", "BirdNET-Go – hors ligne", "BirdNET-Go – offline", "BirdNET-Go – offline", "BirdNET-Go – bezsaistē", "BirdNET-Go – frakoblet", "BirdNET-Go – offline", "BirdNET-Go – offline", "BirdNET-Go – offline", "BirdNET-Go – offline", "BirdNET-Go – offline" },
             ["TrayTipText"]        = new[]{ "Aplikace běží na pozadí.", "Appen kører i baggrunden.", "The app is running in the background.", "Die App läuft im Hintergrund.", "La app sigue en segundo plano.", "Sovellus toimii taustalla.", "L'app tourne en arrière-plan.", "Az alkalmazás a háttérben fut.", "L'app è in esecuzione in background.", "Lietotne darbojas fonā.", "Appen kjører i bakgrunnen.", "De app draait op de achtergrond.", "Aplikacja działa w tle.", "O app continua em segundo plano.", "Aplikácia beží na pozadí.", "Appen körs i bakgrunden." },
@@ -149,6 +148,7 @@ namespace BirdNETGoControl
             ["BtnCancel"]          = new[]{ "Zrušit", "Annuller", "Cancel", "Abbrechen", "Cancelar", "Peruuta", "Annuler", "Mégse", "Annulla", "Atcelt", "Avbryt", "Annuleren", "Anuluj", "Cancelar", "Zrušiť", "Avbryt" },
             ["BtnSave"]            = new[]{ "💾 Uložit", "💾 Gem", "💾 Save", "💾 Speichern", "💾 Guardar", "💾 Tallenna", "💾 Enregistrer", "💾 Mentés", "💾 Salva", "💾 Saglabāt", "💾 Lagre", "💾 Opslaan", "💾 Zapisz", "💾 Guardar", "💾 Uložiť", "💾 Spara" },
             ["PortInvalid"]        = new[]{ "Neplatný port (1–65535).", "Ugyldig port (1–65535).", "Invalid port (1–65535).", "Ungültiger Port (1–65535).", "Puerto no válido (1–65535).", "Virheellinen portti (1–65535).", "Port invalide (1–65535).", "Érvénytelen port (1–65535).", "Porta non valida (1–65535).", "Nederīgs ports (1–65535).", "Ugyldig port (1–65535).", "Ongeldige poort (1–65535).", "Nieprawidłowy port (1–65535).", "Porta inválida (1–65535).", "Neplatný port (1–65535).", "Ogiltig port (1–65535)." },
+            ["PortFromEngine"]     = new[]{ "čteno z configu motoru", "låst fra motorconfig", "read from engine config", "aus Engine-Config gelesen", "leído de la config del motor", "luettu moottorin configista", "lu depuis la config du moteur", "motor configjából olvasva", "letto dalla config del motore", "nolasīts no motora config", "lest fra motorkonfig", "gelezen uit engine-config", "odczytany z konfiguracji silnika", "lido da config do motor", "čítané z configu motora", "läst från motorns config" },
             ["Never"]              = new[]{ "Nikdy", "Aldrig", "Never", "Nie", "Nunca", "Ei koskaan", "Jamais", "Soha", "Mai", "Nekad", "Aldri", "Nooit", "Nigdy", "Nunca", "Nikdy", "Aldrig" },
             ["DaysShort"]          = new[]{ "d", "d", "d", "T", "d", "pv", "j", "n", "g", "d", "d", "d", "d", "d", "d", "d" },
             ["LogsTitle"]          = new[]{ "Protokoly", "Logfiler", "Logs", "Protokolle", "Registros", "Lokit", "Journaux", "Naplók", "Registri", "Žurnāli", "Logger", "Logboeken", "Dzienniki", "Registos", "Denníky", "Loggar" },
@@ -171,7 +171,6 @@ namespace BirdNETGoControl
             ["LastDetection"]      = new[]{ "Poslední: {0} v {1} ({2} %)", "Seneste: {0} kl. {1} ({2} %)", "Last: {0} at {1} ({2} %)", "Zuletzt: {0} um {1} ({2} %)", "Última: {0} a las {1} ({2} %)", "Viimeisin: {0} klo {1} ({2} %)", "Dernière : {0} à {1} ({2} %)", "Utolsó: {0} {1} ({2} %)", "Ultima: {0} alle {1} ({2} %)", "Pēdējā: {0} {1} ({2} %)", "Siste: {0} kl. {1} ({2} %)", "Laatste: {0} om {1} ({2} %)", "Ostatnia: {0} o {1} ({2} %)", "Última: {0} às {1} ({2} %)", "Posledná: {0} o {1} ({2} %)", "Senaste: {0} kl. {1} ({2} %)" },
             ["NoData"]             = new[]{ "Žádná data.", "Ingen data.", "No data.", "Keine Daten.", "Sin datos.", "Ei dataa.", "Aucune donnée.", "Nincs adat.", "Nessun dato.", "Nav datu.", "Ingen data.", "Geen gegevens.", "Brak danych.", "Sem dados.", "Žiadne dáta.", "Inga data." },
             ["ApiUndetected"]      = new[]{ "API motoru nenalezeno; zobrazuji pouze stav.", "Motor-API ikke fundet; viser kun status.", "Engine API not detected; showing status only.", "Engine-API nicht erkannt; nur Status.", "API del motor no detectada; solo estado.", "Moottorin API:a ei löydy; vain tila.", "API du moteur non détectée ; état seulement.", "Motor API nem észlelve; csak állapot.", "API del motore non rilevata; solo stato.", "Dzinēja API nav atrasts; tikai statuss.", "Motor-API ikke oppdaget; kun status.", "Engine-API niet gedetecteerd; alleen status.", "Nie wykryto API silnika; tylko status.", "API do motor não detetada; apenas estado.", "API motora nenájdené; iba stav.", "Motor-API upptäcktes inte; endast status." },
-            ["NavControl"]         = new[]{ "Ovládání", "Styring", "Control", "Steuerung", "Control", "Ohjaus", "Contrôle", "Vezérlés", "Controllo", "Vadība", "Kontroll", "Bediening", "Sterowanie", "Controlo", "Ovládanie", "Kontroll" },
         };
     }
 }
