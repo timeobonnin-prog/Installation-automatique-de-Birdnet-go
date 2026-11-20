@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="BirdNET-Go Control" width="160" />
+  <img src="assets/logo.png" alt="BirdNET-Go Control" width="160" />
   <h1>🐦 BirdNET-Go Control</h1>
   <p><strong>Panneau de contrôle multilingue pour BirdNET-Go</strong> — le détecteur d'oiseaux auto-hébergé.</p>
   <p>
