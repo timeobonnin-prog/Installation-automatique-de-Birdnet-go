@@ -1,85 +1,65 @@
-<p align="center">
-  <img src="logo.png" alt="BirdNET-Go Installer Logo" width="150"/>
-</p>
+# 🐦 BirdNET-Go Control
 
-# 🪶 Installation automatique de BirdNET-Go
+**Panneau de contrôle multilingue pour BirdNET-Go** — le détecteur d'oiseaux auto-hébergé.
 
-<p align="center">
-  <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest"><img src="https://img.shields.io/github/v/release/timeobonnin-prog/Installation-automatique-de-Birdnet-go?style=flat-square" alt="Latest Release"></a>
-  <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/blob/main/LICENSE"><img src="https://img.shields.io/github/license/timeobonnin-prog/Installation-automatique-de-Birdnet-go?style=flat-square" alt="License"></a>
-  <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/actions"><img src="https://img.shields.io/github/actions/workflow/status/timeobonnin-prog/Installation-automatique-de-Birdnet-go/build-release.yml?style=flat-square" alt="Build Status"></a>
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue?style=flat-square" alt="Platforms">
-</p>
+[![Build](https://img.shields.io/github/actions/workflow/status/timeobonnin-prog/Installation-automatique-de-Birdnet-go/build-and-release.yml?label=Build)](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/actions/workflows/build-and-release.yml)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Langues](https://img.shields.io/badge/langues-16-blue)](src/Loc.cs)
 
-Ce dépôt fournit des installateurs automatisés pour déployer facilement la dernière version de [BirdNET-Go](https://github.com/tphakala/birdnet-go) sur **Windows**, **Linux (Debian/Ubuntu)**, **Raspberry Pi** et **macOS**.
-
-Chaque mise à jour est détectée automatiquement, compilée, testée, scannée par VirusTotal, et publiée dans la section Releases.
+> ⚠️ **Projet communautaire non officiel** — BirdNET-Go officiel : [tphakala/birdnet-go](https://github.com/tphakala/birdnet-go)
 
 ---
 
-## 📥 Installation sur Windows (x64 / ARM64)
+## ✨ Fonctionnalités
 
-1. Rendez-vous dans la section [**Releases**](../../releases).
-2. Téléchargez le fichier **`BirdNET-Go-Windows.exe`** (environ 96 Mo).
-3. Double-cliquez dessus. L'installateur fera tout le travail : il créera un raccourci sur votre Bureau, ajoutera le dossier au PATH de Windows, et configurera le pare-feu.
-
-**Note :** Cet installateur est "hors-ligne". Il contient déjà le binaire et les modèles d'IA. Il ne télécharge rien.
-
-### ⚠️ Avertissement Windows SmartScreen
-
-Cet exécutable n'étant pas encore signé numériquement, Windows peut afficher un écran bleu : _"Windows a protégé votre PC"_. Cliquez sur **"Informations complémentaires"** puis **"Exécuter quand même"**.
-
----
-
-## 🐧 Installation sur Linux et 🍓 Raspberry Pi
-
-Téléchargez le fichier **`.deb`** correspondant à votre architecture (amd64 pour PC, arm64 pour Raspberry Pi) dans les Releases, puis installez-le :
-
-    sudo dpkg -i birdnet-go_*.deb
-
-Le service `systemd` sera configuré et démarré automatiquement. L'interface est accessible sur `http://localhost:8080`.
+- **🎛️ Contrôle serveur** : démarrer/arrêter `birdnet-go.exe` en 1 clic, watchdog anti-crash (jusqu'à 3 redémarrages auto), synchronisation du port avec `config.yaml` du moteur
+- **📊 Résultats en direct** : pastille qui pulse quand le moteur écoute, latence ms, détections du jour, dernière espèce
+- **📈 Statistiques** : sparkline 24 h, top 5 espèces, export CSV
+- **🔄 Mises à jour in-app** : MAJ contrôleur + moteur en 1 clic, vérification SHA-256 avant installation
+- **🌍 16 langues** : FR, EN, DE, ES, IT, PT, NL, PL, CS, SK, HU, DA, SV, NB, FI, LV — avec aperçu instantané
+- **💾 Backup / Restore** : sauvegarde zip horodatée des réglages + config moteur
+- **📜 Visionneuse de logs** intégrée
+- **⌨️ Raccourci global** : `Ctrl+Alt+B` pour afficher depuis n'importe où
+- **🔒 Single-instance** : mutex + NamedPipe pour éviter les doublons
+- **📦 Self-contained** : aucun runtime .NET requis chez l'utilisateur
 
 ---
 
-## 🍎 Installation sur macOS
+## 🔐 Sécurité — 4 garanties
 
-Téléchargez le fichier **`.pkg`** correspondant à votre processeur dans les Releases. Double-cliquez dessus pour lancer l'assistant d'installation Apple.
-
----
-
-## 🛡️ Sécurité et Vérification d'intégrité
-
-Chaque version est analysée par VirusTotal. Grâce à notre installateur "hors-ligne", le taux de faux positifs est extrêmement faible.
-
-**1. Analyse VirusTotal**
-Un lien direct vers le rapport est fourni dans chaque Release.
-
-**2. Empreinte SHA-256**
-Pour vérifier l'intégrité du fichier `.exe` (sous PowerShell) :
-
-    Get-FileHash .\BirdNET-Go-Windows.exe -Algorithm SHA256
+1. **Téléchargement depuis la source officielle** — les binaires de BirdNET-Go proviennent **directement** des releases de `tphakala/birdnet-go`, jamais recompilés
+2. **Vérification SHA-256** — chaque installateur est hashé et comparé au digest GitHub officiel **avant exécution** ; en cas de mismatch, l'installation est annulée
+3. **Code 100 % open source** — tout le code du contrôleur est dans `src/`, auditable
+4. **Canal de MAJ statique** — l'app lit `update.json` publié sur GitHub Pages (aucune quota API, aucune limite de débit)
 
 ---
 
-## 🆘 Besoin d'aide ?
+## 📥 Installation
 
-Vous avez rencontré un problème lors de l'installation ?
+| Plateforme | Fichier | Commande |
+|---|---|---|
+| 🪟 Windows | `BirdNET-Go-Windows.exe` | Double-clic (installateur) ou `BirdNET-Go-Windows-Portable.zip` (sans install) |
+| 🐧 Linux x64 | `BirdNET-Go-Linux-x64.deb` | `sudo apt install ./BirdNET-Go-Linux-x64.deb` |
+| 🍓 Raspberry Pi | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb` |
+| 🍎 macOS (ARM) | `BirdNET-Go-macOS.pkg` | Double-clic |
 
-1. Vérifiez que vous avez bien lu les instructions ci-dessus.
-2. Si le problème persiste, [ouvrez une Issue](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/issues/new/choose) en précisant votre système d'exploitation et le message d'erreur.
-
----
-
-## 🔏 Code signing policy
-
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
-
-- **Committers and reviewers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
-- **Approvers:** [timeobonnin-prog](https://github.com/timeobonnin-prog)
-- **Privacy policy:** This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+> Les releases sont publiées automatiquement via GitHub Actions à chaque commit sur `main` et chaque jour à 15 h 55 UTC.
 
 ---
 
-> **⚠️ Clause de non-responsabilité :** Ce logiciel et ses installateurs sont fournis « tels quels » (licence MIT), sans garantie d'aucune sorte. Les exécutables n'étant pas encore signés par une autorité commerciale, certains antivirus ou Windows SmartScreen peuvent déclencher de fausses alertes (faux positifs). L'utilisateur est seul responsable de vérifier l'authenticité des fichiers via les empreintes SHA-256 et les rapports VirusTotal fournis avant toute installation.
+## 🖥️ Captures
 
-_Projet open source sous licence MIT. Non affilié officiellement au projet BirdNET-Go._
+| Contrôle | Résultats | Statistiques |
+|---|---|---|
+| *(ajouter capture onglet Contrôle)* | *(ajouter capture onglet Résultats)* | *(ajouter capture onglet Statistiques)* |
+
+---
+
+## ⚙️ Paramètres d'installation avancés (Windows)
+
+```powershell
+# Port personnalisé
+BirdNET-Go-Windows.exe /VERYSILENT /PORT=9090
+
+# Mode réparation (réinstalle sans toucher aux réglages)
+BirdNET-Go-Windows.exe /REPAIR
