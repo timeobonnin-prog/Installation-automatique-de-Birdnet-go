@@ -26,18 +26,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      ALLOWED_AUTHORS: "dependabot[bot],timeobonnin-prog"
+      # Ajout de 'app/dependabot' pour couvrir les variations de nom du bot GitHub
+      ALLOWED_AUTHORS: "dependabot[bot],app/dependabot,timeobonnin-prog"
       GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
       DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
     steps:
       - name: Vérifier le token
         run: |
           if [ -z "${GH_TOKEN}" ]; then
-            echo "❌ Aucun token (ni GH_PAT ni GITHUB_TOKEN)."
+            echo "❌ Aucun token disponible (ni GH_PAT ni GITHUB_TOKEN)."
             exit 1
           fi
           if [ -z "${{ secrets.GH_PAT }}" ]; then
-            echo "⚠️ Pas de GH_PAT : les PR Dependabot ne pourront PAS être mergées."
+            echo "⚠️ Pas de GH_PAT : les PR Dependabot ne pourront PAS être mergées automatiquement."
           fi
 
       - name: Scanner et merger les PR éligibles
@@ -46,7 +47,6 @@ jobs:
           IFS=',' read -ra AUTHORS <<< "$ALLOWED_AUTHORS"
 
           echo "🔍 Recherche des PR ouvertes..."
-          # Champ corrigé : mergeStateStatus au lieu de mergeableState
           PRS=$(gh pr list --repo "$REPO" --state open \
             --json number,title,author,headRefOid,mergeable,mergeStateStatus \
             --limit 100)
@@ -62,17 +62,20 @@ jobs:
             echo "────────────────────────────────────────"
             echo "PR #$NUM — $TITLE (auteur: $AUTHOR, state: $STATE)"
 
-            # 1) Filtre auteur
+            # 1) Filtre auteur (correspondance partielle pour attraper 'app/dependabot' ou 'dependabot[bot]')
             ALLOWED=false
             for a in "${AUTHORS[@]}"; do
-              [ "$AUTHOR" = "$a" ] && ALLOWED=true && break
+              if [[ "$AUTHOR" == *"$a"* ]]; then 
+                ALLOWED=true
+                break
+              fi
             done
             if [ "$ALLOWED" = false ]; then
               echo "⏭️  Auteur non autorisé, skip."
               continue
             fi
 
-            # 2) Filtre conflit (DIRTY = conflit, BLOCKED = required checks non passés)
+            # 2) Filtre état de merge (On accepte CLEAN et UNSTABLE, on bloque DIRTY et BLOCKED)
             if [ "$STATE" = "DIRTY" ]; then
               echo "⚠️  Conflit détecté, skip. Rebase nécessaire."
               continue
@@ -124,5 +127,5 @@ jobs:
         if: always()
         run: |
           echo "## 🤖 Auto-merge" >> $GITHUB_STEP_SUMMARY
-          echo "- Auteurs : \`$ALLOWED_AUTHORS\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Auteurs autorisés : \`$ALLOWED_AUTHORS\`" >> $GITHUB_STEP_SUMMARY
           echo "- Mode : $( [ "$DRY_RUN" = true ] && echo '🧪 DRY-RUN' || echo '🚀 Actif' )" >> $GITHUB_STEP_SUMMARY
