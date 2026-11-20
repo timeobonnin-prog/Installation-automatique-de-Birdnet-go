@@ -33,7 +33,6 @@ namespace BirdNETGoControl
         public int HotkeyModifiers { get; set; } = 3;
         public int HotkeyVk { get; set; } = 0x42;
 
-        // Override manuel si l'auto-découverte de l'API moteur échoue (ex. "/api/v2")
         public string EngineApiBase { get; set; } = "";
 
         private static AppSettings _current;
