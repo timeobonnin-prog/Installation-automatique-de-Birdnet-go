@@ -134,7 +134,7 @@ HTML_TEMPLATE = """<!doctype html>
 <meta name="color-scheme" content="dark">
 <meta name="description" content="Panneau de contrôle local et sécurisé pour BirdNET-Go. Écoutez la nature chez vous.">
 <title>BirdNET-Go Control — Installateur Communautaire</title>
-<link rel="icon" href="logo.png" type="image/png">
+<link rel="icon" href="assets/logo.png" type="image/png">
 <style>
 :root {
   --bg: #0c0c10;
@@ -279,7 +279,7 @@ footer { text-align: center; color: var(--muted); font-size: 13px; padding: 48px
 
 <header>
   <div class="logo-area">
-    <img src="logo.png" alt="Logo">
+    <img src="assets/logo.png" alt="Logo">
     <h1>BirdNET-Go Control</h1>
   </div>
   <div class="version-badge">

@@ -6,7 +6,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>disable</ImplicitUsings>
-    <ApplicationIcon>..\icon.ico</ApplicationIcon>
+    <ApplicationIcon>..\assets\icon.ico</ApplicationIcon>
     <AssemblyName>BirdNET-Go-Control</AssemblyName>
     <RootNamespace>BirdNETGoControl</RootNamespace>
   </PropertyGroup>

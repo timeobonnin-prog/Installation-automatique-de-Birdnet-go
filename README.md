@@ -85,6 +85,6 @@ Les PR sont bienvenues ! Avant d'ouvrir une PR :
 
 ## 📄 Licence
 
-MIT — voir [`LICENSE`](LICENSE).
+MIT — voir [`LICENSE`](docs/LICENSE).
 
 **Non affilié** au projet officiel BirdNET-Go de Tomi P. Hakala ([tphakala/birdnet-go](https://github.com/tphakala/birdnet-go)), que nous remercions chaleureusement.

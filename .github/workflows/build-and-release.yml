@@ -16,12 +16,12 @@ on:
   push:
     paths:
       - "src/**"
-      - "BirdNET-Go-Installer.iss"
-      - "nfpm.yaml"
-      - "icon.ico"
-      - "logo.png"
-      - "start_birdnet.bat"
-      - "install-birdnet.sh"
+      - "installer/BirdNET-Go-Installer.iss"
+      - "installer/nfpm.yaml"
+      - "assets/icon.ico"
+      - "assets/logo.png"
+      - "scripts/start_birdnet.bat"
+      - "scripts/install-birdnet.sh"
       - "scripts/**"
       - ".github/workflows/build-and-release.yml"
 
@@ -145,7 +145,7 @@ jobs:
       - name: Compile installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer/BirdNET-Go-Installer.iss"
       - name: Build portable ZIP
         shell: pwsh
         run: |
@@ -229,7 +229,7 @@ jobs:
       - name: Compile installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "BirdNET-Go-Installer.iss"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer/BirdNET-Go-Installer.iss"
       - name: Build portable ZIP
         shell: pwsh
         run: |
@@ -307,9 +307,9 @@ jobs:
           ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
         run: |
           VERSION="${{ needs.check-version.outputs.stable_tag }}"
-          sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
-          sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
-          ~/go/bin/nfpm package -p deb -f nfpm.yaml
+          sed -i "s/\${ARCH}/${ARCH}/g" installer/nfpm.yaml
+          sed -i "s/\${VERSION}/${VERSION}/g" installer/nfpm.yaml
+          ~/go/bin/nfpm package -p deb -f installer/nfpm.yaml
           if [ "$ARCH" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
 
       - name: Build .pkg (Mac only)
@@ -396,9 +396,9 @@ jobs:
           ARCH: ${{ contains(matrix.platform, 'amd64') && 'amd64' || 'arm64' }}
         run: |
           VERSION="${{ needs.check-version.outputs.nightly_tag }}"
-          sed -i "s/\${ARCH}/${ARCH}/g" nfpm.yaml
-          sed -i "s/\${VERSION}/${VERSION}/g" nfpm.yaml
-          ~/go/bin/nfpm package -p deb -f nfpm.yaml
+          sed -i "s/\${ARCH}/${ARCH}/g" installer/nfpm.yaml
+          sed -i "s/\${VERSION}/${VERSION}/g" installer/nfpm.yaml
+          ~/go/bin/nfpm package -p deb -f installer/nfpm.yaml
           if [ "$ARCH" = "amd64" ]; then mv *.deb BirdNET-Go-Linux-x64.deb; else mv *.deb BirdNET-Go-RaspberryPi.deb; fi
 
       - name: Build .pkg (Mac only)

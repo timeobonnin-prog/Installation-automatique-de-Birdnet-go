@@ -66,7 +66,7 @@ jobs:
         run: |
           set -e
           [ -f "generate_html.py" ] || { echo "❌ generate_html.py manquant"; exit 1; }
-          [ -f "BirdNET-Go-Installer.iss" ] || { echo "❌ Installateur manquant"; exit 1; }
+          [ -f "installer/BirdNET-Go-Installer.iss" ] || { echo "❌ Installateur manquant"; exit 1; }
           [ -f ".prettierignore" ] || { echo "❌ .prettierignore manquant"; exit 1; }
           grep -q "generate_html.py" .prettierignore || { echo "❌ generate_html.py non protégé"; exit 1; }
           echo "✅ Tous les fichiers critiques sont présents et protégés."
@@ -112,8 +112,8 @@ jobs:
 
       - name: Vérification syntaxe ISS
         run: |
-          if (Test-Path "BirdNET-Go-Installer.iss") {
-            $content = Get-Content "BirdNET-Go-Installer.iss" -Raw
+          if (Test-Path "installer/BirdNET-Go-Installer.iss") {
+            $content = Get-Content "installer/BirdNET-Go-Installer.iss" -Raw
             if ($content -match '\[Setup\]' -and $content -match '\[Files\]') {
               Write-Host "✅ Syntaxe ISS valide"
             } else {
