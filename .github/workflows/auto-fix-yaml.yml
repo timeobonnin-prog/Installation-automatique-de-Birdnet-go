@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # On utilise GH_PAT car GitHub interdit de modifier .github avec le token par défaut
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
