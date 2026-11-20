@@ -305,13 +305,12 @@ namespace BirdNETGoControl
                 "https://api.github.com/repos/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases/latest");
         }
 
-        // #2 : hash SHA-256 local comparé au digest fourni par GitHub
+        // #2 : SHA-256 local comparé au digest GitHub
         private static string Sha256OfFile(string path)
         {
             using var fs = File.OpenRead(path);
             using var sha = SHA256.Create();
-            var hash = sha.ComputeHash(fs);
-            return Convert.ToHexString(hash).ToLowerInvariant();
+            return Convert.ToHexString(sha.ComputeHash(fs)).ToLowerInvariant();
         }
 
         private async Task CheckUpdatesAsync()
@@ -378,7 +377,6 @@ namespace BirdNETGoControl
                     await dl.Content.CopyToAsync(fs);
                 }
 
-                // #2 SHA-256 : bloquant si incohérent
                 if (AppSettings.Current.VerifyUpdateHash &&
                     !string.IsNullOrEmpty(asset.digest) && asset.digest.StartsWith("sha256:"))
                 {
@@ -477,6 +475,6 @@ namespace BirdNETGoControl
     {
         public string? name { get; set; }
         public string? browser_download_url { get; set; }
-        public string? digest { get; set; }   // #2 : "sha256:…"
+        public string? digest { get; set; }
     }
 }
