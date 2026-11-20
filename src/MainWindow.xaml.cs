@@ -40,11 +40,13 @@ namespace BirdNETGoControl
         private DateTime _lastUpdateCheck = DateTime.MinValue;
         private bool _isQuitting = false;
 
-        // Cache de la release (évite de multiplier les appels API non authentifiés, limite 60/h)
+        private UpdateInfo? _pendingUpdate;
         private GitHubRelease? _cachedRelease;
         private DateTime _cachedReleaseAt = DateTime.MinValue;
 
-        // #9 raccourci global
+        private const string UpdateJsonUrl =
+            "https://timeobonnin-prog.github.io/Installation-automatique-de-Birdnet-go/update.json";
+
         private const int WM_HOTKEY = 0x0312;
         private const int HOTKEY_ID = 9001;
         private HwndSource? _hwndSource;
@@ -142,9 +144,9 @@ namespace BirdNETGoControl
         {
             try
             {
-                if (IsServerRunning()) return;                 // le moteur occupe déjà son port
+                if (IsServerRunning()) return;
                 var s = AppSettings.Current;
-                if (PortHelper.IsFree(s.ServerPort)) return;   // port libre : OK
+                if (PortHelper.IsFree(s.ServerPort)) return;
                 int free = PortHelper.FindFree(s.ServerPort + 1);
                 if (free == s.ServerPort) return;
                 int old = s.ServerPort;
@@ -198,6 +200,7 @@ namespace BirdNETGoControl
             var menu = new WinForms.ContextMenuStrip();
             menu.Items.Add(Loc.T("BtnOpenWeb"), null, (_, _) => OpenWeb());
             menu.Items.Add(Loc.T("TrayShow"), null, (_, _) => ShowWindow());
+            menu.Items.Add(Loc.T("TrayStats"), null, (_, _) => OpenStats());
             menu.Items.Add(Loc.T("TrayLogs"), null, (_, _) => OpenLogs());
             menu.Items.Add(Loc.T("TrayBackup"), null, (_, _) => DoBackup());
             menu.Items.Add(Loc.T("TrayRestore"), null, (_, _) => DoRestore());
@@ -207,7 +210,21 @@ namespace BirdNETGoControl
             old?.Dispose();
         }
 
-        // ---------------- #7 Backup / Restore ----------------
+        // ---------------- Résultats / logs / backup ----------------
+        private void OpenStats()
+        {
+            var win = new StatsWindow { Owner = this };
+            win.Show();
+        }
+
+        private void OnStats(object sender, RoutedEventArgs e) => OpenStats();
+
+        private void OpenLogs()
+        {
+            var win = new LogWindow { Owner = this };
+            win.Show();
+        }
+
         private void Tip(string text, WinForms.ToolTipIcon icon)
         {
             if (AppSettings.Current.ShowBalloonNotifications)
@@ -240,13 +257,6 @@ namespace BirdNETGoControl
             UpdateUI();
             App.Log($"Restore effectué : {zip}");
             Tip(Loc.T("RestoreDone"), WinForms.ToolTipIcon.Info);
-        }
-
-        // ---------------- #4 Visionneuse de logs ----------------
-        private void OpenLogs()
-        {
-            var win = new LogWindow { Owner = this };
-            win.Show();
         }
 
         // ---------------- Serveur ----------------
@@ -396,10 +406,39 @@ namespace BirdNETGoControl
             catch { }
         }
 
-        // ---------------- Mises à jour ----------------
+        // ---------------- Mises à jour (canal statique, sans quota API) ----------------
+        private async Task<UpdateInfo?> FetchUpdateInfoAsync()
+        {
+            if (!AppSettings.Current.AllowNightlyUpdates)
+            {
+                try
+                {
+                    var info = await _http.GetFromJsonAsync<UpdateInfo>(UpdateJsonUrl + "?t=" + DateTime.UtcNow.Ticks);
+                    if (!string.IsNullOrEmpty(info?.tag) && !string.IsNullOrEmpty(info?.url))
+                        return info;
+                }
+                catch { }
+            }
+
+            try
+            {
+                var release = await GetTargetReleaseAsync();
+                var asset = release?.assets?.FirstOrDefault(a => a.name == "BirdNET-Go-Windows.exe");
+                if (release != null && asset != null)
+                    return new UpdateInfo
+                    {
+                        tag = release.tag_name,
+                        url = asset.browser_download_url,
+                        sha256 = asset.digest?.StartsWith("sha256:") == true ? asset.digest.Substring(7) : null,
+                        prerelease = release.prerelease
+                    };
+            }
+            catch { }
+            return null;
+        }
+
         private async Task<GitHubRelease?> GetTargetReleaseAsync()
         {
-            // Cache 5 min : 1 seul appel API pour le check + le clic MAJ (limite 60/h sans token)
             if (_cachedRelease != null && (DateTime.Now - _cachedReleaseAt).TotalMinutes < 5)
                 return _cachedRelease;
 
@@ -446,8 +485,9 @@ namespace BirdNETGoControl
 
             try
             {
-                var release = await GetTargetReleaseAsync();
-                var latestTag = release?.tag_name ?? "";
+                var info = await FetchUpdateInfoAsync();
+                _pendingUpdate = info;
+                var latestTag = info?.tag ?? "";
                 var uiVersion = File.Exists(_uiVersionFile) ? File.ReadAllText(_uiVersionFile).Trim() : "0.0.0";
 
                 bool upToDate = string.IsNullOrEmpty(latestTag) ||
@@ -482,25 +522,21 @@ namespace BirdNETGoControl
 
             try
             {
-                var release = await GetTargetReleaseAsync();
-                var asset = release?.assets?.FirstOrDefault(a => a.name == "BirdNET-Go-Windows.exe");
-                if (asset is null) throw new Exception("Installateur introuvable dans la release");
+                var info = _pendingUpdate ?? await FetchUpdateInfoAsync();
+                if (info?.url == null) throw new Exception("Canal de mise à jour injoignable");
 
-                // Nom unique horodaté => jamais bloqué par un ancien installateur verrouillé
                 string installer = Path.Combine(Path.GetTempPath(), $"BirdNET-Go-Update-{DateTime.Now:yyyyMMdd-HHmmss}.exe");
 
-                // Streamé (ResponseHeadersRead) => OK même pour un exe self-contained de ~100 Mo+
-                using (var dl = await _downloadHttp.GetAsync(asset.browser_download_url, HttpCompletionOption.ResponseHeadersRead))
+                using (var dl = await _downloadHttp.GetAsync(info.url, HttpCompletionOption.ResponseHeadersRead))
                 {
                     dl.EnsureSuccessStatusCode();
                     await using var fs = File.Create(installer);
                     await dl.Content.CopyToAsync(fs);
                 }
 
-                if (AppSettings.Current.VerifyUpdateHash &&
-                    !string.IsNullOrEmpty(asset.digest) && asset.digest.StartsWith("sha256:"))
+                if (AppSettings.Current.VerifyUpdateHash && !string.IsNullOrEmpty(info.sha256))
                 {
-                    string expected = asset.digest.Substring(7).ToLowerInvariant();
+                    string expected = info.sha256.ToLowerInvariant();
                     string actual = Sha256OfFile(installer);
                     if (expected != actual)
                     {
@@ -534,7 +570,7 @@ namespace BirdNETGoControl
             catch (Exception ex)
             {
                 App.Log($"Update error: {ex.GetType().Name}: {ex.Message}");
-                TxtUpdateStatus.Text = ex.Message;   // ← la VRAIE raison s'affiche ici
+                TxtUpdateStatus.Text = ex.Message;
                 TxtUpdateStatus.Foreground = new SolidColorBrush(WpfColor.FromRgb(239, 68, 68));
                 BtnUpdate.Content = Loc.T("BtnError");
                 await Task.Delay(4000);
@@ -584,6 +620,14 @@ namespace BirdNETGoControl
             _tray.Dispose();
             WpfApplication.Current.Shutdown();
         }
+    }
+
+    public class UpdateInfo
+    {
+        public string? tag { get; set; }
+        public string? url { get; set; }
+        public string? sha256 { get; set; }
+        public bool prerelease { get; set; }
     }
 
     public class GitHubRelease
