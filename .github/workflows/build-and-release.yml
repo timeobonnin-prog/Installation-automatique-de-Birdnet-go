@@ -42,7 +42,7 @@ jobs:
       stable_tag: ${{ steps.check.outputs.stable }}
       nightly_tag: ${{ steps.check.outputs.nightly }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Check versions
         id: check
         env:
@@ -81,7 +81,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Cache NuGet
         uses: actions/cache@v4
         with:
@@ -165,7 +165,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Cache NuGet
         uses: actions/cache@v4
         with:
@@ -259,7 +259,7 @@ jobs:
             platform: darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Download Binary
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -348,7 +348,7 @@ jobs:
             platform: darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Download Binary
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -436,7 +436,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
