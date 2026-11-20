@@ -2,13 +2,14 @@ name: Clean Releases + Update HTML
 
 on:
   schedule:
-    - cron: "55 15 * * *" # Tous les jours à 15h55 UTC
-  workflow_dispatch: # Déclenchement manuel possible
+    - cron: "55 15 * * *"
+  workflow_dispatch:
   release:
     types: [published, edited, deleted]
 
 permissions:
   contents: write
+  packages: read
   pages: write
   id-token: write
 
@@ -17,9 +18,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ------------------------------------------------------------------
-  # 1. NETTOYAGE DES RELEASES OBSOLÈTES
-  # ------------------------------------------------------------------
   cleanup-releases:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -36,7 +34,6 @@ jobs:
           cmd = ["gh", "api", f"repos/{repo}/releases?per_page=100", "--paginate"]
           releases = json.loads(subprocess.check_output(cmd).decode())
 
-          # Pattern pour identifier les tags valides (ex: v20261031.102-1 ou nightly-v20261031)
           pattern = re.compile(r'^(nightly-v|v)(\d+)\.(\d+)(?:-(\d+))?$')
           grouped = {}
           to_delete = []
@@ -72,9 +69,6 @@ jobs:
               subprocess.run(del_cmd, check=False)
           EOF
 
-  # ------------------------------------------------------------------
-  # 2. GÉNÉRATION ET DÉPLOIEMENT DE LA PAGE HTML + UPDATE.JSON
-  # ------------------------------------------------------------------
   update-html:
     needs: cleanup-releases
     runs-on: ubuntu-24.04
@@ -96,11 +90,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate > releases.json
-
-          # Exécute le script Python qui génère index.html et update.json
           python3 generate_html.py
 
-          # Vérification de sécurité : le fichier HTML doit exister et contenir les balises de base
           if [ ! -s index.html ]; then
             echo "❌ Erreur : index.html est vide ou introuvable !"
             exit 1
@@ -115,13 +106,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add index.html update.json
           if git diff --staged --quiet; then
-            echo "ℹ️ Aucun changement détecté dans index.html ou update.json."
+            echo "ℹ️ Aucun changement détecté."
           else
             git commit -m "chore: update index.html + update.json [skip ci]"
-            git push || echo "⚠️ Échec du push (peut être normal si la branche est protégée ou en conflit)"
+            git push || echo "⚠️ Échec du push"
           fi
 
       - name: Créer le fichier .nojekyll
