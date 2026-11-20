@@ -1,17 +1,22 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using WinForms = System.Windows.Forms;
 
 using WpfApplication = System.Windows.Application;
@@ -43,6 +48,8 @@ namespace BirdNETGoControl
         private UpdateInfo? _pendingUpdate;
         private GitHubRelease? _cachedRelease;
         private DateTime _cachedReleaseAt = DateTime.MinValue;
+
+        private List<Detection> _dets = new();
 
         private const string UpdateJsonUrl =
             "https://timeobonnin-prog.github.io/Installation-automatique-de-Birdnet-go/update.json";
@@ -80,7 +87,7 @@ namespace BirdNETGoControl
             _downloadHttp.DefaultRequestHeaders.UserAgent.ParseAdd("BirdNET-Go-UI/1.0");
 
             _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-            _statusTimer.Tick += (_, _) => UpdateUI();
+            _statusTimer.Tick += async (_, _) => await TickAsync();
             _statusTimer.Start();
 
             _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(24) };
@@ -91,6 +98,7 @@ namespace BirdNETGoControl
             ApplySettings();
             RefreshLocalVersions();
             ApplyLanguage();
+            SetNav(NavControl);
             _ = CheckUpdatesAsync();
 
             Closing += (_, e) =>
@@ -108,6 +116,111 @@ namespace BirdNETGoControl
             if (s.MinimizeToTrayOnLaunch) Hide();
 
             UpdateUI();
+        }
+
+        // ---------------- Navigation par onglets ----------------
+        private void SetNav(Button active)
+        {
+            NavControl.Tag = null;
+            NavResults.Tag = null;
+            NavStats.Tag = null;
+            active.Tag = "sel";
+
+            PanelControl.Visibility = active == NavControl ? Visibility.Visible : Visibility.Collapsed;
+            PanelResults.Visibility = active == NavResults ? Visibility.Visible : Visibility.Collapsed;
+            PanelStats.Visibility = active == NavStats ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void OnNavControl(object sender, RoutedEventArgs e) => SetNav(NavControl);
+        private void OnNavResults(object sender, RoutedEventArgs e) { SetNav(NavResults); _ = RefreshStatsAsync(); }
+        private void OnNavStats(object sender, RoutedEventArgs e) { SetNav(NavStats); _ = RefreshStatsAsync(); }
+        private void OnRefreshStats(object sender, RoutedEventArgs e) => _ = RefreshStatsAsync();
+
+        // ---------------- Résultats / Statistiques ----------------
+        private async Task RefreshStatsAsync()
+        {
+            var status = await EngineApi.PingAsync();
+            _dets = await EngineApi.RecentAsync(300);
+
+            if (status.Reachable)
+            {
+                PulseDot.Fill = new SolidColorBrush(WpfColor.FromRgb(166, 227, 161));
+                StartPulse();
+                TxtListening.Text = Loc.T("Listening");
+                TxtLatency.Text = string.Format(Loc.T("Latency"), status.LatencyMs.ToString("0"));
+            }
+            else
+            {
+                StopPulse();
+                PulseDot.Fill = new SolidColorBrush(WpfColor.FromRgb(243, 138, 168));
+                TxtListening.Text = Loc.T("NotReachable");
+                TxtLatency.Text = "";
+            }
+
+            var today = _dets.Where(d => d.Time.Date == DateTime.Today).ToList();
+            TxtToday.Text = string.Format(Loc.T("TodayCount"), today.Count);
+
+            var last = _dets.OrderByDescending(d => d.Time).FirstOrDefault();
+            TxtLast.Text = last == null
+                ? Loc.T("NoData")
+                : string.Format(Loc.T("LastDetection"), last.Species, last.Time.ToString("HH:mm"), (last.Confidence * 100).ToString("0"));
+
+            TxtApiNote.Text = (_dets.Count == 0 && status.Reachable) ? Loc.T("ApiUndetected") : "";
+
+            BuildSpark(today);
+            BuildTop();
+        }
+
+        private void BuildSpark(List<Detection> today)
+        {
+            var hours = new int[24];
+            foreach (var d in today) hours[d.Time.Hour]++;
+            int max = hours.Length == 0 ? 1 : hours.Max();
+            if (max == 0) max = 1;
+
+            var pts = new PointCollection();
+            for (int i = 0; i < 24; i++)
+                pts.Add(new Point(i * (100.0 / 23.0), 100 - (hours[i] * 100.0 / max)));
+            Spark.Points = pts;
+        }
+
+        private void BuildTop()
+        {
+            var top = _dets.GroupBy(d => d.Species)
+                .OrderByDescending(g => g.Count())
+                .Take(5)
+                .Select((g, i) => $"{i + 1}. {g.Key} — {g.Count()}")
+                .ToList();
+            TxtTop.Text = top.Count == 0 ? Loc.T("NoData") : string.Join("\n", top);
+        }
+
+        private void StartPulse()
+        {
+            var anim = new DoubleAnimation(1.0, 0.25, TimeSpan.FromMilliseconds(700))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            PulseDot.BeginAnimation(UIElement.OpacityProperty, anim);
+        }
+
+        private void StopPulse() => PulseDot.BeginAnimation(UIElement.OpacityProperty, null);
+
+        private void OnExportCsv(object sender, RoutedEventArgs e)
+        {
+            if (_dets.Count == 0) return;
+            var dlg = new SaveFileDialog
+            {
+                FileName = $"detections-{DateTime.Now:yyyyMMdd-HHmm}.csv",
+                Filter = "CSV|*.csv"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            var sb = new StringBuilder();
+            sb.AppendLine("date;espece;confiance");
+            foreach (var d in _dets.OrderBy(x => x.Time))
+                sb.AppendLine($"{d.Time:yyyy-MM-dd HH:mm:ss};{(d.Species ?? "").Replace(';', ',')};{d.Confidence.ToString("0.00", CultureInfo.InvariantCulture)}");
+            try { File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8); } catch { }
         }
 
         // ---------------- #9 Raccourci global ----------------
@@ -186,11 +299,21 @@ namespace BirdNETGoControl
         // ---------------- Langue ----------------
         private void ApplyLanguage()
         {
+            NavControl.Content = Loc.T("NavControl");
+            NavResults.Content = Loc.T("TabDash");
+            NavStats.Content = Loc.T("TabStats");
+
             TxtLblController.Text = Loc.T("LblController");
             TxtLblEngine.Text = Loc.T("LblEngine");
             TxtUpdateHint.Text = Loc.T("UpdateHint");
             BtnOpen.Content = Loc.T("BtnOpenWeb");
             BtnUpdate.Content = Loc.T("BtnUpdate");
+
+            BtnRefresh.Content = Loc.T("Refresh");
+            TxtSparkTitle.Text = Loc.T("SparkTitle");
+            TxtTopTitle.Text = Loc.T("Top5Title");
+            BtnExport.Content = Loc.T("ExportCsv");
+
             BuildTrayMenu();
         }
 
@@ -200,7 +323,7 @@ namespace BirdNETGoControl
             var menu = new WinForms.ContextMenuStrip();
             menu.Items.Add(Loc.T("BtnOpenWeb"), null, (_, _) => OpenWeb());
             menu.Items.Add(Loc.T("TrayShow"), null, (_, _) => ShowWindow());
-            menu.Items.Add(Loc.T("TrayStats"), null, (_, _) => OpenStats());
+            menu.Items.Add(Loc.T("TrayStats"), null, (_, _) => { ShowWindow(); SetNav(NavResults); _ = RefreshStatsAsync(); });
             menu.Items.Add(Loc.T("TrayLogs"), null, (_, _) => OpenLogs());
             menu.Items.Add(Loc.T("TrayBackup"), null, (_, _) => DoBackup());
             menu.Items.Add(Loc.T("TrayRestore"), null, (_, _) => DoRestore());
@@ -210,15 +333,7 @@ namespace BirdNETGoControl
             old?.Dispose();
         }
 
-        // ---------------- Résultats / logs / backup ----------------
-        private void OpenStats()
-        {
-            var win = new StatsWindow { Owner = this };
-            win.Show();
-        }
-
-        private void OnStats(object sender, RoutedEventArgs e) => OpenStats();
-
+        // ---------------- Logs / backup ----------------
         private void OpenLogs()
         {
             var win = new LogWindow { Owner = this };
@@ -291,9 +406,17 @@ namespace BirdNETGoControl
             catch (Exception ex) { App.Log($"Erreur arrêt : {ex.Message}"); }
         }
 
-        private void UpdateUI()
+        // Le scan de processus tourne HORS thread UI => plus de freeze au drag
+        private async Task TickAsync()
         {
-            var isRunning = IsServerRunning();
+            bool isRunning = await Task.Run(() => Process.GetProcessesByName("birdnet-go").Length > 0);
+            ApplyStatus(isRunning);
+        }
+
+        private void UpdateUI() => _ = TickAsync();
+
+        private void ApplyStatus(bool isRunning)
+        {
             var s = AppSettings.Current;
 
             if (!isRunning && _shouldServerBeRunning)
@@ -537,7 +660,7 @@ namespace BirdNETGoControl
                 if (AppSettings.Current.VerifyUpdateHash && !string.IsNullOrEmpty(info.sha256))
                 {
                     string expected = info.sha256.ToLowerInvariant();
-                    string actual = Sha256OfFile(installer);
+                    string actual = await Task.Run(() => Sha256OfFile(installer));   // fond => pas de freeze
                     if (expected != actual)
                     {
                         try { File.Delete(installer); } catch { }
