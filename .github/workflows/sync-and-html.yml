@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   cleanup-releases:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Nettoyage des miroirs et tri par version officielle
@@ -40,26 +40,26 @@ jobs:
           for r in releases:
               tag = r["tag_name"]
               if tag.startswith("manual-"):
-                  print(f"[CONSERVÉ - Manuel] {tag}")
+                  print(f"[CONSERVE - Manuel] {tag}")
                   continue
 
               match = pattern.match(tag)
               if not match:
-                  print(f"[À SUPPRIMER - Miroir / Inconnu] {tag}")
+                  print(f"[A SUPPRIMER - Miroir / Inconnu] {tag}")
                   to_delete.append(tag)
               else:
                   prefix, base_ver, build_str, patch_str = match.groups()
                   build_num = int(build_str)
                   patch_num = int(patch_str) if patch_str else 0
-                  
+
                   key = f"{prefix}{base_ver}"
                   grouped.setdefault(key, []).append(((build_num, patch_num), tag))
 
           for key, items in grouped.items():
               items.sort(key=lambda x: x[0], reverse=True)
-              print(f"[CONSERVÉ - Plus récent de {key}] {items[0][1]}")
+              print(f"[CONSERVE - Plus recent de {key}] {items[0][1]}")
               for _, old_tag in items[1:]:
-                  print(f"[À SUPPRIMER - Ancien de {key}] {old_tag}")
+                  print(f"[A SUPPRIMER - Ancien de {key}] {old_tag}")
                   to_delete.append(old_tag)
 
           for tag in to_delete:
@@ -70,13 +70,13 @@ jobs:
 
   update-html:
     needs: cleanup-releases
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v5
         with:
@@ -99,15 +99,38 @@ jobs:
           fi
           echo "✅ Vérification HTML réussie !"
 
-      - name: Commit index.html
+      # ---- Canal de MAJ sans API : update.json statique sur Pages ----
+      - name: Generate update.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" \
+            --jq '{tag:.tag_name, prerelease:.prerelease, assets:[.assets[]|select(.name=="BirdNET-Go-Windows.exe")|{name,digest,browser_download_url}]}' > rel.json
+          python3 - << 'EOF'
+          import json
+          rel = json.load(open('rel.json'))
+          asset = (rel.get('assets') or [{}])[0]
+          digest = (asset.get('digest') or '').replace('sha256:', '')
+          out = {
+              'tag': rel.get('tag_name'),
+              'prerelease': bool(rel.get('prerelease')),
+              'url': asset.get('browser_download_url'),
+              'sha256': digest or None,
+          }
+          with open('update.json', 'w') as f:
+              json.dump(out, f, indent=2)
+          print(open('update.json').read())
+          EOF
+
+      - name: Commit index.html + update.json
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add index.html
+          git add index.html update.json
           if git diff --staged --quiet; then
-            echo "Aucun changement sur index.html"
+            echo "Aucun changement."
           else
-            git commit -m "chore: update index.html [skip ci]"
+            git commit -m "chore: update index.html + update.json [skip ci]"
             git push || true
           fi
 
@@ -115,6 +138,7 @@ jobs:
         run: touch .nojekyll
 
       - uses: actions/configure-pages@v5
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: "."
