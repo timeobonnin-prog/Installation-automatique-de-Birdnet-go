@@ -203,19 +203,16 @@ begin
   if Result = '' then Result := 'en';
 end;
 
-{ #10 : /PORT=8081 }
 function GetPortParam(): String;
 begin
   Result := ExpandConstant('{param:PORT|}');
 end;
 
-{ #11 : /REPAIR }
 function IsRepair(): Boolean;
 begin
   Result := Pos('/REPAIR', Uppercase(GetCmdTail)) > 0;
 end;
 
-{ #12 : ancienne installation admin (Program Files) }
 function OldAdminDir(): String;
 begin
   Result := ExpandConstant('{pf}\BirdNET-Go');
