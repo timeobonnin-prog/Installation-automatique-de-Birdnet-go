@@ -4,7 +4,6 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
 
-        <!-- ============ BOUTON PRINCIPAL ============ -->
         <Style x:Key="RoundedButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="FontWeight" Value="Bold"/>
@@ -47,7 +46,6 @@
             </Setter>
         </Style>
 
-        <!-- ============ BOUTON DE TITRE ============ -->
         <Style x:Key="TitleButton" TargetType="Button">
             <Setter Property="Foreground" Value="#CDD6F4"/>
             <Setter Property="FontSize" Value="14"/>
@@ -77,7 +75,6 @@
             </Setter>
         </Style>
 
-        <!-- ============ ONGLET DE NAVIGATION (pilule) ============ -->
         <Style x:Key="NavButton" TargetType="Button">
             <Setter Property="Foreground" Value="#A6ADC8"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -97,7 +94,6 @@
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#45475A"/>
                             </Trigger>
-                            <!-- état sélectionné : posé depuis le code via Tag="sel" -->
                             <Trigger Property="Tag" Value="sel">
                                 <Setter TargetName="Bd" Property="Background" Value="#89B4FA"/>
                                 <Setter Property="Foreground" Value="#1E1E2E"/>
@@ -108,7 +104,6 @@
             </Setter>
         </Style>
 
-        <!-- ============ BARRE DE DÉFILEMENT DU THÈME ============ -->
         <Style x:Key="PaletteThumb" TargetType="Thumb">
             <Setter Property="Template">
                 <Setter.Value>
@@ -191,7 +186,6 @@
             </Style.Triggers>
         </Style>
 
-        <!-- ============ SÉLECTEUR DE LANGUE ============ -->
         <DataTemplate x:Key="LangFull">
             <Grid>
                 <Grid.ColumnDefinitions>
