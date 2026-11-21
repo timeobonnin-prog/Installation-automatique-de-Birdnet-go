@@ -1,90 +1,71 @@
 <div align="center">
-  <img src="assets/logo.png" alt="BirdNET-Go Control" width="160" />
-  <h1>🐦 BirdNET-Go Control</h1>
-  <p><strong>Panneau de contrôle multilingue pour BirdNET-Go</strong> — le détecteur d'oiseaux auto-hébergé.</p>
+  <img src="assets/logo.png" alt="BirdNET-Go Control Logo" width="120" />
+  <h1>🐦 BirdNET-Go Control — Guide d'installation et Panneau de contrôle</h1>
+  <p><strong>Installez et gérez BirdNET-Go en 1 clic sur Windows, Linux, Raspberry Pi et macOS.</strong><br>
+  Panneau de contrôle WPF multilingue, installateurs vérifiés SHA-256, mises à jour automatiques.</p>
+  
   <p>
-    <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/actions/workflows/build-and-release.yml"><img src="https://img.shields.io/github/actions/workflow/status/timeobonnin-prog/Installation-automatique-de-Birdnet-go/build-and-release.yml?label=Build" alt="Build" /></a>
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
-    <img src="https://img.shields.io/badge/langues-16-blue" alt="16 langues" />
+    <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/actions/workflows/build-and-release.yml"><img src="https://img.shields.io/github/actions/workflow/status/timeobonnin-prog/Installation-automatique-de-Birdnet-go/build-and-release.yml?label=Build&style=flat-square" alt="Build Status" /></a>
+    <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
+    <img src="https://img.shields.io/badge/Langues-16-blue?style=flat-square" alt="16 langues" />
   </p>
-  <p><em>⚠️ Projet communautaire non officiel — BirdNET-Go officiel : <a href="https://github.com/tphakala/birdnet-go">tphakala/birdnet-go</a></em></p>
+  
+  <p><em>⚠️ <strong>Projet communautaire non officiel.</strong> Le moteur BirdNET-Go provient directement de <a href="https://github.com/tphakala/birdnet-go">tphakala/birdnet-go</a>.</em></p>
 </div>
 
 ---
 
-## ✨ Fonctionnalités
+## 🚀 Installation rapide
 
-- 🎛️ **Contrôle serveur** : démarrer/arrêter `birdnet-go.exe` en 1 clic, watchdog anti-crash (3 redémarrages auto), synchronisation du port avec `config.yaml` du moteur
-- 📊 **Résultats en direct** : pastille qui pulse quand le moteur écoute, latence ms, détections du jour, dernière espèce
-- 📈 **Statistiques** : sparkline 24 h, top 5 espèces, export CSV
-- 🔄 **Mises à jour in-app** : MAJ contrôleur + moteur en 1 clic, vérification SHA-256 avant installation
-- 🌍 **16 langues** : FR, EN, DE, ES, IT, PT, NL, PL, CS, SK, HU, DA, SV, NB, FI, LV — aperçu instantané
-- 💾 **Backup / Restore** : sauvegarde zip horodatée des réglages + config moteur
-- 📜 **Visionneuse de logs** intégrée
-- ⌨️ **Raccourci global** : `Ctrl+Alt+B` pour afficher depuis n'importe où
-- 🔒 **Single-instance** : mutex + NamedPipe pour éviter les doublons
-- 📦 **Self-contained** : aucun runtime .NET requis chez l'utilisateur
+Téléchargez la dernière version depuis les [Releases](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases) :
 
----
+| Plateforme      | Fichier                      | Commande d'installation                                      |
+| :-------------- | :--------------------------- | :----------------------------------------------------------- |
+| 🪟 **Windows**      | `BirdNET-Go-Windows.exe`     | Double-clic, ou utilisez le `.zip` portable sans installation |
+| 🐧 **Linux x64**    | `BirdNET-Go-Linux-x64.deb`   | `sudo apt install ./BirdNET-Go-Linux-x64.deb`                |
+| 🍓 **Raspberry Pi** | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb`              |
+| 🍎 **macOS (ARM)**  | `BirdNET-Go-macOS.pkg`       | Double-clic sur le paquet                                    |
 
-## 🔐 Sécurité — 4 garanties
-
-1. **Source officielle** — les binaires BirdNET-Go proviennent directement des releases de `tphakala/birdnet-go`, jamais recompilés
-2. **SHA-256 vérifié** — chaque installateur est hashé et comparé au digest GitHub officiel avant exécution ; mismatch = installation annulée
-3. **100 % open source** — tout le code du contrôleur est dans `src/`, auditable
-4. **Canal de MAJ statique** — l'app lit `update.json` sur GitHub Pages (aucun quota API, aucune limite de débit)
+> 💡 **Astuce** : Les releases sont générées automatiquement chaque jour à 15h55 UTC ou à chaque nouveau tag.
 
 ---
 
-## 📥 Installation
+## ✨ Fonctionnalités principales
 
-| Plateforme      | Fichier                      | Commande                                                         |
-| :-------------- | :--------------------------- | :--------------------------------------------------------------- |
-| 🪟 Windows      | `BirdNET-Go-Windows.exe`     | Double-clic, ou `BirdNET-Go-Windows-Portable.zip` (sans install) |
-| 🐧 Linux x64    | `BirdNET-Go-Linux-x64.deb`   | `sudo apt install ./BirdNET-Go-Linux-x64.deb`                    |
-| 🍓 Raspberry Pi | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb`                  |
-| 🍎 macOS (ARM)  | `BirdNET-Go-macOS.pkg`       | Double-clic                                                      |
-
-> Releases publiées automatiquement via GitHub Actions à chaque commit sur `main` et chaque jour à 15 h 55 UTC.
+- 🎛️ **Contrôle serveur** : Démarrage/arrêt du moteur en 1 clic, watchdog anti-crash (3 redémarrages auto), synchronisation du port avec le `config.yaml` du moteur.
+- 📊 **Résultats en direct** : Pastille de statut, latence en ms, compteur de détections du jour et dernière espèce identifiée.
+- 📈 **Statistiques avancées** : Graphique sparkline sur 24h, top 5 des espèces, export des données en CSV.
+- 🔄 **Mises à jour in-app** : Mise à jour du contrôleur et du moteur en 1 clic, avec vérification cryptographique SHA-256 avant installation.
+- 🌍 **16 langues** : FR, EN, DE, ES, IT, PT, NL, PL, CS, SK, HU, DA, SV, NB, FI, LV (avec aperçu instantané des traductions).
+- 💾 **Backup / Restore** : Sauvegarde et restauration zip horodatée de tous les réglages et de la configuration du moteur.
+- 📜 **Visionneuse de logs** : Interface intégrée pour consulter les journaux d'activité en temps réel.
+- ⌨️ **Raccourci global** : `Ctrl+Alt+B` pour afficher/masquer l'application depuis n'importe où.
+- 🔒 **Single-instance** : Protection par mutex et NamedPipe pour éviter les doublons d'exécution.
+- 📦 **Self-contained** : Aucun runtime .NET externe requis chez l'utilisateur final.
 
 ---
 
-## 🖥️ Captures
+## 🔐 Sécurité et transparence
 
-| Contrôle                                                                                                                                               | Résultats                                                                                                                                              | Statistiques                                                                                                                                           |
-| :----------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| _<img width="1085" height="931" alt="screenzy-1795196737426" src="https://github.com/user-attachments/assets/8a2b15b4-227a-408c-9547-69dcf8a41f07" />_ | _<img width="1078" height="928" alt="screenzy-1795196903627" src="https://github.com/user-attachments/assets/f1a7a931-d0cf-4793-a678-7ce5b75c1273" />_ | _<img width="1086" height="933" alt="screenzy-1795196954884" src="https://github.com/user-attachments/assets/1531fe7c-b93d-466a-a505-df17397d98d3" />_ |
+1. **Source officielle** : Les binaires du moteur BirdNET-Go sont téléchargés directement depuis les releases de `tphakala/birdnet-go`, jamais recompilés ni modifiés.
+2. **SHA-256 vérifié** : Chaque installateur est hashé et comparé au digest officiel de GitHub avant exécution. Toute différence annule l'installation.
+3. **100 % open source** : L'intégralité du code source du panneau de contrôle est disponible dans le dossier `src/` et est entièrement auditable.
+4. **Canal de mise à jour statique** : L'application lit un simple fichier `update.json` hébergé sur GitHub Pages (aucun quota d'API GitHub, aucune limite de débit).
+
+---
+
+## 🖥️ Captures d'écran
+
+| Contrôle | Résultats | Statistiques |
+| :---: | :---: | :---: |
+| [![Tableau de bord de contrôle](screenshots/control.webp)](screenshots/control.webp) | [![Résultats en direct](screenshots/results.webp)](screenshots/results.webp) | [![Statistiques](screenshots/stats.webp)](screenshots/stats.webp) |
 
 ---
 
 ## ⚙️ Paramètres d'installation avancés (Windows)
 
-- **Port personnalisé** (défaut 8080) : `BirdNET-Go-Windows.exe /VERYSILENT /PORT=9090`
-- **Mode réparation** (sans toucher aux réglages) : `BirdNET-Go-Windows.exe /REPAIR`
-- **Installation silencieuse complète** : `BirdNET-Go-Windows.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /PORT=8080`
+L'installateur Inno Setup prend en charge plusieurs paramètres en ligne de commande pour les déploiements automatisés :
 
----
-
-## 🏗️ Développer
-
-Lancer en mode développement : `dotnet run --project src/BirdNET-Go-Control.csproj`
-
-Prérequis : .NET 8 SDK, Windows (WPF).
-
----
-
-## 🤝 Contribuer
-
-Les PR sont bienvenues ! Avant d'ouvrir une PR :
-
-- `dotnet build src/BirdNET-Go-Control.csproj` doit passer sans erreur
-- Ajouter les clés de traduction dans `src/Loc.cs` pour les 16 langues si vous ajoutez du texte
-- Les commits suivent les [Conventional Commits](https://www.conventionalcommits.org/)
-
----
-
-## 📄 Licence
-
-MIT — voir [`LICENSE`](docs/LICENSE).
-
-**Non affilié** au projet officiel BirdNET-Go de Tomi P. Hakala ([tphakala/birdnet-go](https://github.com/tphakala/birdnet-go)), que nous remercions chaleureusement.
+- **Port personnalisé** (défaut 8080) :  
+  ```cmd
+  BirdNET-Go-Windows.exe /VERYSILENT /PORT=9090
