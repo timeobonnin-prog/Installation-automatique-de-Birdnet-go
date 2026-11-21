@@ -465,7 +465,7 @@ jobs:
 
       - name: Download Stable artifacts
         if: needs.check-version.outputs.build_stable == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: all-files
           pattern: stable-*
@@ -514,7 +514,7 @@ jobs:
 
       - name: Download Nightly artifacts
         if: needs.check-version.outputs.build_nightly == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: all-files-nightly
           pattern: nightly-*
