@@ -152,7 +152,7 @@ jobs:
           New-Item -ItemType Directory -Path "installer\Output" -Force | Out-Null
           Compress-Archive -Path "dist\*" -DestinationPath "installer\Output\BirdNET-Go-Windows-Portable.zip" -Force
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stable-windows-installer
           path: |
@@ -236,7 +236,7 @@ jobs:
           New-Item -ItemType Directory -Path "installer\Output" -Force | Out-Null
           Compress-Archive -Path "dist\*" -DestinationPath "installer\Output\BirdNET-Go-Windows-Portable.zip" -Force
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-windows-installer
           path: |
@@ -325,7 +325,7 @@ jobs:
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version "$VERSION" --install-location / BirdNET-Go-macOS.pkg
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stable-${{ matrix.platform }}-pkg
           path: |
@@ -414,7 +414,7 @@ jobs:
           pkgbuild --root payload --identifier com.github.timeobonnin.birdnetgo --version "$VERSION" --install-location / BirdNET-Go-macOS.pkg
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-${{ matrix.platform }}-pkg
           path: |
