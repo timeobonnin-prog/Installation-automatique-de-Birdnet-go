@@ -3,13 +3,13 @@
   <h1>🐦 BirdNET-Go Control — Guide d'installation et Panneau de contrôle</h1>
   <p><strong>Installez et gérez BirdNET-Go en 1 clic sur Windows, Linux, Raspberry Pi et macOS.</strong><br>
   Panneau de contrôle WPF multilingue, installateurs vérifiés SHA-256, mises à jour automatiques.</p>
-  
+
   <p>
     <a href="https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/actions/workflows/build-and-release.yml"><img src="https://img.shields.io/github/actions/workflow/status/timeobonnin-prog/Installation-automatique-de-Birdnet-go/build-and-release.yml?label=Build&style=flat-square" alt="Build Status" /></a>
     <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
     <img src="https://img.shields.io/badge/Langues-16-blue?style=flat-square" alt="16 langues" />
   </p>
-  
+
   <p><em>⚠️ <strong>Projet communautaire non officiel.</strong> Le moteur BirdNET-Go provient directement de <a href="https://github.com/tphakala/birdnet-go">tphakala/birdnet-go</a>.</em></p>
 </div>
 
@@ -19,12 +19,12 @@
 
 Téléchargez la dernière version depuis les [Releases](https://github.com/timeobonnin-prog/Installation-automatique-de-Birdnet-go/releases) :
 
-| Plateforme      | Fichier                      | Commande d'installation                                      |
-| :-------------- | :--------------------------- | :----------------------------------------------------------- |
+| Plateforme          | Fichier                      | Commande d'installation                                       |
+| :------------------ | :--------------------------- | :------------------------------------------------------------ |
 | 🪟 **Windows**      | `BirdNET-Go-Windows.exe`     | Double-clic, ou utilisez le `.zip` portable sans installation |
-| 🐧 **Linux x64**    | `BirdNET-Go-Linux-x64.deb`   | `sudo apt install ./BirdNET-Go-Linux-x64.deb`                |
-| 🍓 **Raspberry Pi** | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb`              |
-| 🍎 **macOS (ARM)**  | `BirdNET-Go-macOS.pkg`       | Double-clic sur le paquet                                    |
+| 🐧 **Linux x64**    | `BirdNET-Go-Linux-x64.deb`   | `sudo apt install ./BirdNET-Go-Linux-x64.deb`                 |
+| 🍓 **Raspberry Pi** | `BirdNET-Go-RaspberryPi.deb` | `sudo apt install ./BirdNET-Go-RaspberryPi.deb`               |
+| 🍎 **macOS (ARM)**  | `BirdNET-Go-macOS.pkg`       | Double-clic sur le paquet                                     |
 
 > 💡 **Astuce** : Les releases sont générées automatiquement chaque jour à 15h55 UTC ou à chaque nouveau tag.
 
@@ -56,8 +56,8 @@ Téléchargez la dernière version depuis les [Releases](https://github.com/time
 
 ## 🖥️ Captures d'écran
 
-| Contrôle | Résultats | Statistiques |
-| :---: | :---: | :---: |
+|                                       Contrôle                                       |                                  Résultats                                   |                           Statistiques                            |
+| :----------------------------------------------------------------------------------: | :--------------------------------------------------------------------------: | :---------------------------------------------------------------: |
 | [![Tableau de bord de contrôle](screenshots/control.webp)](screenshots/control.webp) | [![Résultats en direct](screenshots/results.webp)](screenshots/results.webp) | [![Statistiques](screenshots/stats.webp)](screenshots/stats.webp) |
 
 ---
@@ -66,6 +66,7 @@ Téléchargez la dernière version depuis les [Releases](https://github.com/time
 
 L'installateur Inno Setup prend en charge plusieurs paramètres en ligne de commande pour les déploiements automatisés :
 
-- **Port personnalisé** (défaut 8080) :  
+- **Port personnalisé** (défaut 8080) :
   ```cmd
   BirdNET-Go-Windows.exe /VERYSILENT /PORT=9090
+  ```
